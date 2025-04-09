@@ -47,7 +47,6 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
       stackInstr.map(_.fmtDoc).mkDocument(" # ")
     case foldedInstr: Opt[FoldedInstr] => foldedInstr.dlof(_.fmtDoc)(doc"")
 
-  override def unwrap: ExprProxy = this
 end ExprProxy
 
 /** A reference to a `func` field in a module.
@@ -89,8 +88,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       params: Type,
       results: Type,
       vars: Seq[Type],
-      body: ExprProxy
-  ): FuncRef =
+      body: Expr
+  ): Func =
     assume(
       !mod.fn.exists((nm, _) => nm == name),
       s"Function `$name` already exists"
@@ -110,7 +109,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         .dlof(docs => doc" #{  # ${docs.mkDocument(Document.forceBreak)}) #} ")(doc"")}"
 
     mod = mod.copy(fn = mod.fn :+ name -> fnDecl)
-    FuncRef(this, name)
+    new Func(this, name)
 
   override def removeFunction(name: Str): Unit =
     mod = mod.copy(fn = mod.fn.filterNot((nm, _) => nm == name))
@@ -167,48 +166,48 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   override def addFunctionExport(
       internalName: Str,
       externalName: Str
-  ): ExportRef =
+  ): Exprt =
     val funcExp = doc"""(export "$externalName" (func $$$internalName))"""
 
     mod = mod.copy(ex = mod.ex :+ externalName -> funcExp)
-    ExportRef(this, externalName)
+    new Exprt(this, externalName)
 
-  override def addTableExport(internalName: Str, externalName: Str): ExportRef =
+  override def addTableExport(internalName: Str, externalName: Str): Exprt =
     val tableExp = doc"""(export "$externalName" (table $$$internalName))"""
 
     mod = mod.copy(ex = mod.ex :+ externalName -> tableExp)
-    ExportRef(this, externalName)
+    new Exprt(this, externalName)
 
   override def addMemoryExport(
       internalName: Str,
       externalName: Str
-  ): ExportRef =
+  ): Exprt =
     val memoryExp = doc"""(export "$externalName" (memory $$$internalName))"""
 
     mod = mod.copy(ex = mod.ex :+ externalName -> memoryExp)
-    ExportRef(this, externalName)
+    new Exprt(this, externalName)
 
   override def addGlobalExport(
       internalName: Str,
       externalName: Str
-  ): ExportRef =
+  ): Exprt =
     val globalExp = doc"""(export "$externalName" (global $$$internalName))"""
 
     mod = mod.copy(ex = mod.ex :+ externalName -> globalExp)
-    ExportRef(this, externalName)
+    new Exprt(this, externalName)
 
   override def addGlobal(
       name: Str,
       ty: Type,
       mutable: Bool,
-      value: ExprProxy
-  ): GlobalRef =
+      value: Expr
+  ): Glob =
     val globalDecl = doc"(global $name ${
         if mutable then doc"(mut ${gen.fmtType(ty)})" else gen.fmtType(ty)
       } (${value.fmtDoc}))"
 
     mod = mod.copy(gl = mod.gl :+ name -> globalDecl)
-    GlobalRef(this, name)
+    new Glob(this, name)
 
   override def removeGlobal(name: Str): Unit =
     mod = mod.copy(gl = mod.gl.filterNot((nm, _) => nm == name))
@@ -217,7 +216,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       initial: Int,
       maximum: Int,
       exportName: Opt[Str],
-      segments: Seq[MemorySegment[ExprProxy]],
+      segments: Seq[MemorySegment[Expr]],
       shared: Bool
   ): Unit =
     val memDecl =
@@ -238,10 +237,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def block(
       label: Opt[Str],
-      children: Seq[ExprProxy],
+      children: Seq[Expr],
       resultType: Opt[Type]
-  ): ExprProxy =
-    ExprProxy(
+  ): Expr =
+    new Expr(
       S(
         FoldedInstr(
           "block",
@@ -253,50 +252,46 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
     )
 
-  override def nop(): ExprProxy =
-    ExprProxy(S(FoldedInstr("drop", Seq(), Seq())))
+  override def nop(): Expr =
+    new Expr(S(FoldedInstr("drop", Seq(), Seq())))
 
-  override def ret(value: Opt[ExprProxy]): ExprProxy =
-    ExprProxy(S(FoldedInstr("return", Seq(), value.map(_.inner).toSeq)))
+  override def ret(value: Opt[Expr]): Expr =
+    new Expr(S(FoldedInstr("return", Seq(), value.map(_.inner).toSeq)))
 
-  override def unreachable(): ExprProxy =
-    ExprProxy(S(FoldedInstr("unreachable", Seq(), Seq())))
+  override def unreachable(): Expr =
+    new Expr(S(FoldedInstr("unreachable", Seq(), Seq())))
 
-  override def drop(value: ExprProxy): ExprProxy =
-    ExprProxy(S(FoldedInstr("drop", Seq(), Seq(value.inner))))
+  override def drop(value: Expr): Expr =
+    new Expr(S(FoldedInstr("drop", Seq(), Seq(value.inner))))
 
-  override def i32: ModI32Proxy[ExprProxy] = ModI32Impl()
-  override def ref: ModRefProxy[ExprProxy] = ModRefImpl()
-  override def i31ref: ModI31RefProxy[ExprProxy] = ModI31RefImpl()
+  override def i32 = new I32:
+    override def const(value: Int): Expr =
+      new Expr(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
+
+    override def add(left: Expr, right: Expr): Expr =
+      new Expr(S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner))))
+  end i32
+
+  override def ref = new Ref:
+    override def i31(value: Expr): Expr =
+      new Expr(S(FoldedInstr("ref.i31", Seq(), Seq(value.inner))))
+  end ref
+
+  override def i31ref = new I31Ref:
+    override def get(i31: Expr, signed: Bool): Expr =
+      new Expr(
+        S(
+          FoldedInstr(
+            s"i31.get_${if signed then 's' else 'u'}",
+            Seq(),
+            Seq(i31.inner)
+          )
+        )
+      )
+  end i31ref
 
   def emitText: Document = mod.emitText
 end ModuleProxy
-
-class ModI32Impl extends ModI32Proxy[ExprProxy]:
-  override def const(value: Int): Expression[ExprProxy] =
-    ExprProxy(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
-
-  override def add(left: ExprProxy, right: ExprProxy): ExprProxy =
-    ExprProxy(S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner))))
-end ModI32Impl
-
-class ModRefImpl extends ModRefProxy[ExprProxy]:
-  override def i31(value: ExprProxy): ModuleProxy#Expr =
-    ExprProxy(S(FoldedInstr("ref.i31", Seq(), Seq(value.inner))))
-end ModRefImpl
-
-class ModI31RefImpl extends ModI31RefProxy[ExprProxy]:
-  override def get(i31: ExprProxy, signed: Bool): Expression[ExprProxy] =
-    ExprProxy(
-      S(
-        FoldedInstr(
-          s"i31.get_${if signed then 's' else 'u'}",
-          Seq(),
-          Seq(i31.inner)
-        )
-      )
-    )
-end ModI31RefImpl
 
 /** A [[WasmGenerator]] backend that produces text-based WAT as its output. */
 class WatBackend extends WasmGenerator[ModuleProxy]:
@@ -309,24 +304,28 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   def newModule: ModuleProxy = ModuleProxy(this, Module())
 
-  def errExpr(errMsg: Message)(using ModuleProxy, Raise): ExprProxy =
+  def errExpr(errMsg: Message)(using ModuleProxy, Raise): ModuleProxy#Expr =
     raise(
       ErrorReport(errMsg -> N :: Nil, source = Diagnostic.Source.Compilation)
     )
     summon[ModuleProxy].unreachable()
 
-  def operand(a: Arg)(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+  def operand(
+      a: Arg
+  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
     if a.spread then die else subexpression(a.value)
 
   def subexpression(
       r: Result
-  )(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) = result(r)
+  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) = result(r)
 
-  def result(r: Result)(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+  def result(
+      r: Result
+  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
     val mod = summon[ModuleProxy]
     r match
       case Value.Lit(IntLit(value)) =>
-        mod.ref.i31(mod.i32.const(value.toInt).unwrap).unwrap -> mod
+        mod.ref.i31(mod.i32.const(value.toInt)) -> mod
       case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
           if !l.functionLike =>
         if l.binary then
@@ -339,11 +338,10 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
                 .i31(
                   mod.i32
                     .add(
-                      mod.i31ref.get(lhsOp, true).unwrap,
-                      mod.i31ref.get(rhsOp, true).unwrap
+                      mod.i31ref.get(lhsOp, true),
+                      mod.i31ref.get(rhsOp, true)
                     )
-                )
-                .unwrap -> rhsMod
+                ) -> rhsMod
             case lNme =>
               raise(
                 WarningReport(
@@ -365,7 +363,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   def returningTerm(
       t: Block
-  )(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
     val mod = summon[ModuleProxy]
     t match
       case Define(defn, rst) =>
@@ -443,7 +441,9 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
     // module.setStart(mainFn)
     module
 
-  def block(t: Block)(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+  def block(
+      t: Block
+  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
     returningTerm(t)
 end WatBackend
 

@@ -26,47 +26,22 @@ private case object StringView_IterType extends Type
 private case object UnreachableType extends Type
 private case class MultiValueType(types: Seq[Type]) extends Type
 
-/** Abstract handle for `i32`-related instructions. */
-@deprecated("Use Module#I32Proxy instead.")
-trait ModI32Proxy[E <: Expression[E]]:
-  /** Creates an `i32.const` instruction with the given `value`. */
-  // TODO: Return E
-  def const(value: Int): Expression[E]
-
-  /** Creates an `i32.add` instruction with the given values as operands. */
-  def add(left: E, right: E): E
-end ModI32Proxy
-
-/** Abstract handle for `ref`-related instructions. */
-trait ModRefProxy[E]:
-  /** Creates a `ref.i31` instruction with the given `value`. */
-  def i31(value: E): Expression[E]
-end ModRefProxy
-
-/** Abstract handle for `i31.ref`-related instructions. */
-trait ModI31RefProxy[E]:
-  /** Creates an `i31.get_{s,u}` instruction. */
-  def get(i31: E, signed: Bool): Expression[E]
-end ModI31RefProxy
-
 /** Abstract class representing a Wasm `export` section. */
-abstract class Export[E]
+abstract class Export[E <: Export[E]]
 
 /** Abstract class representing a Wasm expression, which is composed of zero or
  * more instructions.
  */
-abstract class Expression[E]:
-  def unwrap: E
-end Expression
+abstract class Expression[E <: Expression[E]]
 
 /** Abstract class representing a Wasm function. */
-abstract class Function[F]:
+abstract class Function[F <: Function[F]]:
   /** The type representing expressions within the function. */
   type Expr <: Expression[Expr]
 end Function
 
 /** Abstract class representing a Wasm `global` section. */
-abstract class Global[G]
+abstract class Global[G <: Global[G]]
 
 /** Represention of a data segment used to initialize Wasm memories. See
  * [[https://webassembly.github.io/gc/core/text/modules.html#data-segments]]
@@ -81,10 +56,25 @@ case class MemorySegment[E <: Expression[E]](
  */
 abstract class Module:
   /** Abstract handle for `i32`-related instructions. */
-  abstract class I32Proxy:
+  abstract class I32:
     /** Creates an `i32.const` instruction with the given `value`. */
-    def const(value: Int): Module#Expr
-  end I32Proxy
+    def const(value: Int): Expr
+
+    /** Creates an `i32.add` instruction with the given values as operands. */
+    def add(left: Expr, right: Expr): Expr
+  end I32
+
+  /** Abstract handle for `ref`-related instructions. */
+  abstract class Ref:
+    /** Creates a `ref.i31` instruction with the given `value`. */
+    def i31(value: Expr): Expr
+  end Ref
+
+  /** Abstract handle for `i31.ref`-related instructions. */
+  abstract class I31Ref:
+    /** Creates an `i31.get_{s,u}` instruction. */
+    def get(i31: Expr, signed: Bool): Expr
+  end I31Ref
 
   /** Concrete type representing an `export` section. */
   type Exprt <: Export[Exprt]
@@ -203,13 +193,13 @@ abstract class Module:
   def drop(value: Expr): Expr
 
   /** Returns a handle to create `i32` instructions. */
-  def i32: ModI32Proxy[Expr]
+  def i32: I32
 
   /** Returns a handle to create `ref` instructions. */
-  def ref: ModRefProxy[Expr]
+  def ref: Ref
 
   /** Returns a handle to create `i31` instructions. */
-  def i31ref: ModI31RefProxy[Expr]
+  def i31ref: I31Ref
 
 end Module
 
@@ -299,7 +289,7 @@ object WasmGenerator:
         gen.none,
         gen.anyref,
         Seq(),
-        ref.i31(i32.const(0).unwrap).unwrap
+        ref.i31(i32.const(0))
       )
       addFunctionExport("main", "main")
     mod
