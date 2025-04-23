@@ -253,7 +253,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     )
 
   override def nop(): Expr =
-    new Expr(S(FoldedInstr("drop", Seq(), Seq())))
+    new Expr(S(FoldedInstr("nop", Seq(), Seq())))
 
   override def ret(value: Opt[Expr]): Expr =
     new Expr(S(FoldedInstr("return", Seq(), value.map(_.inner).toSeq)))
