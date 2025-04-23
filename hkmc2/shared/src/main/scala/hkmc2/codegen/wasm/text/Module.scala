@@ -65,10 +65,10 @@ case class FoldedInstr(
                   case stackInstr: Ls[StackInstr] =>
                     stackInstr.map(_.fmtDoc).mkDocument(" # ")
                   case S(foldedInstr) => foldedInstr.fmtDoc
-                  case N              => ???
+                  case N              => doc""
                 }"
             )
-            .mkDocument(doc" ")} #} "
+            .mkDocument(doc" # ")} #} "
       )(doc"")})"
 end FoldedInstr
 

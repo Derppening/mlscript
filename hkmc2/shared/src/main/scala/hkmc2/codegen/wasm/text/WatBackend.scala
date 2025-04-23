@@ -106,7 +106,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         )(doc"")}${(vars.map(v => doc"(local ${gen.fmtType(v)})") :+ body.fmtDoc)
         .filterNot(_.isEmpty)
         .optionIf(_.nonEmpty)
-        .dlof(docs => doc" #{  # ${docs.mkDocument(Document.forceBreak)}) #} ")(doc"")}"
+        .dlof(docs => doc" #{  # ${docs.mkDocument(Document.forceBreak)}) #} ")(doc")")}"
 
     mod = mod.copy(fn = mod.fn :+ name -> fnDecl)
     new Func(this, name)
