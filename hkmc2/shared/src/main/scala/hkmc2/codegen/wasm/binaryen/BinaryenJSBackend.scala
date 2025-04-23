@@ -194,8 +194,19 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
         new Expr(freshId)
   end i32
 
-  override def ref: Ref = ???
-  override def i31ref: I31Ref = ???
+  override def ref: Ref = new Ref:
+    override def i31(value: Expr): Expr =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.i31(${value.toJSRepr})"
+        new Expr(freshId)
+  end ref
+
+  override def i31ref: I31Ref = new I31Ref:
+    override def get(i31: Expr, signed: Bool): Expr =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i31.get_${if signed then "s" else "u"}(${i31.toJSRepr})"
+        new Expr(freshId)
+  end i31ref
 
   override def toJSRepr: Document = varId.toJSRepr
 end ModRef
