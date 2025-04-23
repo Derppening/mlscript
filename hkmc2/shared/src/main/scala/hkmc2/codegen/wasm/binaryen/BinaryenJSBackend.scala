@@ -182,6 +182,14 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.drop(${value.toJSRepr})"
       new Expr(freshId)
 
+  override def call(name: Str, operands: Seq[Expr], returnType: Type): Expr =
+    gen.withFreshVarId: freshId =>
+      gen.db +=\\
+        doc"${freshId.toJSRepr} = ${this.toJSRepr}.call($name, ${operands
+            .map(_.toJSRepr)
+            .mkDocument(doc"[", doc", ", doc"]")}, ${gen.fmtType(returnType)})"
+      new Expr(freshId)
+
   override def i32 = new I32:
     override def const(value: Int): Expr =
       gen.withFreshVarId: freshId =>
@@ -283,5 +291,9 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
     withFreshVarId: freshId =>
       db +=\\ doc"${freshId.toJSRepr} = new $modId.Module()"
       ModRef(this, freshId)
+
+  /** Converts all collected JavScript calls into a [[Document]] for execution.
+   */
+  def dumpJS: Document = db.toDoc
 
 end BinaryenJSBackend

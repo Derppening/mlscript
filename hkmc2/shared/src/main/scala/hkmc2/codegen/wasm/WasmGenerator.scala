@@ -192,6 +192,17 @@ abstract class Module:
    */
   def drop(value: Expr): Expr
 
+  /** Creates a `call` instruction.
+   *
+   * @param name
+   *   The name of the function to call.
+   * @param operands
+   *   The arguments to pass to the function.
+   * @param returnType
+   *   The return type of the function.
+   */
+  def call(name: Str, operands: Seq[Expr], returnType: Type): Expr
+
   /** Returns a handle to create `i32` instructions. */
   def i32: I32
 

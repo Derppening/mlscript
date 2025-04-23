@@ -264,6 +264,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   override def drop(value: Expr): Expr =
     new Expr(S(FoldedInstr("drop", Seq(), Seq(value.inner))))
 
+  override def call(name: Str, operands: Seq[Expr], returnType: Type): Expr =
+    // TODO: Ensure that operands are either placed on the stack now, or use `local.get`
+    //       Or - Use Seq[??? -> Expr] to lazily generate the expressions on the spot?
+    if operands.nonEmpty then TODO("call with operands is not supported yet")
+    new Expr(S(FoldedInstr("call", Seq(s"$$$name"), Seq())))
+
   override def i32 = new I32:
     override def const(value: Int): Expr =
       new Expr(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
@@ -302,7 +308,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
     case I31RefType => doc"i31.ref"
     case _          => ???
 
-  def newModule: ModuleProxy = ModuleProxy(this, Module())
+  override def newModule: ModuleProxy = ModuleProxy(this, Module())
 
   def errExpr(errMsg: Message)(using ModuleProxy, Raise): ModuleProxy#Expr =
     raise(
