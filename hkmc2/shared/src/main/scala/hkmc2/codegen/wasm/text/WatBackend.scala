@@ -385,7 +385,9 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
             val bodyExpr = block(body)
             mod.addFunction(
               sym.nme,
-              params = this.createType(params.map(_ => this.anyref).toSeq),
+              params = this.createType(
+                params.flatMap(_.params).map(_ => this.anyref).toSeq
+              ),
               // TODO(Derppening): Infer whether we actually have a return value or ()
               results = this.anyref,
               vars = Seq(),
