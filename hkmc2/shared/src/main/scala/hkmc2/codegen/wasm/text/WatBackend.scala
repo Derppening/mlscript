@@ -318,28 +318,28 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   def operand(
       a: Arg
-  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
+  )(using ModuleProxy, Raise): ModuleProxy#Expr =
     if a.spread then die else subexpression(a.value)
 
   def subexpression(
       r: Result
-  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) = result(r)
+  )(using ModuleProxy, Raise): ModuleProxy#Expr = result(r)
 
   def result(
       r: Result
-  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
+  )(using ModuleProxy, Raise): ModuleProxy#Expr =
     val mod = summon[ModuleProxy]
     r match
       case Value.Lit(IntLit(value)) =>
-        mod.ref.i31(mod.i32.const(value.toInt)) -> mod
+        mod.ref.i31(mod.i32.const(value.toInt))
       case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
           if !l.functionLike =>
         if l.binary then
           l.nme match
             case "+" =>
               // TODO(Derppening): Do not assume i31ref
-              val (lhsOp, lhsMod) = operand(lhs)
-              val (rhsOp, rhsMod) = operand(rhs)(using lhsMod)
+              val lhsOp = operand(lhs)
+              val rhsOp = operand(rhs)
               mod.ref
                 .i31(
                   mod.i32
@@ -347,7 +347,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
                       mod.i31ref.get(lhsOp, true),
                       mod.i31ref.get(rhsOp, true)
                     )
-                ) -> rhsMod
+                )
             case lNme =>
               raise(
                 WarningReport(
@@ -355,9 +355,8 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
                   source = Diagnostic.Source.Compilation
                 )
               )
-              mod.unreachable() -> mod
-        else
-          errExpr(msg"Cannot call non-binary builtin symbol '${l.nme}'") -> mod
+              mod.unreachable()
+        else errExpr(msg"Cannot call non-binary builtin symbol '${l.nme}'")
       case r =>
         raise(
           WarningReport(
@@ -365,11 +364,11 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
             source = Diagnostic.Source.Compilation
           )
         )
-        mod.unreachable() -> mod
+        mod.unreachable()
 
   def returningTerm(
       t: Block
-  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
+  )(using ModuleProxy, Raise): ModuleProxy#Expr =
     val mod = summon[ModuleProxy]
     t match
       case Define(defn, rst) =>
@@ -383,8 +382,8 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
                 )
               )
               ???
-            val (bodyExpr, newMod) = block(body)
-            newMod.addFunction(
+            val bodyExpr = block(body)
+            mod.addFunction(
               sym.nme,
               params = this.createType(params.map(_ => this.anyref).toSeq),
               // TODO(Derppening): Infer whether we actually have a return value or ()
@@ -392,7 +391,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
               vars = Seq(),
               body = bodyExpr
             )
-            bodyExpr -> newMod
+            returningTerm(rst)
           case defn =>
             raise(
               WarningReport(
@@ -400,13 +399,13 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
                 source = Diagnostic.Source.Compilation
               )
             )
-            mod.unreachable() -> mod
-      case Return(Value.Lit(UnitLit(false)), false) => mod.ret(N) -> mod
+            mod.unreachable()
+      case Return(Value.Lit(UnitLit(false)), false) => mod.ret(N)
       case Return(res, true)                        => result(res)
-      case Return(res, false) => result(res).mapFirst(v => mod.ret(S(v)))
-      case End(_)             =>
+      case Return(res, false)                       => mod.ret(S(result(res)))
+      case End(_)                                   =>
         // TODO: Insert `drop`s
-        mod.nop() -> mod
+        mod.nop()
       case t =>
         raise(
           WarningReport(
@@ -414,7 +413,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
             source = Diagnostic.Source.Compilation
           )
         )
-        mod.unreachable() -> mod
+        mod.unreachable()
 
   def program(p: Program, exprt: Opt[BlockMemberSymbol])(using
       Raise
@@ -426,7 +425,8 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
           source = Diagnostic.Source.Compilation
         )
       )
-    val (mainFnExpr, module) = block(p.main)(using newModule)
+    val module = newModule
+    val mainFnExpr = block(p.main)(using module)
     if exprt.isDefined then
       raise(
         WarningReport(
@@ -449,7 +449,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   def block(
       t: Block
-  )(using ModuleProxy, Raise): (ModuleProxy#Expr, ModuleProxy) =
+  )(using ModuleProxy, Raise): ModuleProxy#Expr =
     returningTerm(t)
 end WatBackend
 
