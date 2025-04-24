@@ -191,6 +191,14 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
             .mkDocument(doc"[", doc", ", doc"]")}, ${gen.fmtType(returnType)})"
       new Expr(freshId)
 
+  override def callRef(
+      target: Expr,
+      operands: Seq[Expr],
+      params: Type,
+      results: Type
+  ): Expr =
+    TODO("Binaryen.js does not support call_ref")
+
   override def i32 = new I32:
     override def const(value: Int): Expr =
       gen.withFreshVarId: freshId =>
@@ -204,6 +212,11 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   end i32
 
   override def ref: Ref = new Ref:
+    override def func(name: Str, ty: Type): Expr =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.func($name, ${gen.fmtType(ty)})"
+        new Expr(freshId)
+
     override def i31(value: Expr): Expr =
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.i31(${value.toJSRepr})"

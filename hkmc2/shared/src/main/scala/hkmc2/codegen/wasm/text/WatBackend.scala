@@ -270,6 +270,18 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     if operands.nonEmpty then TODO("call with operands is not supported yet")
     new Expr(S(FoldedInstr("call", Seq(s"$$$name"), Seq())))
 
+  override def callRef(
+      target: Expr,
+      operands: Seq[Expr],
+      params: Type,
+      results: Type
+  ): Expr =
+    // TODO: Ensure that operands are either placed on the stack now, or use `local.get`
+    //       Or - Use Seq[??? -> Expr] to lazily generate the expressions on the spot?
+    if operands.nonEmpty then TODO("call with operands is not supported yet")
+    // TODO
+    new Expr(S(FoldedInstr("call_ref", Seq("funcref"), Seq(target.inner))))
+
   override def i32 = new I32:
     override def const(value: Int): Expr =
       new Expr(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
@@ -279,6 +291,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   end i32
 
   override def ref = new Ref:
+    override def func(name: Str, ty: Type): Expr =
+      new Expr(S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq())))
     override def i31(value: Expr): Expr =
       new Expr(S(FoldedInstr("ref.i31", Seq(), Seq(value.inner))))
   end ref
@@ -361,8 +375,12 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
         // TODO
         val base = subexpression(fun)
         // val args = args.map(argument)
-        println(base)
-        mod.call("foo", Seq(), this.i31ref)
+        mod.callRef(
+          mod.ref.func("foo", this.i31ref),
+          Seq(),
+          this.none,
+          this.anyref
+        )
       case r =>
         raise(
           WarningReport(

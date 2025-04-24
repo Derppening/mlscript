@@ -66,6 +66,11 @@ abstract class Module:
 
   /** Abstract handle for `ref`-related instructions. */
   abstract class Ref:
+    /** Creates a `ref.func` instruction to a function with the given `name` and
+     * return type `ty`.
+     */
+    def func(name: Str, ty: Type): Expr
+
     /** Creates a `ref.i31` instruction with the given `value`. */
     def i31(value: Expr): Expr
   end Ref
@@ -202,6 +207,24 @@ abstract class Module:
    *   The return type of the function.
    */
   def call(name: Str, operands: Seq[Expr], returnType: Type): Expr
+
+  /** Create a `call_ref` instruction.
+   *
+   * @param target
+   *   The function reference to call.
+   * @param operands
+   *   The arguments to pass to the function.
+   * @param params
+   *   The parameter types of the function.
+   * @param results
+   *   The result types of the function.
+   */
+  def callRef(
+      target: Expr,
+      operands: Seq[Expr],
+      params: Type,
+      results: Type
+  ): Expr
 
   /** Returns a handle to create `i32` instructions. */
   def i32: I32
