@@ -357,6 +357,12 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
               )
               mod.unreachable()
         else errExpr(msg"Cannot call non-binary builtin symbol '${l.nme}'")
+      case c @ Call(fun, args) =>
+        // TODO
+        val base = subexpression(fun)
+        // val args = args.map(argument)
+        println(base)
+        mod.call("foo", Seq(), this.i31ref)
       case r =>
         raise(
           WarningReport(
