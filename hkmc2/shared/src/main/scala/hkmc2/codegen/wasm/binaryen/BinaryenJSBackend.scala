@@ -9,6 +9,7 @@ import document.*
 import shorthands.*
 
 import java.util.concurrent.atomic.AtomicLong
+import scala.collection.mutable
 
 /** Trait indicating that a class can be lowered into JavaScript code, */
 private trait ToJSRepr:
@@ -263,7 +264,8 @@ end GlobalRef
  *   the JavaScript code.
  */
 class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
-    extends WasmGenerator[ModRef]:
+    extends WasmGenerator[ModRef]
+    with AutoCloseable:
 
   /** A monotonically increasing counter for generating variable names of
    * intermediate Binaryen values.
@@ -272,6 +274,10 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
 
   /** The [[DocBuilder]] instance housing all generated JavaScript code. */
   private[binaryen] val db = DocBuilder()
+
+  /** A [[set mutable.HashSet]] of all created modules by the Binaryen backend.
+   */
+  private val moduleIds = mutable.HashSet[VarId]()
 
   /** Creates a fresh [[VarId]], executes [[block]], and returns the result of
    * the block.
@@ -290,7 +296,13 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
   override def newModule: ModRef =
     withFreshVarId: freshId =>
       db +=\\ doc"${freshId.toJSRepr} = new $modId.Module()"
+      moduleIds += freshId
       ModRef(this, freshId)
+
+  override def close(): Unit =
+    moduleIds.foreach: id =>
+      db +=\\ doc"${id.toJSRepr}.drop()"
+    moduleIds.clear()
 
   /** Converts all collected JavScript calls into a [[Document]] for execution.
    */
