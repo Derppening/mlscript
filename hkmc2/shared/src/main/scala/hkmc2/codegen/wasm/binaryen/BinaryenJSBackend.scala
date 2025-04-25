@@ -37,24 +37,22 @@ end VarId
  *   The identifier of the module in JavaScript code.
  */
 case class ModRef(gen: BinaryenJSBackend, varId: VarId)
-    extends Module
+    extends Module[TypeRef, ExprRef]
     with ToJSRepr:
   override type Exprt = ExportRef
-  override type Expr = ExprRef
   override type Func = FuncRef
   override type Glob = GlobalRef
 
   override def addFunction(
       name: Str,
-      params: Type,
-      results: Type,
-      vars: Seq[Type],
-      body: Expr
+      params: TypeRef,
+      results: TypeRef,
+      vars: Seq[TypeRef],
+      body: ExprRef
   ): Func =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunction($name, ${gen
-          .fmtType(params)}, ${gen.fmtType(results)}, ${vars
-          .map(gen.fmtType)
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunction($name, ${params.toJSRepr}, ${results.toJSRepr}, ${vars
+          .map(_.toJSRepr)
           .mkString("[", ", ", "]")}, ${body.toJSRepr})"
       new Func(freshId)
 
@@ -65,11 +63,10 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str,
-      params: Type,
-      results: Type
+      params: TypeRef,
+      results: TypeRef
   ): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.addFunctionImport($internalName, $externalModuleName, $externalBaseName, ${gen
-        .fmtType(params)}, ${gen.fmtType(results)})"
+    gen.db +=\\ doc"${this.toJSRepr}.addFunctionImport($internalName, $externalModuleName, $externalBaseName, ${params.toJSRepr}, ${results.toJSRepr})"
   override def addTableImport(
       internalName: Str,
       externalModuleName: Str,
@@ -86,10 +83,9 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str,
-      globalType: Type
+      globalType: TypeRef
   ): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.addGlobalImport($internalName, $externalModuleName, $externalBaseName, ${gen
-        .fmtType(globalType)})"
+    gen.db +=\\ doc"${this.toJSRepr}.addGlobalImport($internalName, $externalModuleName, $externalBaseName, ${globalType.toJSRepr})"
 
   override def addFunctionExport(
       internalName: Str,
@@ -119,13 +115,14 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
 
   override def addGlobal(
       name: Str,
-      ty: Type,
+      ty: TypeRef,
       mutable: Bool,
-      value: Expr
+      value: ExprRef
   ): Glob =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addGlobal($name, ${gen
-          .fmtType(ty)}, ${if mutable then 1 else 0}, ${value.toJSRepr})"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addGlobal($name, ${ty.toJSRepr}, ${
+          if mutable then 1 else 0
+        }, ${value.toJSRepr})"
       new Glob(freshId)
   override def removeGlobal(name: Str): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.removeGlobal($name)"
@@ -134,7 +131,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       initial: Int,
       maximum: Int,
       exportName: Opt[Str],
-      segments: Seq[MemorySegment[Expr]],
+      segments: Seq[MemorySegment[ExprRef]],
       shared: Bool
   ): Unit =
     gen.db +=\\
@@ -147,87 +144,91 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
 
   override def block(
       label: Opt[Str],
-      children: Seq[Expr],
-      resultType: Opt[Type]
-  ): Expr =
+      children: Seq[ExprRef],
+      resultType: Opt[TypeRef]
+  ): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.block(${label.orNull}, ${children
             .map(_.toJSRepr)
             .mkDocument(pre = "[", ", ", post = "]")}${resultType
-            .map(resTy => s", ${gen.fmtType(resTy)}")
+            .map(resTy => s", ${resTy.toJSRepr}")
             .getOrElse("")})"
-      new Expr(freshId)
+      new ExprRef(freshId)
 
-  override def nop(): Expr =
+  override def nop(): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.nop()"
-      new Expr(freshId)
+      new ExprRef(freshId)
 
-  override def ret(value: Opt[Expr]): Expr =
+  override def ret(value: Opt[ExprRef]): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.return(${value.map(_.toJSRepr).getOrElse("")})"
-      new Expr(freshId)
+      new ExprRef(freshId)
 
-  override def unreachable(): Expr =
+  override def unreachable(): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.unreachable()"
-      new Expr(freshId)
+      new ExprRef(freshId)
 
-  override def drop(value: Expr): Expr =
+  override def drop(value: ExprRef): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.drop(${value.toJSRepr})"
-      new Expr(freshId)
+      new ExprRef(freshId)
 
-  override def call(name: Str, operands: Seq[Expr], returnType: Type): Expr =
+  override def call(
+      name: Str,
+      operands: Seq[ExprRef],
+      returnType: TypeRef
+  ): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.call($name, ${operands
             .map(_.toJSRepr)
-            .mkDocument(doc"[", doc", ", doc"]")}, ${gen.fmtType(returnType)})"
-      new Expr(freshId)
+            .mkDocument(doc"[", doc", ", doc"]")}, ${returnType.toJSRepr})"
+      new ExprRef(freshId)
 
   override def callRef(
-      target: Expr,
-      operands: Seq[Expr],
-      params: Type,
-      results: Type
-  ): Expr =
+      target: ExprRef,
+      operands: Seq[ExprRef],
+      params: TypeRef,
+      results: TypeRef
+  ): ExprRef =
     TODO("Binaryen.js does not support call_ref")
 
   override def i32 = new I32:
-    override def const(value: Int): Expr =
+    override def const(value: Int): ExprRef =
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i32.const(${value.toString})"
-        new Expr(freshId)
+        new ExprRef(freshId)
 
-    override def add(left: Expr, right: Expr): Expr =
+    override def add(left: ExprRef, right: ExprRef): ExprRef =
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i32.add(${left.toJSRepr}, ${right.toJSRepr})"
-        new Expr(freshId)
+        new ExprRef(freshId)
   end i32
 
   override def ref: Ref = new Ref:
-    override def func(name: Str, ty: Type): Expr =
+    override def func(name: Str, ty: TypeRef): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.func($name, ${gen.fmtType(ty)})"
-        new Expr(freshId)
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.func($name, ${ty.toJSRepr})"
+        new ExprRef(freshId)
 
-    override def i31(value: Expr): Expr =
+    override def i31(value: ExprRef): ExprRef =
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.i31(${value.toJSRepr})"
-        new Expr(freshId)
+        new ExprRef(freshId)
   end ref
 
   override def i31ref: I31Ref = new I31Ref:
-    override def get(i31: Expr, signed: Bool): Expr =
+    override def get(i31: ExprRef, signed: Bool): ExprRef =
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i31.get_${if signed then "s" else "u"}(${i31.toJSRepr})"
-        new Expr(freshId)
+        new ExprRef(freshId)
   end i31ref
 
   override def toJSRepr: Document = varId.toJSRepr
@@ -269,6 +270,15 @@ case class GlobalRef(varId: VarId) extends Global[GlobalRef] with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end GlobalRef
 
+/** A reference to a type in Binaryen.
+ *
+ * @param varId
+ *   The identifier of the export in JavaScript code.
+ */
+case class TypeRef(varId: VarId) extends wasm.Type with ToJSRepr:
+  override def toJSRepr: Document = varId.toJSRepr
+end TypeRef
+
 /** A [[WasmGenerator]] backend that produces Binaryen.js Javascript calls as
  * its output.
  *
@@ -277,8 +287,9 @@ end GlobalRef
  *   the JavaScript code.
  */
 class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
-    extends WasmGenerator[ModRef]
+    extends WasmGenerator[TypeRef, ModRef, ExprRef]
     with AutoCloseable:
+  type TypeRefs = VarId
 
   /** A monotonically increasing counter for generating variable names of
    * intermediate Binaryen values.
@@ -292,6 +303,77 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
    */
   private val moduleIds = mutable.HashSet[VarId]()
 
+  override lazy val none: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.none"
+      TypeRef(freshId)
+  override lazy val i32: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.i32"
+      TypeRef(freshId)
+  override lazy val i64: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.i64"
+      TypeRef(freshId)
+  override lazy val f32: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.f32"
+      TypeRef(freshId)
+  override lazy val f64: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.f64"
+      TypeRef(freshId)
+  override lazy val v128: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.v128"
+      TypeRef(freshId)
+  override lazy val funcref: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.funcref"
+      TypeRef(freshId)
+  override lazy val externref: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.externref"
+      TypeRef(freshId)
+  override lazy val anyref: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.anyref"
+      TypeRef(freshId)
+  override lazy val eqref: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.eqref"
+      TypeRef(freshId)
+  override lazy val i31ref: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.i31ref"
+      TypeRef(freshId)
+  override lazy val structref: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.structref"
+      TypeRef(freshId)
+  override lazy val stringref: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.stringref"
+      TypeRef(freshId)
+  override lazy val unreachable: TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.unreachable"
+      TypeRef(freshId)
+
+  /** Creates a possibly multi-valued type from a [[Seq]] of types. */
+  def createType(types: Seq[TypeRef]): TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.createType(${types.map(_.toJSRepr).mkDocument("[", ", ", "]")})"
+      TypeRef(freshId)
+  override def createType(types: TypeRefs): TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.createType(${types.toJSRepr})"
+      TypeRef(freshId)
+  override def expandType(ty: TypeRef): TypeRefs =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.expandType(${ty.toJSRepr})"
+      freshId
+
   /** Creates a fresh [[VarId]], executes [[block]], and returns the result of
    * the block.
    *
@@ -300,11 +382,6 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
   def withFreshVarId[T](block: VarId => T): T = block(
     VarId(varCounter.getAndIncrement())
   )
-
-  def fmtType(ty: Type): Str = ty match
-    case I32Type    => s"$modId.i32"
-    case I31RefType => s"$modId.i31ref"
-    case _          => ???
 
   override def newModule: ModRef =
     withFreshVarId: freshId =>

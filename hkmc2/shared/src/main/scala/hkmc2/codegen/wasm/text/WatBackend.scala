@@ -79,7 +79,7 @@ class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef]
  *   The underlying [[wasm.Module]] that this proxy represents.
  */
 class ModuleProxy(private val gen: WatBackend, private var mod: Module)
-    extends WasmModule:
+    extends WasmModule[WasmType, ExprProxy]:
 
   /** Monotonically increasing counter for giving unique names to types. */
   private val anonTypeCounter = AtomicLong()
@@ -114,21 +114,20 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
    */
   private def addFunctionType(
       name: Opt[Str],
-      params: Type,
-      results: Type
+      params: WasmType,
+      results: WasmType
   ): Str = addType(name, gen.fmtFuncType(params, results))
 
   override type Exprt = ExportRef
-  override type Expr = ExprProxy
   override type Func = FuncRef
   override type Glob = GlobalRef
 
   override def addFunction(
       name: Str,
-      params: Type,
-      results: Type,
-      vars: Seq[Type],
-      body: Expr
+      params: WasmType,
+      results: WasmType,
+      vars: Seq[WasmType],
+      body: ExprProxy
   ): Func =
     assume(
       !mod.fn.exists((nm, _) => nm == name),
@@ -146,8 +145,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
     mod = mod.copy(
       fn = mod.fn :+ name -> ModFunc(fnTypeStrIndex, fnDecl),
-      el =
-        mod.el :+ name -> doc"(elem $$$name declare (ref $$$fnTypeStrIndex) (ref.func $$$name))"
+      el = mod.el :+ name -> doc"(elem declare func $$$name)"
     )
     new Func(this, name)
 
@@ -158,8 +156,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str,
-      params: Type,
-      results: Type
+      params: WasmType,
+      results: WasmType
   ): Unit =
     val funcImp =
       doc"(import \"$externalModuleName\" \"$externalBaseName\" (func $$$internalName${gen
@@ -196,7 +194,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str,
-      globalType: Type
+      globalType: WasmType
   ): Unit =
     val globalImp =
       doc"(import \"$externalModuleName\" \"$externalBaseName\" (global $$$internalName ${gen.fmtType(globalType)}))"
@@ -238,9 +236,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def addGlobal(
       name: Str,
-      ty: Type,
+      ty: WasmType,
       mutable: Bool,
-      value: Expr
+      value: ExprProxy
   ): Glob =
     val globalDecl = doc"(global $name ${
         if mutable then doc"(mut ${gen.fmtType(ty)})" else gen.fmtType(ty)
@@ -256,7 +254,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       initial: Int,
       maximum: Int,
       exportName: Opt[Str],
-      segments: Seq[MemorySegment[Expr]],
+      segments: Seq[MemorySegment[ExprProxy]],
       shared: Bool
   ): Unit =
     val memDecl =
@@ -277,10 +275,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def block(
       label: Opt[Str],
-      children: Seq[Expr],
-      resultType: Opt[Type]
-  ): Expr =
-    new Expr(
+      children: Seq[ExprProxy],
+      resultType: Opt[WasmType]
+  ): ExprProxy =
+    new ExprProxy(
       S(
         FoldedInstr(
           "block",
@@ -292,32 +290,35 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
     )
 
-  override def nop(): Expr =
-    new Expr(S(FoldedInstr("nop", Seq(), Seq())))
+  override def nop(): ExprProxy =
+    new ExprProxy(S(FoldedInstr("nop", Seq(), Seq())))
 
-  override def ret(value: Opt[Expr]): Expr =
-    new Expr(S(FoldedInstr("return", Seq(), value.map(_.inner).toSeq)))
+  override def ret(value: Opt[ExprProxy]): ExprProxy =
+    new ExprProxy(S(FoldedInstr("return", Seq(), value.map(_.inner).toSeq)))
 
-  override def unreachable(): Expr =
-    new Expr(S(FoldedInstr("unreachable", Seq(), Seq())))
+  override def unreachable(): ExprProxy =
+    new ExprProxy(S(FoldedInstr("unreachable", Seq(), Seq())))
 
-  override def drop(value: Expr): Expr =
-    new Expr(S(FoldedInstr("drop", Seq(), Seq(value.inner))))
+  override def drop(value: ExprProxy): ExprProxy =
+    new ExprProxy(S(FoldedInstr("drop", Seq(), Seq(value.inner))))
 
-  override def call(name: Str, operands: Seq[Expr], returnType: Type): Expr =
-    // TODO: Ensure that operands are either placed on the stack now, or use `local.get`
-    //       Or - Use Seq[??? -> Expr] to lazily generate the expressions on the spot?
-    if operands.nonEmpty then TODO("call with operands is not supported yet")
-    new Expr(S(FoldedInstr("call", Seq(s"$$$name"), Seq())))
+  override def call(
+      name: Str,
+      operands: Seq[ExprProxy],
+      returnType: WasmType
+  ): ExprProxy =
+    new ExprProxy(
+      S(FoldedInstr("call", Seq(s"$$$name"), operands.map(_.inner)))
+    )
 
   override def callRef(
-      target: Expr,
-      operands: Seq[Expr],
-      params: Type,
-      results: Type
-  ): Expr =
+      target: ExprProxy,
+      operands: Seq[ExprProxy],
+      params: WasmType,
+      results: WasmType
+  ): ExprProxy =
     val fnTypeStrIndex = addFunctionType(N, params, results)
-    new Expr(
+    new ExprProxy(
       S(
         FoldedInstr(
           "call_ref",
@@ -328,23 +329,25 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     )
 
   override def i32 = new I32:
-    override def const(value: Int): Expr =
-      new Expr(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
+    override def const(value: Int): ExprProxy =
+      new ExprProxy(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
 
-    override def add(left: Expr, right: Expr): Expr =
-      new Expr(S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner))))
+    override def add(left: ExprProxy, right: ExprProxy): ExprProxy =
+      new ExprProxy(
+        S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner)))
+      )
   end i32
 
   override def ref = new Ref:
-    override def func(name: Str, ty: Type): Expr =
-      new Expr(S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq())))
-    override def i31(value: Expr): Expr =
-      new Expr(S(FoldedInstr("ref.i31", Seq(), Seq(value.inner))))
+    override def func(name: Str, ty: WasmType): ExprProxy =
+      new ExprProxy(S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq())))
+    override def i31(value: ExprProxy): ExprProxy =
+      new ExprProxy(S(FoldedInstr("ref.i31", Seq(), Seq(value.inner))))
   end ref
 
   override def i31ref = new I31Ref:
-    override def get(i31: Expr, signed: Bool): Expr =
-      new Expr(
+    override def get(i31: ExprProxy, signed: Bool): ExprProxy =
+      ExprProxy(
         S(
           FoldedInstr(
             s"i31.get_${if signed then 's' else 'u'}",
@@ -359,9 +362,37 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 end ModuleProxy
 
 /** A [[WasmGenerator]] backend that produces text-based WAT as its output. */
-class WatBackend extends WasmGenerator[ModuleProxy]:
+class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
+  override type TypeRefs = Seq[WasmType]
+
+  override lazy val none: WasmType = NoneType
+  override lazy val i32: WasmType = I32Type
+  override lazy val i64: WasmType = I64Type
+  override lazy val f32: WasmType = F32Type
+  override lazy val f64: WasmType = F64Type
+  override lazy val v128: WasmType = V128Type
+  override lazy val funcref: WasmType = FuncRefType
+  override lazy val externref: WasmType = ExternRefType
+  override lazy val anyref: WasmType = AnyRefType
+  override lazy val eqref: WasmType = EqRefType
+  override lazy val i31ref: WasmType = I31RefType
+  override lazy val structref: WasmType = StructRefType
+  override lazy val stringref: WasmType = StringRefType
+  override lazy val unreachable: WasmType = UnreachableType
+
+  override def createType(types: TypeRefs): WasmType =
+    types.size match
+      case 0 => NoneType
+      case 1 => types.head
+      case _ => MultiValueType(types)
+  override def expandType(ty: WasmType): TypeRefs = ty match
+    case MultiValueType(types) => types
+    case NoneType              => Seq()
+    case _                     => Seq(ty)
+    ???
+
   /** Formats a type into its text representation. */
-  def fmtType(ty: Type): Document = ty match
+  def fmtType(ty: WasmType): Document = ty match
     case I32Type    => doc"i32"
     case AnyRefType => doc"anyref"
     case I31RefType => doc"i31.ref"
@@ -373,8 +404,8 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
    * This function will only generate `(param ...)` and `(result ...)` clauses.
    * Use [[fmtFuncType]] to generate the function type.
    */
-  def fmtFuncSig(params: Type, results: Type): Document =
-    (expandType(params).map(p => doc"(param ${fmtType(p)}") ++
+  def fmtFuncSig(params: WasmType, results: WasmType): Document =
+    (expandType(params).map(p => doc"(param ${fmtType(p)})") ++
       expandType(results)
         .map(r => doc"(result ${fmtType(r)})")).mkDocument(" ")
 
@@ -384,7 +415,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
    * This function will generate the full function type. Use [[fmtFuncSig]] to
    * only generate the parameter and result clauses.
    */
-  def fmtFuncType(params: Type, results: Type): Document =
+  def fmtFuncType(params: WasmType, results: WasmType): Document =
     doc"(func${fmtFuncSig(params, results)
         .optionUnless(_.isEmpty)
         .dlof(tyDoc => doc" $tyDoc")(doc"")})"
@@ -393,7 +424,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   /* Functions taken from JSBuilder */
 
-  def errExpr(errMsg: Message)(using ModuleProxy, Raise): ModuleProxy#Expr =
+  def errExpr(errMsg: Message)(using ModuleProxy, Raise): ExprProxy =
     raise(
       ErrorReport(errMsg -> N :: Nil, source = Diagnostic.Source.Compilation)
     )
@@ -401,16 +432,16 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   def operand(
       a: Arg
-  )(using ModuleProxy, Raise): ModuleProxy#Expr =
+  )(using ModuleProxy, Raise): ExprProxy =
     if a.spread then die else subexpression(a.value)
 
   def subexpression(
       r: Result
-  )(using ModuleProxy, Raise): ModuleProxy#Expr = result(r)
+  )(using ModuleProxy, Raise): ExprProxy = result(r)
 
   def result(
       r: Result
-  )(using ModuleProxy, Raise): ModuleProxy#Expr =
+  )(using ModuleProxy, Raise): ExprProxy =
     val mod = summon[ModuleProxy]
     r match
       case Value.Lit(IntLit(value)) =>
@@ -461,7 +492,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   def returningTerm(
       t: Block
-  )(using ModuleProxy, Raise): ModuleProxy#Expr =
+  )(using ModuleProxy, Raise): ExprProxy =
     val mod = summon[ModuleProxy]
     t match
       case Define(defn, rst) =>
@@ -544,7 +575,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
 
   def block(
       t: Block
-  )(using ModuleProxy, Raise): ModuleProxy#Expr =
+  )(using ModuleProxy, Raise): ExprProxy =
     returningTerm(t)
 end WatBackend
 

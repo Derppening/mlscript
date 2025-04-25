@@ -6,25 +6,22 @@ import mlscript.utils.*, shorthands.*
 import js.CodeBuilder
 
 /** Abstract base class for all Wasm types. */
-abstract class Type
-private case object NoneType extends Type
-private case object I32Type extends Type
-private case object I64Type extends Type
-private case object F32Type extends Type
-private case object F64Type extends Type
-private case object V128Type extends Type
-private case object FuncRefType extends Type
-private case object ExternRefType extends Type
-private case object AnyRefType extends Type
-private case object EqRefType extends Type
-private case object I31RefType extends Type
-private case object StructRefType extends Type
-private case object StringRefType extends Type
-private case object StringView_Wtf8Type extends Type
-private case object StringView_Wtf16Type extends Type
-private case object StringView_IterType extends Type
-private case object UnreachableType extends Type
-private case class MultiValueType(types: Seq[Type]) extends Type
+abstract class WasmType extends Type
+private case object NoneType extends WasmType
+private case object I32Type extends WasmType
+private case object I64Type extends WasmType
+private case object F32Type extends WasmType
+private case object F64Type extends WasmType
+private case object V128Type extends WasmType
+private case object FuncRefType extends WasmType
+private case object ExternRefType extends WasmType
+private case object AnyRefType extends WasmType
+private case object EqRefType extends WasmType
+private case object I31RefType extends WasmType
+private case object StructRefType extends WasmType
+private case object StringRefType extends WasmType
+private case object UnreachableType extends WasmType
+private case class MultiValueType(types: Seq[WasmType]) extends WasmType
 
 /** Abstract class representing a Wasm `export` section. */
 abstract class Export[E <: Export[E]]
@@ -52,9 +49,17 @@ case class MemorySegment[E <: Expression[E]](
     passive: Bool
 )
 
+/** Abstract class representing a Wasm type. */
+abstract class Type
+
 /** Abstract class representing a Wasm `module`.
+ *
+ * @tparam Type
+ *   The backend-specific handle for Wasm types.
+ * @tparam Expr
+ *   The backend-specific handle for Wasm expressions.
  */
-abstract class Module:
+abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   /** Abstract handle for `i32`-related instructions. */
   abstract class I32:
     /** Creates an `i32.const` instruction with the given `value`. */
@@ -83,9 +88,6 @@ abstract class Module:
 
   /** Concrete type representing an `export` section. */
   type Exprt <: Export[Exprt]
-
-  /** Concrete type representing a Wasm expression. */
-  type Expr <: Expression[Expr]
 
   /** Concrete type representing a `func` section. */
   type Func <: Function[Func]
@@ -175,7 +177,11 @@ abstract class Module:
    * @param resultType
    *   The result type of the block.
    */
-  def block(label: Opt[Str], children: Seq[Expr], resultType: Opt[Type]): Expr
+  def block(
+      label: Opt[Str],
+      children: Seq[Expr],
+      resultType: Opt[Type]
+  ): Expr
 
   /** Creates a `nop` instruction. */
   def nop(): Expr
@@ -241,80 +247,80 @@ end Module
  *
  * This class should be implemented by all backends that generate Wasm code.
  *
+ * @tparam T
+ *   The backend-specific handle for Wasm types.
  * @tparam M
  *   The backend-specific handle for Wasm modules.
+ * @tparam E
+ *   The backend-specific handle for Wasm expressions.
  * @note
  *   The API of this class is based on the `binaryen.js` API.
  */
-abstract class WasmGenerator[M <: Module] extends CodeBuilder:
+abstract class WasmGenerator[T <: Type, M <: Module[T, E], E <: Expression[E]]
+    extends CodeBuilder:
+
+  /** Type alias for representing multiple Wasm types. */
+  type TypeRefs
+
   /** The none (i.e. `void`) type. */
-  final def none: Type = NoneType
+  lazy val none: T
 
   /** The 32-bit integer type. */
-  final def i32: Type = I32Type
+  lazy val i32: T
 
   /** The 64-bit integer type. */
-  final def i64: Type = I64Type
+  lazy val i64: T
 
   /** The 32-bit floating point type. */
-  final def f32: Type = F32Type
+  lazy val f32: T
 
   /** The 64-bit floating point type. */
-  final def f64: Type = F64Type
+  lazy val f64: T
 
   /** The 128-bit vector type. */
-  final def v128: Type = V128Type
+  lazy val v128: T
 
   /** The function reference type. */
-  final def funcref: Type = FuncRefType
+  lazy val funcref: T
 
   /** The external (host) reference type. */
-  final def externref: Type = ExternRefType
+  lazy val externref: T
 
   /** The any (⊤) reference type. */
-  final def anyref: Type = AnyRefType
+  lazy val anyref: T
 
   /** The equal reference type. */
-  final def eqref: Type = EqRefType
+  lazy val eqref: T
 
   /** The i31 reference type. */
-  final def i31ref: Type = I31RefType
+  lazy val i31ref: T
 
   /** The structure reference type. */
-  final def structref: Type = StructRefType
+  lazy val structref: T
 
   /** The string reference type. */
-  final def stringref: Type = StringRefType
-
-  final def stringview_wtf8: Type = StringView_Wtf8Type
-  final def stringview_wtf16: Type = StringView_Wtf16Type
-  final def stringview_iter: Type = StringView_IterType
+  lazy val stringref: T
 
   /** A special type indicating unreachable code when obtaining information
    * about an expression.
    */
-  final def unreachable: Type = UnreachableType
+  lazy val unreachable: T
 
   /** Creates a multi-value type from [[TypeRefs an array of types]].
    */
-  def createType(types: Seq[Type]): Type =
-    types.size match
-      case 0 => NoneType
-      case 1 => types.head
-      case _ => MultiValueType(types)
+  def createType(types: TypeRefs): T
 
   /** Expands a multi-value type to [[TypeRefs an array of types]]. */
-  def expandType(ty: Type): Seq[Type] = ty match
-    case MultiValueType(types) => types
-    case NoneType              => Seq()
-    case _                     => Seq(ty)
+  def expandType(ty: T): TypeRefs
 
   /** Creates a new module using this backend. */
   def newModule: M
 
 object WasmGenerator:
   /** Test function for creating a simple module. */
-  def mkSimpleModule[M <: Module](gen: WasmGenerator[M]): M =
+  def mkSimpleModule[T <: Type, M <: Module[T, E], E <: Expression[E]](
+      gen: WasmGenerator[T, M, E]
+  ): M =
     val mod = gen.newModule
     locally:
       import mod._
