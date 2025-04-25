@@ -320,7 +320,7 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
     case I32Type    => doc"i32"
     case AnyRefType => doc"anyref"
     case I31RefType => doc"i31.ref"
-    case _          => ???
+    case _ => TODO(s"WatBackend::fmtType not implemented for type `$ty`")
 
   override def newModule: ModuleProxy = ModuleProxy(this, Module())
 
