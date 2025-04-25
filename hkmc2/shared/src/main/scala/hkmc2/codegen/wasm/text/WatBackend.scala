@@ -11,6 +11,8 @@ import syntax.Tree.{IntLit, UnitLit}
 import wasm.Module as WasmModule
 import Message.MessageContext
 
+import java.util.concurrent.atomic.AtomicLong
+
 /** A reference to an `export` field in a module.
  *
  * @param mod
@@ -78,6 +80,44 @@ class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef]
  */
 class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     extends WasmModule:
+
+  /** Monotonically increasing counter for giving unique names to types. */
+  private val anonTypeCounter = AtomicLong()
+
+  /** Adds a type to this module.
+   *
+   * @param name
+   *   The name of the type, or [[None]] if a type name should be generated.
+   * @param tyDoc
+   *   The document representing the type specification.
+   */
+  private def addType(name: Opt[Str], tyDoc: Document): Str =
+    assume(
+      name.forall(name => !mod.ty.exists((nm, _) => nm == name)),
+      s"Type `$name` already exists"
+    )
+
+    val intName = name.getOrElse:
+      s"_${anonTypeCounter.getAndIncrement()}"
+
+    mod = mod.copy(ty = mod.ty :+ (intName -> doc"(type $$$intName $tyDoc)"))
+    intName
+
+  /** Adds a function type to this module.
+   *
+   * @param name
+   * The name of the type, or [[None]] if a type name should be generated.
+   * @param params
+   * The parameter types of the function.
+   * @param results
+   * The result types of the function.
+   */
+  private def addFunctionType(
+      name: Opt[Str],
+      params: Type,
+      results: Type
+  ): Str = addType(name, gen.fmtFuncType(params, results))
+
   override type Exprt = ExportRef
   override type Expr = ExprProxy
   override type Func = FuncRef
@@ -95,20 +135,20 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       s"Function `$name` already exists"
     )
 
-    val fnDecl = doc"(func $$$name${gen
-        .expandType(params)
-        .optionIf(_.nonEmpty)
-        .dlof(_.map(p => doc"(param ${gen.fmtType(p)})").mkDocument(" ", " ", ""))(doc"")}${gen
-        .expandType(results)
-        .optionIf(_.nonEmpty)
-        .dlof(
-          _.map(r => doc"(result ${gen.fmtType(r)})").mkDocument(" ", " ", "")
-        )(doc"")}${(vars.map(v => doc"(local ${gen.fmtType(v)})") :+ body.fmtDoc)
-        .filterNot(_.isEmpty)
-        .optionIf(_.nonEmpty)
-        .dlof(docs => doc" #{  # ${docs.mkDocument(Document.forceBreak)}) #} ")(doc")")}"
+    val fnTypeStrIndex = addFunctionType(N, params, results)
 
-    mod = mod.copy(fn = mod.fn :+ name -> fnDecl)
+    val fnDecl =
+      doc"(func $$$name${gen.fmtFuncSig(params, results).optionUnless(_.isEmpty).dlof(sig => doc" $sig ")(doc"")}${(vars
+          .map(v => doc"(local ${gen.fmtType(v)})") :+ body.fmtDoc)
+          .filterNot(_.isEmpty)
+          .optionIf(_.nonEmpty)
+          .dlof(docs => doc" #{  # ${docs.mkDocument(Document.forceBreak)}) #} ")(doc")")}"
+
+    mod = mod.copy(
+      fn = mod.fn :+ name -> ModFunc(fnTypeStrIndex, fnDecl),
+      el =
+        mod.el :+ name -> doc"(elem $$$name declare (ref $$$fnTypeStrIndex) (ref.func $$$name))"
+    )
     new Func(this, name)
 
   override def removeFunction(name: Str): Unit =
@@ -276,11 +316,16 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       params: Type,
       results: Type
   ): Expr =
-    // TODO: Ensure that operands are either placed on the stack now, or use `local.get`
-    //       Or - Use Seq[??? -> Expr] to lazily generate the expressions on the spot?
-    if operands.nonEmpty then TODO("call with operands is not supported yet")
-    // TODO
-    new Expr(S(FoldedInstr("call_ref", Seq("funcref"), Seq(target.inner))))
+    val fnTypeStrIndex = addFunctionType(N, params, results)
+    new Expr(
+      S(
+        FoldedInstr(
+          "call_ref",
+          Seq(s"$$$fnTypeStrIndex"),
+          Seq(target.inner) ++ operands.map(_.inner)
+        )
+      )
+    )
 
   override def i32 = new I32:
     override def const(value: Int): Expr =
@@ -322,7 +367,31 @@ class WatBackend extends WasmGenerator[ModuleProxy]:
     case I31RefType => doc"i31.ref"
     case _ => TODO(s"WatBackend::fmtType not implemented for type `$ty`")
 
+  /** Formats a function signature with the given [[params parameters]] and
+   * [[results]] into its text representation.
+   *
+   * This function will only generate `(param ...)` and `(result ...)` clauses.
+   * Use [[fmtFuncType]] to generate the function type.
+   */
+  def fmtFuncSig(params: Type, results: Type): Document =
+    (expandType(params).map(p => doc"(param ${fmtType(p)}") ++
+      expandType(results)
+        .map(r => doc"(result ${fmtType(r)})")).mkDocument(" ")
+
+  /** Formats a function type with the given [[params parameters]] and
+   * [[results]] into its text representation.
+   *
+   * This function will generate the full function type. Use [[fmtFuncSig]] to
+   * only generate the parameter and result clauses.
+   */
+  def fmtFuncType(params: Type, results: Type): Document =
+    doc"(func${fmtFuncSig(params, results)
+        .optionUnless(_.isEmpty)
+        .dlof(tyDoc => doc" $tyDoc")(doc"")})"
+
   override def newModule: ModuleProxy = ModuleProxy(this, Module())
+
+  /* Functions taken from JSBuilder */
 
   def errExpr(errMsg: Message)(using ModuleProxy, Raise): ModuleProxy#Expr =
     raise(

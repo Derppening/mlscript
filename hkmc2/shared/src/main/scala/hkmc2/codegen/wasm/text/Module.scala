@@ -77,6 +77,18 @@ end FoldedInstr
  */
 type Expr = Opt[FoldedInstr] | Ls[StackInstr]
 
+/** A module function.
+ *
+ * @param fnTypeStrIndex
+ *   The index of the function type in the module's `type` section.
+ * @param doc
+ *   The content of the module function.
+ */
+case class ModFunc(
+    val fnTypeStrIndex: Str,
+    val doc: Document
+)
+
 /** A WebAssembly module definition.
  *
  * @param id
@@ -106,7 +118,7 @@ case class Module(
     id: Opt[Str] = N,
     ty: Seq[Str -> Document] = Seq(),
     im: Seq[Str -> Document] = Seq(),
-    fn: Seq[Str -> Document] = Seq(),
+    fn: Seq[Str -> ModFunc] = Seq(),
     ta: Seq[Str -> Document] = Seq(),
     me: Seq[Str -> Document] = Seq(),
     gl: Seq[Str -> Document] = Seq(),
@@ -119,7 +131,7 @@ case class Module(
     doc"(module${id.dlof(id => doc" $id")(doc"")} #{  # ${Seq(
         ty.map(_._2),
         im.map(_._2),
-        fn.map(_._2),
+        fn.map(_._2.doc),
         ta.map(_._2),
         me.map(_._2),
         gl.map(_._2),
