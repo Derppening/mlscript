@@ -313,6 +313,9 @@ abstract class WasmGenerator[T <: Type, M <: Module[T, E], E <: Expression[E]]
   /** Expands a multi-value type to [[TypeRefs an array of types]]. */
   def expandType(ty: T): TypeRefs
 
+  /** Returns the type of this expression `expr`. */
+  def getExpressionType(expr: E): T
+
   /** Creates a new module using this backend. */
   def newModule: M
 

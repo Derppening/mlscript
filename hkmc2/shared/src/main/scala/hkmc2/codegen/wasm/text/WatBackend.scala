@@ -389,7 +389,53 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
     case MultiValueType(types) => types
     case NoneType              => Seq()
     case _                     => Seq(ty)
-    ???
+
+  override def getExpressionType(expr: ExprProxy): WasmType =
+    val lastInstrOpt = expr.inner match
+      case stackInstr: Ls[StackInstr] if stackInstr.nonEmpty =>
+        Some(stackInstr.last)
+      case Some(foldedInstr: FoldedInstr) => Some(foldedInstr)
+      case _                              => None
+    val lastInstr = lastInstrOpt match
+      case Some(instr) => instr
+      case None        =>
+        // TODO(Derppening): Should this be an error?
+        return NoneType
+
+    val lastInstrMnem = lastInstr.mnemonic
+
+    // Take advantage of the fact that Wasm instructions (except control-flow instructions) are all prefixed with the
+    // type of the expression result
+    Array(
+      "i31.ref" -> i31ref,
+      "anyref" -> AnyRefType,
+      "i32" -> i32
+    ).find: (prefix, _) =>
+      lastInstrMnem.startsWith(s"$prefix.")
+    .dlof(_._2):
+        // Un-prefixed instructions - Manually match by instruction
+        lastInstrMnem match
+          case "block" =>
+            // Type of a `block` instruction is the type of the last instruction in the block
+            // TODO(Derppening): Consider storing this information in the instruction itself
+            lastInstr match
+              case StackInstr(_, _) =>
+                TODO(
+                  s"WatBackend::getExpressionType not implemented for instruction StackInstr(`$lastInstrMnem`)"
+                )
+              case FoldedInstr(_, _, stackargs) =>
+                getExpressionType(ExprProxy(stackargs.last))
+          case "nop" | "drop"        => none
+          case "ret" | "unreachable" => unreachable
+          case "call" | "call_ref"   =>
+            // TODO(Derppening): Requires refactoring ExprProxy to store the type of the expression
+            TODO(
+              s"WatBackend::getExpressionType not implemented for instruction `$lastInstrMnem`"
+            )
+          case mnem =>
+            TODO(
+              s"WatBackend::getExpressionType not implemented for instruction `$mnem`"
+            )
 
   /** Formats a type into its text representation. */
   def fmtType(ty: WasmType): Document = ty match

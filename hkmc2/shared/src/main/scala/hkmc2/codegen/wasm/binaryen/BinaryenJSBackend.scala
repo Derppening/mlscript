@@ -374,6 +374,11 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
       db +=\\ doc"${freshId.toJSRepr} = $modId.expandType(${ty.toJSRepr})"
       freshId
 
+  override def getExpressionType(expr: ExprRef): TypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.getExpressionType(${expr.toJSRepr})"
+      TypeRef(freshId)
+
   /** Creates a fresh [[VarId]], executes [[block]], and returns the result of
    * the block.
    *
