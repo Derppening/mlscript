@@ -422,20 +422,17 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
 
     val lastInstrMnem = lastInstr.mnemonic
 
-    // Take advantage of the fact that Wasm instructions (except control-flow instructions) are all prefixed with the
-    // type of the expression result
+    // Take advantage of the fact that most Wasm instructions are prefixed with the type of the expression result
+    // TODO(Derppening): Refactor ExprProxy to store the type of the expression so we don't have to compute it
     Array(
-      "i31.ref" -> i31ref,
-      "anyref" -> AnyRefType,
       "i32" -> i32
     ).find: (prefix, _) =>
       lastInstrMnem.startsWith(s"$prefix.")
     .dlof(_._2):
-        // Un-prefixed instructions - Manually match by instruction
+        // These are the exceptions to the rule...
         lastInstrMnem match
           case "block" =>
             // Type of a `block` instruction is the type of the last instruction in the block
-            // TODO(Derppening): Consider storing this information in the instruction itself
             lastInstr match
               case StackInstr(_, _) =>
                 TODO(
@@ -445,11 +442,12 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
                 getExpressionType(ExprProxy(stackargs.last))
           case "nop" | "drop"        => none
           case "ret" | "unreachable" => unreachable
-          case "call" | "call_ref"   =>
-            // TODO(Derppening): Requires refactoring ExprProxy to store the type of the expression
+          case "call" | "call_ref" =>
             TODO(
               s"WatBackend::getExpressionType not implemented for instruction `$lastInstrMnem`"
             )
+          case "ref.i31"                 => i31ref
+          case "i31.get_u" | "i31.get_s" => i32
           case mnem =>
             TODO(
               s"WatBackend::getExpressionType not implemented for instruction `$mnem`"
