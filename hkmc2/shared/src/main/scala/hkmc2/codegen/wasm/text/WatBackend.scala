@@ -430,6 +430,47 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
     )
     summon[ModuleProxy].unreachable()
 
+  def getVar(l: Local)(using ModuleProxy, Raise): ExprProxy =
+    l match
+      case ts: semantics.TermSymbol =>
+        raise(
+          WarningReport(
+            msg"WasmBackend::getVar for ${ts.toString} not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        summon[ModuleProxy].unreachable()
+      case ts: semantics.InnerSymbol =>
+        raise(
+          WarningReport(
+            msg"WasmBackend::getVar for ${ts.toString} not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        summon[ModuleProxy].unreachable()
+      case ts: semantics.BlockMemberSymbol if ts.isParameterizedMethod =>
+        // TODO(Derppening): Infer return type of function
+        summon[ModuleProxy].ref.func(ts.nme, this.anyref)
+      case l =>
+        raise(
+          WarningReport(
+            msg"WasmBackend::getVar for ${l.toString} (${l.getClass().getName()}) not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        summon[ModuleProxy].unreachable()
+
+  def argument(a: Arg)(using ModuleProxy, Raise): ExprProxy =
+    if a.spread then
+      raise(
+        WarningReport(
+          msg"WasmBackend::argument for `${a.toString}` (spread == true) not implemented yet" -> N :: Nil,
+          source = Diagnostic.Source.Compilation
+        )
+      )
+      summon[ModuleProxy].unreachable()
+    else result(a.value)
+
   def operand(
       a: Arg
   )(using ModuleProxy, Raise): ExprProxy =
@@ -445,7 +486,20 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
     val mod = summon[ModuleProxy]
     r match
       case Value.Lit(IntLit(value)) =>
+        // TODO(Derppening): Use i32.const and lower to i31ref only at function return/explicit type casts
         mod.ref.i31(mod.i32.const(value.toInt))
+      case Value.Ref(l: BuiltinSymbol) =>
+        if l.nullary then
+          raise(
+            WarningReport(
+              msg"WasmBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
+              source = Diagnostic.Source.Compilation
+            )
+          )
+          mod.unreachable()
+        else errExpr(msg"Illegal reference to builtin symbol '${l.nme}'")
+      case Value.Ref(l) => getVar(l)
+
       case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
           if !l.functionLike =>
         if l.binary then
@@ -471,16 +525,39 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
               )
               mod.unreachable()
         else errExpr(msg"Cannot call non-binary builtin symbol '${l.nme}'")
-      case c @ Call(fun, args) =>
-        // TODO
-        val base = subexpression(fun)
-        // val args = args.map(argument)
-        mod.callRef(
-          mod.ref.func("foo", this.i31ref),
-          Seq(),
-          this.none,
-          this.anyref
+      case Call(Value.Ref(l: BuiltinSymbol), rhs :: Nil) if !l.functionLike =>
+        if l.unary then
+          raise(
+            WarningReport(
+              msg"WasmBackend::result for unary builtin symbol '${l.nme.toString}' not implemented yet" -> N :: Nil,
+              source = Diagnostic.Source.Compilation
+            )
+          )
+          mod.unreachable()
+        else errExpr(msg"Cannot call non-unary builtin symbol '${l.nme}'")
+      case Call(Value.Ref(l: BuiltinSymbol), args) =>
+        if l.functionLike then
+          raise(
+            WarningReport(
+              msg"WasmBackend::result for builtin symbol '${l.nme.toString}' not implemented yet" -> N :: Nil,
+              source = Diagnostic.Source.Compilation
+            )
+          )
+          mod.unreachable()
+        else errExpr(msg"Illegal arity for builtin symbol '${l.nme}'")
+
+      case Call(s @ Select(_, id), lhs :: rhs :: Nil) =>
+        raise(
+          WarningReport(
+            msg"WasmBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
         )
+        mod.unreachable()
+      case c @ Call(fun, args) =>
+        val base = subexpression(fun)
+        val wasmArgs = args.map(argument)
+        mod.callRef(base, wasmArgs, this.none, this.anyref)
       case r =>
         raise(
           WarningReport(
