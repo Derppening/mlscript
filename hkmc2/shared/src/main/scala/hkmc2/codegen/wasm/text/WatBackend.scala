@@ -54,6 +54,14 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
   /** See [[isEmpty]]. */
   def nonEmpty: Boolean = !isEmpty
 
+  /** Returns the type of this expression. */
+  def getType: WasmType =
+    (inner match
+      case stackInstr: Ls[StackInstr] => stackInstr.lastOption.map(_.exprType)
+      case foldedInstr: Opt[FoldedInstr] => foldedInstr.map(_.exprType)
+    )
+    .getOrElse(NoneType)
+
   /** Converts the inner expression into a [[List]] of
    * [[StackInstr stack instructions]].
    */
@@ -303,22 +311,32 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           label.map(label => s"$$$label").toSeq ++ resultType
             .map(gen.expandType(_))
             .map(_.map(resTy => s"(result ${gen.fmtType(resTy)})")),
-          children.map(_.inner)
+          children.map(_.inner),
+          resultType.getOrElse(NoneType)
         )
       )
     )
 
   override def nop(): ExprProxy =
-    new ExprProxy(S(FoldedInstr("nop", Seq(), Seq())))
+    new ExprProxy(S(FoldedInstr("nop", Seq(), Seq(), NoneType)))
 
   override def ret(value: Opt[ExprProxy]): ExprProxy =
-    new ExprProxy(S(FoldedInstr("return", Seq(), value.map(_.inner).toSeq)))
+    new ExprProxy(
+      S(
+        FoldedInstr(
+          "return",
+          Seq(),
+          value.map(_.inner).toSeq,
+          value.dlof(_.getType)(NoneType)
+        )
+      )
+    )
 
   override def unreachable(): ExprProxy =
-    new ExprProxy(S(FoldedInstr("unreachable", Seq(), Seq())))
+    new ExprProxy(S(FoldedInstr("unreachable", Seq(), Seq(), UnreachableType)))
 
   override def drop(value: ExprProxy): ExprProxy =
-    new ExprProxy(S(FoldedInstr("drop", Seq(), Seq(value.inner))))
+    new ExprProxy(S(FoldedInstr("drop", Seq(), Seq(value.inner), NoneType)))
 
   override def call(
       name: Str,
@@ -326,7 +344,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       returnType: WasmType
   ): ExprProxy =
     new ExprProxy(
-      S(FoldedInstr("call", Seq(s"$$$name"), operands.map(_.inner)))
+      S(FoldedInstr("call", Seq(s"$$$name"), operands.map(_.inner), returnType))
     )
 
   override def callRef(
@@ -341,26 +359,29 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         FoldedInstr(
           "call_ref",
           Seq(s"$$$fnTypeStrIndex"),
-          Seq(target.inner) ++ operands.map(_.inner)
+          Seq(target.inner) ++ operands.map(_.inner),
+          results
         )
       )
     )
 
   override def i32 = new I32:
     override def const(value: Int): ExprProxy =
-      new ExprProxy(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
+      new ExprProxy(S(FoldedInstr("i32.const", Seq(s"$value"), Seq(), I32Type)))
 
     override def add(left: ExprProxy, right: ExprProxy): ExprProxy =
       new ExprProxy(
-        S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner)))
+        S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner), I32Type))
       )
   end i32
 
   override def ref = new Ref:
     override def func(name: Str, ty: WasmType): ExprProxy =
-      new ExprProxy(S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq())))
+      new ExprProxy(S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ???)))
     override def i31(value: ExprProxy): ExprProxy =
-      new ExprProxy(S(FoldedInstr("ref.i31", Seq(), Seq(value.inner))))
+      new ExprProxy(
+        S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), I31RefType))
+      )
   end ref
 
   override def i31ref = new I31Ref:
@@ -370,7 +391,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           FoldedInstr(
             s"i31.get_${if signed then 's' else 'u'}",
             Seq(),
-            Seq(i31.inner)
+            Seq(i31.inner),
+            I32Type
           )
         )
       )
@@ -408,50 +430,7 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
     case NoneType              => Seq()
     case _                     => Seq(ty)
 
-  override def getExpressionType(expr: ExprProxy): WasmType =
-    val lastInstrOpt = expr.inner match
-      case stackInstr: Ls[StackInstr] if stackInstr.nonEmpty =>
-        Some(stackInstr.last)
-      case Some(foldedInstr: FoldedInstr) => Some(foldedInstr)
-      case _                              => None
-    val lastInstr = lastInstrOpt match
-      case Some(instr) => instr
-      case None        =>
-        // TODO(Derppening): Should this be an error?
-        return NoneType
-
-    val lastInstrMnem = lastInstr.mnemonic
-
-    // Take advantage of the fact that most Wasm instructions are prefixed with the type of the expression result
-    // TODO(Derppening): Refactor ExprProxy to store the type of the expression so we don't have to compute it
-    Array(
-      "i32" -> i32
-    ).find: (prefix, _) =>
-      lastInstrMnem.startsWith(s"$prefix.")
-    .dlof(_._2):
-        // These are the exceptions to the rule...
-        lastInstrMnem match
-          case "block" =>
-            // Type of a `block` instruction is the type of the last instruction in the block
-            lastInstr match
-              case StackInstr(_, _) =>
-                TODO(
-                  s"WatBackend::getExpressionType not implemented for instruction StackInstr(`$lastInstrMnem`)"
-                )
-              case FoldedInstr(_, _, stackargs) =>
-                getExpressionType(ExprProxy(stackargs.last))
-          case "nop" | "drop"        => none
-          case "ret" | "unreachable" => unreachable
-          case "call" | "call_ref" =>
-            TODO(
-              s"WatBackend::getExpressionType not implemented for instruction `$lastInstrMnem`"
-            )
-          case "ref.i31"                 => i31ref
-          case "i31.get_u" | "i31.get_s" => i32
-          case mnem =>
-            TODO(
-              s"WatBackend::getExpressionType not implemented for instruction `$mnem`"
-            )
+  override def getExpressionType(expr: ExprProxy): WasmType = expr.getType
 
   /** Formats a type into its text representation. */
   def fmtType(ty: WasmType): Document = ty match

@@ -20,6 +20,9 @@ abstract sealed class Instruction:
    */
   val instrargs: Seq[Any]
 
+  /** The result type of this expression. */
+  val exprType: WasmType
+
   /** Formats this instruction into a [[Document]]. */
   def fmtDoc: Document
 end Instruction
@@ -27,7 +30,8 @@ end Instruction
 /** A WebAssembly stack instruction. */
 case class StackInstr(
     override val mnemonic: Str,
-    override val instrargs: Seq[Any]
+    override val instrargs: Seq[Any],
+    override val exprType: WasmType
 ) extends Instruction:
   override def fmtDoc: Document = doc"$mnemonic${instrargs
       .optionIf(_.nonEmpty)
@@ -42,7 +46,8 @@ end StackInstr
 case class FoldedInstr(
     override val mnemonic: Str,
     override val instrargs: Seq[Any],
-    stackargs: Seq[Expr]
+    stackargs: Seq[Expr],
+    override val exprType: WasmType
 ) extends Instruction:
   /** Converts this folded instruction into a sequence of stack instructions. */
   def toStack: Ls[StackInstr] =
@@ -52,7 +57,7 @@ case class FoldedInstr(
           case stackInstrs: Ls[StackInstr] => stackInstrs
           case foldedInstr: Opt[FoldedInstr] =>
             foldedInstr.map(_.toStack).getOrElse(Ls())
-      .toList :+ StackInstr(mnemonic, instrargs)
+      .toList :+ StackInstr(mnemonic, instrargs, exprType)
 
   override def fmtDoc: Document = doc"($mnemonic${instrargs
       .optionIf(_.nonEmpty)
