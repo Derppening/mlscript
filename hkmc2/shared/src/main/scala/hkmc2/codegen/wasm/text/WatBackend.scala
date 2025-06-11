@@ -278,6 +278,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   override def removeGlobal(name: Str): Unit =
     mod = mod.copy(gl = mod.gl.filterNot((nm, _) => nm == name))
 
+    // TODO(Derppening): We probably will need to relax this to support the multiple memories feature in Wasm...
   override def setMemory(
       initial: Int,
       maximum: Int,
@@ -383,7 +384,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def ref = new Ref:
     override def func(name: Str, ty: WasmType): ExprProxy =
-      new ExprProxy(S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty)))
+      // TODO(Derppening): Use TypeBuilder to create a SignatureType, and use that to replace AnyRefType
+      new ExprProxy(
+        S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), AnyRefType))
+      )
     override def i31(value: ExprProxy): ExprProxy =
       new ExprProxy(
         S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), I31RefType))
@@ -636,7 +640,7 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
               params = this.createType(
                 params.flatMap(_.params).map(_ => this.anyref).toSeq
               ),
-              // TODO(Derppening): Infer whether we actually have a return value or ()
+              // TODO(Derppening): Change this to bodyExpr.getType once we have signature types as function types
               results = this.anyref,
               vars = Seq(),
               body = bodyExpr
