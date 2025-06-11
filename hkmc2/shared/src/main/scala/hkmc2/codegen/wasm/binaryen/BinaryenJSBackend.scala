@@ -41,6 +41,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
     with ToJSRepr:
   override type Exprt = ExportRef
   override type Func = FuncRef
+  override type FuncInfo = FuncInfoRef
   override type Glob = GlobalRef
 
   override def addFunction(
@@ -152,6 +153,11 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   override def setStart(start: Func): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.setStart(${start.toJSRepr})"
 
+  override def getFunctionInfo(ftype: Func): FuncInfo =
+    gen.withFreshVarId: freshId =>
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunctionInfo(${ftype.toJSRepr})"
+      new FuncInfo(freshId)
+
   override def block(
       label: Opt[Str],
       children: Seq[ExprRef],
@@ -261,6 +267,13 @@ end ExportRef
 case class FuncRef(varId: VarId) extends Function[FuncRef] with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end FuncRef
+
+/** A reference to a structure containing function information in Binaryen. */
+case class FuncInfoRef(varId: VarId)
+    extends FunctionInfo[TypeRef]
+    with ToJSRepr:
+  override def toJSRepr: Document = varId.toJSRepr
+end FuncInfoRef
 
 /** A reference to an expression in Binaryen.
  *

@@ -13,6 +13,14 @@ abstract class Export[E <: Export[E]]
  */
 abstract class Expression[E <: Expression[E]]
 
+/** Abstract class representing a structure containing information of a
+  * function.
+  *
+  * @tparam T
+  *   The type representing Wasm types.
+  */
+abstract class FunctionInfo[T <: Type]
+
 /** Abstract class representing a Wasm function. */
 abstract class Function[F <: Function[F]]:
   /** The type representing expressions within the function. */
@@ -73,6 +81,11 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Concrete type representing a `func` section. */
   type Func <: Function[Func]
+
+  /** Concrete type representing a structure containing information of a
+    * function.
+    */
+  type FuncInfo <: FunctionInfo[Type]
 
   /** Concrete type representing a `global` section. */
   type Glob <: Global[Glob]
@@ -156,6 +169,9 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Sets the `start` function for this module. */
   def setStart(start: Func): Unit
+
+  /** Obtains information about a function. */
+  def getFunctionInfo(name: Func): FuncInfo
 
   /** Creates a `block` instruction.
    *

@@ -70,6 +70,18 @@ case class FuncRef(mod: ModuleProxy, name: Str) extends Function[FuncRef]:
   override type Expr = ExprProxy
 end FuncRef
 
+/** A structure containing function information.
+  *
+  * @param name
+  *   The name of the function.
+  * @param results
+  *   The result type of the function.
+  */
+case class FunctionInfo(
+    name: Str,
+    results: WasmType
+) extends wasm.FunctionInfo[WasmType]
+
 /** A reference to a `global` field in a module.
  *
  * @param mod
@@ -128,6 +140,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override type Exprt = ExportRef
   override type Func = FuncRef
+  override type FuncInfo = FunctionInfo
   override type Glob = GlobalRef
 
   override def addFunction(
@@ -152,7 +165,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           .dlof(docs => doc" #{  # ${docs.mkDocument(Document.forceBreak)}) #} ")(doc")")}"
 
     mod = mod.copy(
-      fn = mod.fn :+ name -> ModFunc(fnTypeStrIndex, fnDecl),
+      fn = mod.fn :+ name -> ModFunc(fnTypeStrIndex, params, results, fnDecl),
       el = mod.el :+ name -> doc"(elem declare func $$$name)"
     )
     new Func(this, name)
@@ -287,6 +300,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def setStart(start: Func): Unit =
     mod = mod.copy(st = S(start.name))
+
+  override def getFunctionInfo(ftype: Func): FuncInfo =
+    val func = mod.fn.find(_._1 == ftype.name).map(_._2).get
+    new FunctionInfo(name = func._1, results = func.resultTypes)
 
   override def block(
       label: Opt[Str],

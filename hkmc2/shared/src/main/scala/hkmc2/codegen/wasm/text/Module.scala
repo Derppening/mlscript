@@ -101,14 +101,20 @@ end FoldedInstr
 type Expr = Opt[FoldedInstr] | Ls[StackInstr]
 
 /** A module function.
- *
- * @param fnTypeStrIndex
- *   The index of the function type in the module's `type` section.
- * @param doc
- *   The content of the module function.
- */
+  *
+  * @param typeId
+  *   The identifier of the function type in the module's `type` section.
+  * @param paramTypes
+  *   The parameter type(s) of this function, without the `(param)` construct.
+  * @param resultTypes
+  *   The result type(s) of this function, without the `(result)` construct.
+  * @param doc
+  *   The content of the module function.
+  */
 case class ModFunc(
-    val fnTypeStrIndex: Str,
+    val typeId: Str,
+    val paramTypes: WasmType,
+    val resultTypes: WasmType,
     val doc: Document
 )
 
