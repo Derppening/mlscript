@@ -13,24 +13,6 @@ import Message.MessageContext
 
 import java.util.concurrent.atomic.AtomicLong
 
-/** Abstract base class for all Wasm types. */
-abstract class WasmType extends Type
-private case object NoneType extends WasmType
-private case object I32Type extends WasmType
-private case object I64Type extends WasmType
-private case object F32Type extends WasmType
-private case object F64Type extends WasmType
-private case object V128Type extends WasmType
-private case object FuncRefType extends WasmType
-private case object ExternRefType extends WasmType
-private case object AnyRefType extends WasmType
-private case object EqRefType extends WasmType
-private case object I31RefType extends WasmType
-private case object StructRefType extends WasmType
-private case object StringRefType extends WasmType
-private case object UnreachableType extends WasmType
-private case class MultiValueType(types: Seq[WasmType]) extends WasmType
-
 /** A reference to an `export` field in a module.
  *
  * @param mod
