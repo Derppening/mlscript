@@ -418,7 +418,7 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
   def fmtType(ty: WasmType): Document = ty match
     case I32Type    => doc"i32"
     case AnyRefType => doc"anyref"
-    case I31RefType => doc"i31.ref"
+    case I31RefType => doc"i31ref"
     case _ => TODO(s"WatBackend::fmtType not implemented for type `$ty`")
 
   /** Formats a function signature with the given [[params parameters]] and
