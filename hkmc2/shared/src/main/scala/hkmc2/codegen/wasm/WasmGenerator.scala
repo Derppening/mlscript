@@ -86,6 +86,13 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
       body: Expr
   ): Func
 
+  /** Gets a function by name.
+    *
+    * Refer to the implementation documentation for the specific handling if the
+    * function with the given name is not found.
+    */
+  def getFunction(name: Str): Func
+
   /** Removes the function with the given `name` from this module. */
   def removeFunction(name: Str): Unit
 

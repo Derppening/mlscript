@@ -157,6 +157,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     )
     new Func(this, name)
 
+  /** Gets a function by name.
+    *
+    * Generates a [[NoSuchElementException]] if the function does not exist.
+    */
+  override def getFunction(name: Str): Func =
+    mod.fn.find(_._1 == name).map((nme, _) => new Func(this, nme)).get
+
   override def removeFunction(name: Str): Unit =
     mod = mod.copy(fn = mod.fn.filterNot((nm, _) => nm == name))
 

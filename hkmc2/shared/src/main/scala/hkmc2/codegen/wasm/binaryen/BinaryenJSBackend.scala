@@ -56,6 +56,16 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
           .mkString("[", ", ", "]")}, ${body.toJSRepr})"
       new Func(freshId)
 
+  /** Gets a function by name.
+    *
+    * Generates a JavaScript runtime assertion if the function does not exist.
+    */
+  override def getFunction(name: Str): Func =
+    gen.withFreshVarId: freshId =>
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunction($name)"
+      gen.db +=\\ doc"""assert(${freshId.toJSRepr}, "Function '$name' not found in module")"""
+      new Func(freshId)
+
   override def removeFunction(name: String): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.removeFunction($name)"
 
