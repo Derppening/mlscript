@@ -423,7 +423,11 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
     moduleIds.clear()
 
   /** Converts all collected JavScript calls into a [[Document]] for execution.
-   */
-  def dumpJS: Document = db.toDoc
+    */
+  def dumpJS: Document =
+    val prelude = (0L until varCounter.get())
+      .map(VarId(_).toJSRepr)
+      .mkDocument("let ", ", ", ";")
+    prelude :\\: db.toDoc
 
 end BinaryenJSBackend
