@@ -54,7 +54,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunction($name, ${params.toJSRepr}, ${results.toJSRepr}, ${vars
           .map(_.toJSRepr)
-          .mkString("[", ", ", "]")}, ${body.toJSRepr})"
+          .mkString("[", ", ", "]")}, ${body.toJSRepr});"
       new Func(freshId)
 
   /** Gets a function by name.
@@ -63,12 +63,12 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
     */
   override def getFunction(name: Str): Func =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunction($name)"
-      gen.db +=\\ doc"""assert(${freshId.toJSRepr}, "Function '$name' not found in module")"""
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunction($name);"
+      gen.db +=\\ doc"""assert(${freshId.toJSRepr}, "Function '$name' not found in module");"""
       new Func(freshId)
 
   override def removeFunction(name: String): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.removeFunction($name)"
+    gen.db +=\\ doc"${this.toJSRepr}.removeFunction($name);"
 
   override def addFunctionImport(
       internalName: Str,
@@ -77,51 +77,51 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       params: TypeRef,
       results: TypeRef
   ): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.addFunctionImport($internalName, $externalModuleName, $externalBaseName, ${params.toJSRepr}, ${results.toJSRepr})"
+    gen.db +=\\ doc"${this.toJSRepr}.addFunctionImport($internalName, $externalModuleName, $externalBaseName, ${params.toJSRepr}, ${results.toJSRepr});"
   override def addTableImport(
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str
   ): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.addTableImport($internalName, $externalModuleName, $externalBaseName)"
+    gen.db +=\\ doc"${this.toJSRepr}.addTableImport($internalName, $externalModuleName, $externalBaseName);"
   override def addMemoryImport(
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str
   ): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.addMemoryImport($internalName, $externalModuleName, $externalBaseName)"
+    gen.db +=\\ doc"${this.toJSRepr}.addMemoryImport($internalName, $externalModuleName, $externalBaseName);"
   override def addGlobalImport(
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str,
       globalType: TypeRef
   ): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.addGlobalImport($internalName, $externalModuleName, $externalBaseName, ${globalType.toJSRepr})"
+    gen.db +=\\ doc"${this.toJSRepr}.addGlobalImport($internalName, $externalModuleName, $externalBaseName, ${globalType.toJSRepr});"
 
   override def addFunctionExport(
       internalName: Str,
       externalName: Str
   ): Exprt =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunctionExport($internalName, $externalName)"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunctionExport($internalName, $externalName);"
       new Exprt(freshId)
   override def addTableExport(internalName: Str, externalName: Str): Exprt =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addTableExport($internalName, $externalName)"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addTableExport($internalName, $externalName);"
       new Exprt(freshId)
   override def addMemoryExport(
       internalName: Str,
       externalName: Str
   ): Exprt =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addMemoryExport($internalName, $externalName)"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addMemoryExport($internalName, $externalName);"
       new Exprt(freshId)
   override def addGlobalExport(
       internalName: Str,
       externalName: Str
   ): Exprt =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addGlobalExport($internalName, $externalName)"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addGlobalExport($internalName, $externalName);"
       new Exprt(freshId)
 
   override def addGlobal(
@@ -133,10 +133,10 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addGlobal($name, ${ty.toJSRepr}, ${
           if mutable then 1 else 0
-        }, ${value.toJSRepr})"
+        }, ${value.toJSRepr});"
       new Glob(freshId)
   override def removeGlobal(name: Str): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.removeGlobal($name)"
+    gen.db +=\\ doc"${this.toJSRepr}.removeGlobal($name);"
 
   override def setMemory(
       initial: Int,
@@ -148,14 +148,14 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
     gen.db +=\\
       doc"${this.toJSRepr}.setMemory(${initial.toString}, ${maximum.toString}, ${exportName.orNull}, ${segments
           .map(s => s"{offset: ${s.offset.toJSRepr}, data: new Uint8Array(${s.data.mkString("[", ", ", "]")}), passive: ${s.passive}")
-          .mkString("[", ", ", "]")}, ${shared.toString})"
+          .mkString("[", ", ", "]")}, ${shared.toString});"
 
   override def setStart(start: Func): Unit =
-    gen.db +=\\ doc"${this.toJSRepr}.setStart(${start.toJSRepr})"
+    gen.db +=\\ doc"${this.toJSRepr}.setStart(${start.toJSRepr});"
 
   override def getFunctionInfo(ftype: Func): FuncInfo =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunctionInfo(${ftype.toJSRepr})"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunctionInfo(${ftype.toJSRepr});"
       new FuncInfo(freshId)
 
   override def block(
@@ -169,31 +169,31 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
             .map(_.toJSRepr)
             .mkDocument(pre = "[", ", ", post = "]")}${resultType
             .map(resTy => s", ${resTy.toJSRepr}")
-            .getOrElse("")})"
+            .getOrElse("")});"
       new ExprRef(freshId)
 
   override def nop(): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.nop()"
+        doc"${freshId.toJSRepr} = ${this.toJSRepr}.nop();"
       new ExprRef(freshId)
 
   override def ret(value: Opt[ExprRef]): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.return(${value.map(_.toJSRepr).getOrElse("")})"
+        doc"${freshId.toJSRepr} = ${this.toJSRepr}.return(${value.map(_.toJSRepr).getOrElse("")});"
       new ExprRef(freshId)
 
   override def unreachable(): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.unreachable()"
+        doc"${freshId.toJSRepr} = ${this.toJSRepr}.unreachable();"
       new ExprRef(freshId)
 
   override def drop(value: ExprRef): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.drop(${value.toJSRepr})"
+        doc"${freshId.toJSRepr} = ${this.toJSRepr}.drop(${value.toJSRepr});"
       new ExprRef(freshId)
 
   override def call(
@@ -205,7 +205,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.call($name, ${operands
             .map(_.toJSRepr)
-            .mkDocument(doc"[", doc", ", doc"]")}, ${returnType.toJSRepr})"
+            .mkDocument(doc"[", doc", ", doc"]")}, ${returnType.toJSRepr});"
       new ExprRef(freshId)
 
   override def callRef(
@@ -219,31 +219,31 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   override def i32 = new I32:
     override def const(value: Int): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i32.const(${value.toString})"
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i32.const(${value.toString});"
         new ExprRef(freshId)
 
     override def add(left: ExprRef, right: ExprRef): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i32.add(${left.toJSRepr}, ${right.toJSRepr})"
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i32.add(${left.toJSRepr}, ${right.toJSRepr});"
         new ExprRef(freshId)
   end i32
 
   override def ref: Ref = new Ref:
     override def func(name: Str, ty: TypeRef): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.func($name, ${ty.toJSRepr})"
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.func($name, ${ty.toJSRepr});"
         new ExprRef(freshId)
 
     override def i31(value: ExprRef): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.i31(${value.toJSRepr})"
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.i31(${value.toJSRepr});"
         new ExprRef(freshId)
   end ref
 
   override def i31ref: I31Ref = new I31Ref:
     override def get(i31: ExprRef, signed: Bool): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i31.get_${if signed then "s" else "u"}(${i31.toJSRepr})"
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i31.get_${if signed then "s" else "u"}(${i31.toJSRepr});"
         new ExprRef(freshId)
   end i31ref
 
@@ -386,20 +386,20 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
   /** Creates a possibly multi-valued type from a [[Seq]] of types. */
   def createType(types: Seq[TypeRef]): TypeRef =
     withFreshVarId: freshId =>
-      db +=\\ doc"${freshId.toJSRepr} = $modId.createType(${types.map(_.toJSRepr).mkDocument("[", ", ", "]")})"
+      db +=\\ doc"${freshId.toJSRepr} = $modId.createType(${types.map(_.toJSRepr).mkDocument("[", ", ", "]")});"
       TypeRef(freshId)
   override def createType(types: TypeRefs): TypeRef =
     withFreshVarId: freshId =>
-      db +=\\ doc"${freshId.toJSRepr} = $modId.createType(${types.toJSRepr})"
+      db +=\\ doc"${freshId.toJSRepr} = $modId.createType(${types.toJSRepr});"
       TypeRef(freshId)
   override def expandType(ty: TypeRef): TypeRefs =
     withFreshVarId: freshId =>
-      db +=\\ doc"${freshId.toJSRepr} = $modId.expandType(${ty.toJSRepr})"
+      db +=\\ doc"${freshId.toJSRepr} = $modId.expandType(${ty.toJSRepr});"
       freshId
 
   override def getExpressionType(expr: ExprRef): TypeRef =
     withFreshVarId: freshId =>
-      db +=\\ doc"${freshId.toJSRepr} = $modId.getExpressionType(${expr.toJSRepr})"
+      db +=\\ doc"${freshId.toJSRepr} = $modId.getExpressionType(${expr.toJSRepr});"
       TypeRef(freshId)
 
   /** Creates a fresh [[VarId]], executes [[block]], and returns the result of
@@ -413,13 +413,13 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
 
   override def newModule: ModRef =
     withFreshVarId: freshId =>
-      db +=\\ doc"${freshId.toJSRepr} = new $modId.Module()"
+      db +=\\ doc"${freshId.toJSRepr} = new $modId.Module();"
       moduleIds += freshId
       ModRef(this, freshId)
 
   override def close(): Unit =
     moduleIds.foreach: id =>
-      db +=\\ doc"${id.toJSRepr}.drop()"
+      db +=\\ doc"${id.toJSRepr}.drop();"
     moduleIds.clear()
 
   /** Converts all collected JavScript calls into a [[Document]] for execution.
