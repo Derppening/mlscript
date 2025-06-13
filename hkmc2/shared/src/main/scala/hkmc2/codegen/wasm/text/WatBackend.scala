@@ -12,6 +12,7 @@ import wasm.Module as WasmModule
 import Message.MessageContext
 
 import java.util.concurrent.atomic.AtomicLong
+import scala.collection.mutable
 
 /** A reference to an `export` field in a module.
  *
@@ -79,6 +80,7 @@ end FuncRef
   */
 case class FunctionInfo(
     name: Str,
+    params: WasmType,
     results: WasmType
 ) extends wasm.FunctionInfo[WasmType]
 
@@ -90,6 +92,24 @@ case class FunctionInfo(
  *   The name of the global.
  */
 class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef]
+
+/** A builder for creating heap types. */
+class TypeBuilder(private val gen: WatBackend, size: Int)
+    extends wasm.TypeBuilder[WasmType]:
+  private val entries = mutable.ArrayBuffer[HeapType]()
+  entries.sizeHint(size)
+
+  override def setSignatureType(
+      index: Int,
+      paramTypes: WasmType,
+      resultTypes: WasmType
+  ): Unit =
+    // Pad `entries` until we have the correct number of elements
+    entries ++= Seq.fill(index - entries.size + 1)(null)
+    entries(index) = SignatureType(paramTypes, resultTypes)
+
+  override def build(): WasmType = gen.createType(entries.toSeq)
+end TypeBuilder
 
 /** A reference to a WebAssembly module.
  *
@@ -278,7 +298,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   override def removeGlobal(name: Str): Unit =
     mod = mod.copy(gl = mod.gl.filterNot((nm, _) => nm == name))
 
-    // TODO(Derppening): We probably will need to relax this to support the multiple memories feature in Wasm...
+    // TODO(Derppening): We probably will need to relax this to support the multiple
+    //                   memories feature in Wasm...
   override def setMemory(
       initial: Int,
       maximum: Int,
@@ -304,7 +325,11 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def getFunctionInfo(ftype: Func): FuncInfo =
     val func = mod.fn.find(_._1 == ftype.name).map(_._2).get
-    new FunctionInfo(name = func._1, results = func.resultTypes)
+    new FunctionInfo(
+      name = func._1,
+      params = func.paramTypes,
+      results = func.resultTypes
+    )
 
   override def block(
       label: Opt[Str],
@@ -384,9 +409,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def ref = new Ref:
     override def func(name: Str, ty: WasmType): ExprProxy =
-      // TODO(Derppening): Use TypeBuilder to create a SignatureType, and use that to replace AnyRefType
+      // TODO(Derppening): See if need to convert `ty` into an exact type,
+      //                   since the instruction's return type in Binaryen is
+      //                   `(ref (exact $idx))`, but this appears to be a Wasm
+      //                   proposal...
+      require(ty.isInstanceOf[SignatureType])
       new ExprProxy(
-        S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), AnyRefType))
+        S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty))
       )
     override def i31(value: ExprProxy): ExprProxy =
       new ExprProxy(
@@ -412,7 +441,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 end ModuleProxy
 
 /** A [[WasmGenerator]] backend that produces text-based WAT as its output. */
-class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
+class WatBackend
+    extends WasmGenerator[WasmType, ModuleProxy, TypeBuilder, ExprProxy]:
   override type TypeRefs = Seq[WasmType]
 
   override lazy val none: WasmType = NoneType
@@ -473,6 +503,8 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
 
   override def newModule: ModuleProxy = ModuleProxy(this, Module())
 
+  override def newTypeBuilder(size: Int): TypeBuilder = TypeBuilder(this, size)
+
   /* Functions taken from JSBuilder */
 
   def errExpr(errMsg: Message)(using ModuleProxy, Raise): ExprProxy =
@@ -500,8 +532,12 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
         )
         summon[ModuleProxy].unreachable()
       case ts: semantics.BlockMemberSymbol if ts.isParameterizedMethod =>
-        // TODO(Derppening): Infer return type of function
-        summon[ModuleProxy].ref.func(ts.nme, this.anyref)
+        val mod = summon[ModuleProxy]
+        val func = mod.getFunction(ts.nme)
+        val funcInfo = mod.getFunctionInfo(func)
+        val sigType = newTypeBuilder(1)
+        sigType.setSignatureType(0, funcInfo.params, funcInfo.results)
+        mod.ref.func(ts.nme, sigType.build())
       case l =>
         raise(
           WarningReport(
@@ -607,8 +643,9 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
         mod.unreachable()
       case c @ Call(fun, args) =>
         val base = subexpression(fun)
+        val baseTy = base.getType.asInstanceOf[SignatureType]
         val wasmArgs = args.map(argument)
-        mod.callRef(base, wasmArgs, this.none, this.anyref)
+        mod.callRef(base, wasmArgs, baseTy.params, baseTy.results)
       case r =>
         raise(
           WarningReport(
@@ -640,8 +677,7 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
               params = this.createType(
                 params.flatMap(_.params).map(_ => this.anyref).toSeq
               ),
-              // TODO(Derppening): Change this to bodyExpr.getType once we have signature types as function types
-              results = this.anyref,
+              results = bodyExpr.getType,
               vars = Seq(),
               body = bodyExpr
             )
@@ -696,11 +732,13 @@ class WatBackend extends WasmGenerator[WasmType, ModuleProxy, ExprProxy]:
       mainFnExpr
     )
     module.addFunctionExport("main", "main")
-    // TODO(Derppening): Do we treat `main` as a main function, or just a launchpad from JS?
-    //                   Start functions must not return any value though...
+    // TODO(Derppening): Do we treat `main` as a main function, or just a launchpad from
+    //                   JS? Start functions must not return any value though...
     // module.setStart(mainFn)
     module
 
+  // TODO(Derppening): Make this return Seq[ExprProxy], since Wasm allows
+  //                   returning multiple values
   def block(
       t: Block
   )(using ModuleProxy, Raise): ExprProxy =

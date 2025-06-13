@@ -8,7 +8,7 @@ import mlscript.utils.*
 import document.*
 import shorthands.*
 
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import scala.collection.mutable
 
 /** Trait indicating that a class can be lowered into JavaScript code, */
@@ -293,6 +293,32 @@ case class GlobalRef(varId: VarId) extends Global[GlobalRef] with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end GlobalRef
 
+/** A reference to a heap type builder in Binaryen.
+ *
+ * @param gen
+ *   The [[BinaryenJSBackend]] instance that generates constructs for this type
+ *   builder.
+ * @param varId
+ *   The identifier of the type builder in JavaScript code.
+ */
+case class TypeBuilder(gen: BinaryenJSBackend, varId: VarId)
+    extends wasm.TypeBuilder[TypeRef]
+    with ToJSRepr:
+  override def setSignatureType(
+      index: Int,
+      paramTypes: TypeRef,
+      resultTypes: TypeRef
+  ): Unit =
+    gen.db +=\\ doc"${varId.toJSRepr}.setSignatureType($index, ${paramTypes.toJSRepr}, ${resultTypes.toJSRepr});"
+
+  override def build(): TypeRef =
+    gen.withFreshVarId: freshId =>
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${varId.toJSRepr}.buildAndDispose();"
+      TypeRef(freshId)
+
+  override def toJSRepr: Document = varId.toJSRepr
+end TypeBuilder
+
 /** A reference to a type in Binaryen.
  *
  * @param varId
@@ -310,7 +336,7 @@ end TypeRef
  *   the JavaScript code.
  */
 class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
-    extends WasmGenerator[TypeRef, ModRef, ExprRef]
+    extends WasmGenerator[TypeRef, ModRef, TypeBuilder, ExprRef]
     with AutoCloseable:
   type TypeRefs = VarId
 
@@ -416,6 +442,11 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
       db +=\\ doc"${freshId.toJSRepr} = new $modId.Module();"
       moduleIds += freshId
       ModRef(this, freshId)
+
+  override def newTypeBuilder(size: Int): TypeBuilder =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = new $modId.newTypeBuilder($size);"
+      TypeBuilder(this, freshId)
 
   override def close(): Unit =
     moduleIds.foreach: id =>

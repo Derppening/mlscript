@@ -42,6 +42,18 @@ case class MemorySegment[E <: Expression[E]](
 /** Abstract class representing a Wasm type. */
 abstract class Type
 
+/** Abstract class representing a builder that creates heap types. */
+abstract class TypeBuilder[T <: Type]:
+
+  /** Sets the type at `index` to be a signature type with the given
+   * `paramTypes` and `resultTypes`.
+   */
+  def setSignatureType(index: Int, paramTypes: T, resultTypes: T): Unit
+
+  /** Builds a heap type from this instance. */
+  def build(): T
+end TypeBuilder
+
 /** Abstract class representing a Wasm `module`.
  *
  * @tparam Type
@@ -256,12 +268,17 @@ end Module
  *   The backend-specific handle for Wasm types.
  * @tparam M
  *   The backend-specific handle for Wasm modules.
+ * @tparam TB
+ *   The backend-specific handle for heap type builders.
  * @tparam E
  *   The backend-specific handle for Wasm expressions.
  * @note
  *   The API of this class is based on the `binaryen.js` API.
  */
-abstract class WasmGenerator[T <: Type, M <: Module[T, E], E <: Expression[E]]
+abstract class WasmGenerator[T <: Type, M <: Module[
+  T,
+  E
+], TB <: TypeBuilder[T], E <: Expression[E]]
     extends CodeBuilder:
 
   /** Type alias for representing multiple Wasm types. */
@@ -324,10 +341,20 @@ abstract class WasmGenerator[T <: Type, M <: Module[T, E], E <: Expression[E]]
   /** Creates a new module using this backend. */
   def newModule: M
 
+  /** Creates a new type builder using this backend for generating heap types.
+   *
+   * @param size
+   *   The initial size of the type builder.
+   */
+  def newTypeBuilder(size: Int = 0): TB
+
 object WasmGenerator:
   /** Test function for creating a simple module. */
-  def mkSimpleModule[T <: Type, M <: Module[T, E], E <: Expression[E]](
-      gen: WasmGenerator[T, M, E]
+  def mkSimpleModule[T <: Type, M <: Module[
+    T,
+    E
+  ], TB <: TypeBuilder[T], E <: Expression[E]](
+      gen: WasmGenerator[T, M, TB, E]
   ): M =
     val mod = gen.newModule
     locally:

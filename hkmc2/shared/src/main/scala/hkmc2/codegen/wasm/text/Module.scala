@@ -24,6 +24,15 @@ private case object StringRefType extends WasmType
 private case object UnreachableType extends WasmType
 private case class MultiValueType(types: Seq[WasmType]) extends WasmType
 
+/** Abstract base class for all Wasm heap types. */
+// TODO(Derppening): Do we want first class `AbsHeapType` and `reftype`? Having
+//                   them makes `{...}RefType` obsolete, since they are just
+//                   `ref null {...}`, but might break a lot of things...
+abstract class HeapType extends WasmType
+
+/** A type representing a function signature. */
+case class SignatureType(params: WasmType, results: WasmType) extends HeapType
+
 /** An abstraction over a generic WebAssembly instructions.
  */
 abstract sealed class Instruction:
