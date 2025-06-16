@@ -335,6 +335,11 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("bitor")))
       case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.js.try_catch) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("try_catch")))
+      case t if t.resolvedSymbol.exists(_ is ctx.builtins.wasm.plus_impl) =>
+        conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("plus_impl")))
+      case t if t.resolvedSymbol.exists(_ is ctx.builtins.wasm.test) =>
+        // TODO(Derppening): Fold this implementation into `Runtime.mls` when modules are implemented
+        conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("test")))
       case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.debug.printStack) =>
         if !config.effectHandlers.exists(_.debug) then
           raise(ErrorReport(

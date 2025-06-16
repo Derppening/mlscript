@@ -386,3 +386,11 @@ fun runStackSafe(limit, f) =
     stackOffset = 0
     stackHandler = null
   result
+
+fun plus_impl(lhs, rhs) = if lhs is
+  Int31 and rhs is Int31 then lhs + rhs
+  Num and rhs is Num then lhs + rhs
+  else unreachable()
+
+fun test() =
+  42

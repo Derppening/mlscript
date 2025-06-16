@@ -42,6 +42,11 @@ declare module js with
     bitor
     try_catch
 
+declare module wasm with
+  fun
+    test
+    plus_impl
+
 declare module debug with
   fun printStack
   fun getLocals
