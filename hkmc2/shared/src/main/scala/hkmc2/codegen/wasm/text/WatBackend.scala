@@ -45,6 +45,17 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
     )
     .getOrElse(NoneType)
 
+  /** Returns the type of this expression, converted into a WAT-compatible
+   * type if needed.
+   *
+   * @param expectsValue
+   * Whether this expression is in a context where a value is expected to
+   * be generated.
+   */
+  def getWasmType(expectsValue: Bool): WasmType = getType match
+    case UnreachableType => if expectsValue then AnyRefType else NoneType
+    case ty              => ty
+
   /** Converts the inner expression into a [[List]] of
    * [[StackInstr stack instructions]].
    */
@@ -471,6 +482,10 @@ class WatBackend
     case _                     => Seq(ty)
 
   override def getExpressionType(expr: ExprProxy): WasmType = expr.getType
+  override def getExpressionWasmType(
+      expr: ExprProxy,
+      expectsValue: Bool
+  ): WasmType = expr.getWasmType(expectsValue)
 
   /** Formats a type into its text representation. */
   def fmtType(ty: WasmType): Document = ty match
@@ -643,9 +658,12 @@ class WatBackend
         mod.unreachable()
       case c @ Call(fun, args) =>
         val base = subexpression(fun)
-        val baseTy = base.getType.asInstanceOf[SignatureType]
-        val wasmArgs = args.map(argument)
-        mod.callRef(base, wasmArgs, baseTy.params, baseTy.results)
+        // Propagate `unreachable` to its parent expression
+        if base.getType != UnreachableType then
+          val baseTy = base.getType.asInstanceOf[SignatureType]
+          val wasmArgs = args.map(argument)
+          mod.callRef(base, wasmArgs, baseTy.params, baseTy.results)
+        else base
       case r =>
         raise(
           WarningReport(
@@ -677,7 +695,7 @@ class WatBackend
               params = this.createType(
                 params.flatMap(_.params).map(_ => this.anyref).toSeq
               ),
-              results = bodyExpr.getType,
+              results = bodyExpr.getWasmType(false),
               vars = Seq(),
               body = bodyExpr
             )
@@ -727,7 +745,7 @@ class WatBackend
     val mainFn = module.addFunction(
       name = "main",
       params = this.none,
-      results = mainFnExpr.getType,
+      results = mainFnExpr.getWasmType(false),
       vars = Seq(),
       mainFnExpr
     )

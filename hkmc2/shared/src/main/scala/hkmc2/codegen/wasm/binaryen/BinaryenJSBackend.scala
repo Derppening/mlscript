@@ -428,6 +428,21 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
       db +=\\ doc"${freshId.toJSRepr} = $modId.getExpressionType(${expr.toJSRepr});"
       TypeRef(freshId)
 
+  override def getExpressionWasmType(
+      expr: ExprRef,
+      expectsValue: Bool
+  ): TypeRef =
+    val exprType = getExpressionType(expr)
+    withFreshVarId: freshId =>
+      db +=\\ doc"""if (${exprType.toJSRepr} == $modId.unreachable) {
+        ${freshId.toJSRepr} = ${
+          if expectsValue then doc"$modId.anyref" else doc"$modId.none"
+        };
+      } else {
+        ${freshId.toJSRepr} = ${exprType.toJSRepr}
+      }"""
+      TypeRef(freshId)
+
   /** Creates a fresh [[VarId]], executes [[block]], and returns the result of
    * the block.
    *

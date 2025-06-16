@@ -338,6 +338,15 @@ abstract class WasmGenerator[T <: Type, M <: Module[
   /** Returns the type of this expression `expr`. */
   def getExpressionType(expr: E): T
 
+  /** Returns the type of this expression `expr`, lowering internal types into
+   * Wasm types where necessary.
+   *
+   * @param expectsValue
+   *   Whether this expression is in a context where a value is expected to be
+   *   generated.
+   */
+  def getExpressionWasmType(expr: E, expectsValue: Bool): T
+
   /** Creates a new module using this backend. */
   def newModule: M
 
