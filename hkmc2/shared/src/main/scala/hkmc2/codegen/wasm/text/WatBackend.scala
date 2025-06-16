@@ -727,7 +727,7 @@ class WatBackend
     val mainFn = module.addFunction(
       name = "main",
       params = this.none,
-      results = this.anyref,
+      results = mainFnExpr.getType,
       vars = Seq(),
       mainFnExpr
     )
