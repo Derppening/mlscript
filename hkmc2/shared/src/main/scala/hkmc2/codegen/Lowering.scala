@@ -331,6 +331,8 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
           subTerm_nonTail(arg): ar =>
             k(Call(fr, Arg(spread = true, ar) :: Nil)(isMlsFun, true).withLocOf(t))
       f match
+      case t if t.resolvedSymbol.exists(_ is ctx.builtins.js.bitor) =>
+        conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("bitor")))
       case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.js.try_catch) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("try_catch")))
       case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.debug.printStack) =>

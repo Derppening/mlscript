@@ -112,6 +112,7 @@ declare module source with
 
 declare module js with
   fun
+    bitor
     try_catch
 
 declare module debug with

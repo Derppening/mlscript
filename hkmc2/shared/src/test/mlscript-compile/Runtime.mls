@@ -37,6 +37,7 @@ fun deboundMethod(mtdName, clsName) =
     "[debinding error] Method '" + mtdName + "' of class '" + clsName + "' was accessed without being called."
 
 
+val bitor = RuntimeJS.bitor
 val try_catch = RuntimeJS.try_catch
 
 class EffectHandle(_reified) with

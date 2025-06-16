@@ -14,6 +14,7 @@ let Runtime1;
     };
     this.Unit = new Unit$class;
     this.Unit.class = Unit$class;
+    this.bitor = RuntimeJS.bitor;
     this.try_catch = RuntimeJS.try_catch;
     this.EffectHandle = function EffectHandle(_reified1) {
       return new EffectHandle.class(_reified1);

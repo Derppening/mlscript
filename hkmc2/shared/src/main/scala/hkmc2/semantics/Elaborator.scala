@@ -152,6 +152,7 @@ object Elaborator:
         val name = assumeObject("name")
         val file = assumeObject("file")
       object js extends VirtualModule(assumeBuiltinMod("js")):
+        val bitor = assumeObject("bitor")
         val try_catch = assumeObject("try_catch")
       object debug extends VirtualModule(assumeBuiltinMod("debug")):
         val printStack = assumeObject("printStack")
