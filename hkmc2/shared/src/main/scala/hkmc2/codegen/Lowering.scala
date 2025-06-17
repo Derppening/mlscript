@@ -272,6 +272,9 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
           return k(Value.Lam(paramLists.head, bodyBlock))
       case bs: BlockMemberSymbol =>
         bs.defn match
+        case S(_) if bs.asCls.exists(_ is ctx.builtins.Int31) =>
+        // case S(_) if bs.asCls.exists(sym => (sym is ctx.builtins.Int31) || (sym is ctx.builtins.wasm.Int31)) =>
+          return term(Sel(State.runtimeSymbol.ref().noIArgs, ref.tree)(S(bs)).noIArgs)(k)
         case S(d) if d.isDeclare.isDefined =>
           return term(Sel(State.globalThisSymbol.ref().noIArgs, ref.tree)(S(bs)).noIArgs)(k)
         case S(td: TermDefinition) if td.k is syntax.Fun =>
@@ -344,8 +347,10 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
       case t if t.resolvedSymbol.exists(_ is ctx.builtins.wasm.plus_impl) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("plus_impl")))
       case t if t.resolvedSymbol.exists(_ is ctx.builtins.wasm.test) =>
-        // TODO(Derppening): Fold this implementation into `Runtime.mls` when modules are implemented
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("test")))
+      // case t if t.resolvedSymbol.exists(sym => (sym is ctx.builtins.Int31) || (sym is ctx.builtins.wasm.Int31)) =>
+      case t if t.resolvedSymbol.exists(_ is ctx.builtins.Int31) =>
+        conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("Int31")))
       case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.debug.printStack) =>
         if !config.effectHandlers.exists(_.debug) then
           raise(ErrorReport(

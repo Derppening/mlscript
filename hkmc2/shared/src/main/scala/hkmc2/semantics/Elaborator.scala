@@ -132,6 +132,8 @@ object Elaborator:
           s"builtin module symbol $nme"))
       val Unit = assumeBuiltinCls("Unit")
       val Int = assumeBuiltinCls("Int")
+      // TODO(Derppening): Can we move the Int31 builtin in the wasm module?
+      val Int31 = assumeBuiltinCls("Int31")
       val Num = assumeBuiltinCls("Num")
       val Str = assumeBuiltinCls("Str")
       val Function = assumeBuiltinCls("Function")
@@ -158,6 +160,7 @@ object Elaborator:
         val shl = assumeObject("shl")
         val try_catch = assumeObject("try_catch")
       object wasm extends VirtualModule(assumeBuiltinMod("wasm")):
+        // val Int31 = assumeObject("Int31")
         val plus_impl = assumeObject("plus_impl")
         val test = assumeObject("test")
       object debug extends VirtualModule(assumeBuiltinMod("debug")):

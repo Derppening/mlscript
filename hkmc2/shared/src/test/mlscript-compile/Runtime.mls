@@ -390,6 +390,10 @@ fun runStackSafe(limit, f) =
     stackHandler = null
   result
 
+class Int31(v) with
+  fun zext() = bitand(v, bitnot(shl(1, 31))) as Int
+  fun sext() = bitor(v, shl(1, 31)) as Int
+
 fun plus_impl(lhs, rhs) = if lhs is
   Int31 and rhs is Int31 then lhs + rhs
   Num and rhs is Num then lhs + rhs

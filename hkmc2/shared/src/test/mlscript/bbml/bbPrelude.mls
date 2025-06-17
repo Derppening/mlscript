@@ -12,6 +12,8 @@ declare class Bool
 declare class Int
 declare class Num
 
+declare class Int31
+
 data
   class
     CodeBase[T, C, S]
@@ -49,6 +51,7 @@ declare module wasm with
   fun
     test
     plus_impl
+  // declare class Int31
 
 declare module debug with
   fun printStack
