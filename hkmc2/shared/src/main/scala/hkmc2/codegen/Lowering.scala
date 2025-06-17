@@ -230,7 +230,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
       args(fs)(args => k(Value.Arr(args)))
     case ref @ st.Ref(sym) =>
       sym match
-      case ctx.builtins.source.bms | ctx.builtins.js.bms | ctx.builtins.debug.bms | ctx.builtins.annotations.bms =>
+      case ctx.builtins.source.bms | ctx.builtins.js.bms | ctx.builtins.wasm.bms | ctx.builtins.debug.bms | ctx.builtins.annotations.bms =>
         raise:
           ErrorReport(
             msg"Module '${sym.nme}' is virtual (i.e., \"compiler fiction\"); cannot be used directly" -> t.toLoc ::
