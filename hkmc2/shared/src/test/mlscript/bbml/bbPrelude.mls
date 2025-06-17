@@ -39,7 +39,10 @@ declare module source with
 
 declare module js with
   fun
+    bitand
+    bitnot
     bitor
+    shl
     try_catch
 
 declare module wasm with

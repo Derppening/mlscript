@@ -152,7 +152,10 @@ object Elaborator:
         val name = assumeObject("name")
         val file = assumeObject("file")
       object js extends VirtualModule(assumeBuiltinMod("js")):
+        val bitand = assumeObject("bitand")
+        val bitnot = assumeObject("bitnot")
         val bitor = assumeObject("bitor")
+        val shl = assumeObject("shl")
         val try_catch = assumeObject("try_catch")
       object wasm extends VirtualModule(assumeBuiltinMod("wasm")):
         val plus_impl = assumeObject("plus_impl")
