@@ -65,6 +65,12 @@ case class StackInstr(
       .dlof(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))(doc"")}"
 end StackInstr
 
+object FoldedInstr:
+  /** Instruction mnemonics that do not (yet) support lowering from folded
+    * instructions to stack instructions.
+    */
+  val unsupportedToStackMnemonics = Set("if", "then", "else")
+
 /** A WebAssembly folded instruction.
  *
  * @param stackargs
@@ -78,6 +84,11 @@ case class FoldedInstr(
 ) extends Instruction:
   /** Converts this folded instruction into a sequence of stack instructions. */
   def toStack: Ls[StackInstr] =
+    if FoldedInstr.unsupportedToStackMnemonics contains mnemonic then
+      TODO(
+        s"Lowering of `${mnemonic}` to stack instruction not implemented"
+      )
+
     stackargs
       .flatMap: arg =>
         arg match

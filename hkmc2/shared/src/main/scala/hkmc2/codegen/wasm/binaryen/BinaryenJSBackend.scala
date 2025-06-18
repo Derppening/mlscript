@@ -172,6 +172,17 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
             .getOrElse("")});"
       new ExprRef(freshId)
 
+  override def `if`(
+      condition: ExprRef,
+      ifTrue: ExprRef,
+      ifFalse: Opt[ExprRef]
+  ): ExprRef =
+    gen.withFreshVarId: freshId =>
+      gen.db +=\\
+        doc"${freshId.toJSRepr} = ${this.toJSRepr}.if(${condition.toJSRepr}, ${ifTrue.toJSRepr}${ifFalse
+            .dlof(iff => doc", ${iff.toJSRepr}")(doc"")});"
+      new ExprRef(freshId)
+
   override def nop(): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\

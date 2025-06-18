@@ -68,7 +68,6 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
     case stackInstr: Ls[StackInstr] =>
       stackInstr.map(_.fmtDoc).mkDocument(" # ")
     case foldedInstr: Opt[FoldedInstr] => foldedInstr.dlof(_.fmtDoc)(doc"")
-
 end ExprProxy
 
 /** A reference to a `func` field in a module.
@@ -356,6 +355,38 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
             .map(_.map(resTy => s"(result ${gen.fmtType(resTy)})")),
           children.map(_.inner),
           resultType.getOrElse(NoneType)
+        )
+      )
+    )
+
+  override def `if`(
+      condition: ExprProxy,
+      ifTrue: ExprProxy,
+      ifFalse: Opt[ExprProxy]
+  ): ExprProxy =
+    // TODO(Derppening): Add support for `condition.getType is UnreachableType`
+    // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
+    val resultType = (ifTrue.getType, ifFalse.map(_.getType)) match
+      case (thenTy, S(elseTy)) if thenTy eq elseTy => thenTy
+      case (thenTy, S(UnreachableType))            => thenTy
+      case (UnreachableType, S(elseTy))            => elseTy
+      case _                                       => gen.none
+
+    new ExprProxy(
+      S(
+        FoldedInstr(
+          "if",
+          if resultType eq gen.none then Seq()
+          else Seq(s"(result ${gen.fmtType(resultType)})"),
+          Seq(
+            condition.inner,
+            S(FoldedInstr("then", Seq(), Seq(ifTrue.inner), ifTrue.getType))
+          ) ++
+            ifFalse
+              .map: iff =>
+                S(FoldedInstr("else", Seq(), Seq(iff.inner), iff.getType))
+              .toSeq,
+          resultType
         )
       )
     )

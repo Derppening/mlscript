@@ -200,6 +200,10 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
       resultType: Opt[Type]
   ): Expr
 
+  /** Creates an `if` instruction.
+    */
+  def `if`(condition: Expr, ifTrue: Expr, ifFalse: Opt[Expr]): Expr
+
   /** Creates a `nop` instruction. */
   def nop(): Expr
 
