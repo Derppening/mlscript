@@ -619,8 +619,7 @@ class WatBackend
     val mod = summon[ModuleProxy]
     r match
       case Value.Lit(IntLit(value)) =>
-        // TODO(Derppening): Use i32.const and lower to i31ref only at function return/explicit type casts
-        mod.ref.i31(mod.i32.const(value.toInt))
+        mod.i32.const(value.toInt)
       case Value.Ref(l: BuiltinSymbol) =>
         if l.nullary then
           raise(
@@ -638,17 +637,18 @@ class WatBackend
         if l.binary then
           l.nme match
             case "+" =>
-              // TODO(Derppening): Do not assume i31ref
-              val lhsOp = operand(lhs)
-              val rhsOp = operand(rhs)
-              mod.ref
-                .i31(
-                  mod.i32
-                    .add(
-                      mod.i31ref.get(lhsOp, true),
-                      mod.i31ref.get(rhsOp, true)
-                    )
-                )
+              // TODO(Derppening): Refactor to call `plus_impl`
+              val lhsOpRaw = operand(lhs)
+              val lhsOp = lhsOpRaw.getType match
+                case I31RefType => mod.i31ref.get(lhsOpRaw, true)
+                case I32Type    => lhsOpRaw
+                case _          => ???
+              val rhsOpRaw = operand(rhs)
+              val rhsOp = rhsOpRaw.getType match
+                case I31RefType => mod.i31ref.get(rhsOpRaw, true)
+                case I32Type    => lhsOpRaw
+                case _          => ???
+              mod.i32.add(lhsOp, rhsOp)
             case lNme =>
               raise(
                 WarningReport(
@@ -740,9 +740,17 @@ class WatBackend
             )
             mod.unreachable()
       case Return(Value.Lit(UnitLit(false)), false) => mod.ret(N)
-      case Return(res, true)                        => result(res)
-      case Return(res, false)                       => mod.ret(S(result(res)))
-      case End(_)                                   =>
+      case Return(res, true) =>
+        val resValue = result(res)
+        resValue.getType match
+          case I32Type => mod.ref.i31(resValue)
+          case _       => resValue
+      case Return(res, false) =>
+        val resValue = result(res)
+        resValue.getType match
+          case I32Type => mod.ret(S(mod.ref.i31(resValue)))
+          case _       => mod.ret(S(resValue))
+      case End(_) =>
         // TODO: Insert `drop`s
         mod.nop()
       case t =>
