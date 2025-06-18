@@ -7,7 +7,7 @@ import mlscript.utils.*, shorthands.*
 
 import document.*
 import semantics.*
-import syntax.Tree.{IntLit, UnitLit}
+import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
 import Message.MessageContext
 
@@ -618,6 +618,8 @@ class WatBackend
   )(using ModuleProxy, Raise): ExprProxy =
     val mod = summon[ModuleProxy]
     r match
+      case Value.Lit(BoolLit(value)) =>
+        mod.i32.const(if value then 1 else 0)
       case Value.Lit(IntLit(value)) =>
         mod.i32.const(value.toInt)
       case Value.Ref(l: BuiltinSymbol) =>
