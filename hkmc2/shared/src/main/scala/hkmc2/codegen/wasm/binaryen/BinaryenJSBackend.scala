@@ -249,6 +249,11 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.i31(${value.toJSRepr});"
         new ExprRef(freshId)
+
+    override def cast(value: ExprRef, castType: TypeRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.cast(${value.toJSRepr}, ${castType.toJSRepr});"
+        new ExprRef(freshId)
   end ref
 
   override def i31ref: I31Ref = new I31Ref:

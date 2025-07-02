@@ -463,6 +463,18 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       new ExprProxy(
         S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), I31RefType))
       )
+
+    override def cast(value: ExprProxy, castType: WasmType): ExprProxy =
+      new ExprProxy(
+        S(
+          FoldedInstr(
+            "ref.cast",
+            Seq(gen.fmtType(castType)),
+            Seq(value.inner),
+            castType
+          )
+        )
+      )
   end ref
 
   override def i31ref = new I31Ref:
