@@ -652,16 +652,25 @@ class WatBackend
           l.nme match
             case "+" =>
               // TODO(Derppening): Refactor to call `plus_impl`
+              // TODO(Derppening): Omit emitting sanity checks
               val lhsOpRaw = operand(lhs)
               val lhsOp = lhsOpRaw.getType match
-                case I31RefType => mod.i31ref.get(lhsOpRaw, true)
-                case I32Type    => lhsOpRaw
-                case _          => ???
+                case I31RefType =>
+                  mod.i31ref.get(
+                    mod.ref.cast(lhsOpRaw, i31ref),
+                    true
+                  )
+                case I32Type => lhsOpRaw
+                case _       => ???
               val rhsOpRaw = operand(rhs)
               val rhsOp = rhsOpRaw.getType match
-                case I31RefType => mod.i31ref.get(rhsOpRaw, true)
-                case I32Type    => lhsOpRaw
-                case _          => ???
+                case I31RefType =>
+                  mod.i31ref.get(
+                    mod.ref.cast(rhsOpRaw, i31ref),
+                    true
+                  )
+                case I32Type => lhsOpRaw
+                case _       => ???
               mod.i32.add(lhsOp, rhsOp)
             case lNme =>
               raise(
