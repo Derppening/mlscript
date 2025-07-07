@@ -3,11 +3,13 @@ package codegen
 package wasm
 package text
 
-import mlscript.utils.*
-import shorthands.*
+import mlscript.utils.*, shorthands.*
 
 import document.*
+import semantics.*
+import syntax.Tree.{IntLit, UnitLit}
 import wasm.Module as WasmModule
+import Message.MessageContext
 
 /** A reference to an `export` field in a module.
  *
@@ -265,7 +267,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   override def i32: ModI32Proxy[ExprProxy] = ModI32Impl()
   override def ref: ModRefProxy[ExprProxy] = ModRefImpl()
-  override def i31ref: ModI31RefProxy[ExprProxy] = ???
+  override def i31ref: ModI31RefProxy[ExprProxy] = ModI31RefImpl()
 
   def emitText: Document = mod.emitText
 end ModuleProxy
@@ -273,6 +275,9 @@ end ModuleProxy
 class ModI32Impl extends ModI32Proxy[ExprProxy]:
   override def const(value: Int): Expression[ExprProxy] =
     ExprProxy(S(FoldedInstr("i32.const", Seq(s"$value"), Seq())))
+
+  override def add(left: ExprProxy, right: ExprProxy): ExprProxy =
+    ExprProxy(S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner))))
 end ModI32Impl
 
 class ModRefImpl extends ModRefProxy[ExprProxy]:
@@ -280,8 +285,21 @@ class ModRefImpl extends ModRefProxy[ExprProxy]:
     ExprProxy(S(FoldedInstr("ref.i31", Seq(), Seq(value.inner))))
 end ModRefImpl
 
+class ModI31RefImpl extends ModI31RefProxy[ExprProxy]:
+  override def get(i31: ExprProxy, signed: Bool): Expression[ExprProxy] =
+    ExprProxy(
+      S(
+        FoldedInstr(
+          s"i31.get_${if signed then 's' else 'u'}",
+          Seq(),
+          Seq(i31.inner)
+        )
+      )
+    )
+end ModI31RefImpl
+
 /** A [[WasmGenerator]] backend that produces text-based WAT as its output. */
-class WatBackend(val folded: Bool) extends WasmGenerator[ModuleProxy]:
+class WatBackend extends WasmGenerator[ModuleProxy]:
   /** Formats a type into its text representation. */
   def fmtType(ty: Type): Document = ty match
     case I32Type    => doc"i32"
@@ -290,8 +308,145 @@ class WatBackend(val folded: Bool) extends WasmGenerator[ModuleProxy]:
     case _          => ???
 
   def newModule: ModuleProxy = ModuleProxy(this, Module())
+
+  def errExpr(errMsg: Message)(using ModuleProxy, Raise): ExprProxy =
+    raise(
+      ErrorReport(errMsg -> N :: Nil, source = Diagnostic.Source.Compilation)
+    )
+    summon[ModuleProxy].unreachable()
+
+  def operand(a: Arg)(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+    if a.spread then die else subexpression(a.value)
+
+  def subexpression(
+      r: Result
+  )(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) = result(r)
+
+  def result(r: Result)(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+    val mod = summon[ModuleProxy]
+    r match
+      case Value.Lit(IntLit(value)) =>
+        mod.ref.i31(mod.i32.const(value.toInt).unwrap).unwrap -> mod
+      case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
+          if !l.functionLike =>
+        if l.binary then
+          l.nme match
+            case "+" =>
+              // TODO(Derppening): Do not assume i31ref
+              val (lhsOp, lhsMod) = operand(lhs)
+              val (rhsOp, rhsMod) = operand(rhs)(using lhsMod)
+              mod.ref
+                .i31(
+                  mod.i32
+                    .add(
+                      mod.i31ref.get(lhsOp, true).unwrap,
+                      mod.i31ref.get(rhsOp, true).unwrap
+                    )
+                )
+                .unwrap -> rhsMod
+            case lNme =>
+              raise(
+                WarningReport(
+                  msg"WasmBackend::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              mod.unreachable() -> mod
+        else
+          errExpr(msg"Cannot call non-binary builtin symbol '${l.nme}'") -> mod
+      case r =>
+        raise(
+          WarningReport(
+            msg"WasmBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        mod.unreachable() -> mod
+
+  def returningTerm(
+      t: Block
+  )(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+    val mod = summon[ModuleProxy]
+    t match
+      case Define(defn, rst) =>
+        defn match
+          case FunDefn(owner, sym, params, body) =>
+            if owner.nonEmpty then
+              raise(
+                WarningReport(
+                  msg"WasmBackend::returningTerm for ${defn.toString} (owner.nonEmpty == true) not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              ???
+            val (bodyExpr, newMod) = block(body)
+            newMod.addFunction(
+              sym.nme,
+              params = this.createType(params.map(_ => this.anyref).toSeq),
+              // TODO(Derppening): Infer whether we actually have a return value or ()
+              results = this.anyref,
+              vars = Seq(),
+              body = bodyExpr
+            )
+            bodyExpr -> newMod
+          case defn =>
+            raise(
+              WarningReport(
+                msg"WasmBackend::returningTerm for ${defn.toString} not implemented yet" -> N :: Nil,
+                source = Diagnostic.Source.Compilation
+              )
+            )
+            mod.unreachable() -> mod
+      case Return(Value.Lit(UnitLit(false)), false) => mod.ret(N) -> mod
+      case Return(res, true)                        => result(res)
+      case Return(res, false) => result(res).mapFirst(v => mod.ret(S(v)))
+      case End(_)             =>
+        // TODO: Insert `drop`s
+        mod.nop() -> mod
+      case t =>
+        raise(
+          WarningReport(
+            msg"WasmBackend::returningTerm for ${t.toString} not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        mod.unreachable() -> mod
+
+  def program(p: Program, exprt: Opt[BlockMemberSymbol])(using
+      Raise
+  ): ModuleProxy =
+    if p.imports.nonEmpty then
+      raise(
+        WarningReport(
+          msg"Imports of external symbols ${p.imports.mkString("[", ", ", "]")} not implemented yet" -> N :: Nil,
+          source = Diagnostic.Source.Compilation
+        )
+      )
+    val (mainFnExpr, module) = block(p.main)(using newModule)
+    if exprt.isDefined then
+      raise(
+        WarningReport(
+          msg"Exports of symbols not implemented yet" -> N :: Nil,
+          source = Diagnostic.Source.Compilation
+        )
+      )
+    val mainFn = module.addFunction(
+      name = "main",
+      params = this.none,
+      results = this.anyref,
+      vars = Seq(),
+      mainFnExpr
+    )
+    module.addFunctionExport("main", "main")
+    // TODO(Derppening): Do we treat `main` as a main function, or just a launchpad from JS?
+    //                   Start functions must not return any value though...
+    // module.setStart(mainFn)
+    module
+
+  def block(t: Block)(using ModuleProxy, Raise): (ExprProxy, ModuleProxy) =
+    returningTerm(t)
 end WatBackend
 
 @main
 def main(): Unit =
-  println(WasmGenerator.mkSimpleModule(WatBackend(true)).emitText)
+  println(WasmGenerator.mkSimpleModule(WatBackend()).emitText)

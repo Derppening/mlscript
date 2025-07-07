@@ -28,9 +28,13 @@ private case class MultiValueType(types: Seq[Type]) extends Type
 
 /** Abstract handle for `i32`-related instructions. */
 @deprecated("Use Module#I32Proxy instead.")
-trait ModI32Proxy[E]:
+trait ModI32Proxy[E <: Expression[E]]:
   /** Creates an `i32.const` instruction with the given `value`. */
+  // TODO: Return E
   def const(value: Int): Expression[E]
+
+  /** Creates an `i32.add` instruction with the given values as operands. */
+  def add(left: E, right: E): E
 end ModI32Proxy
 
 /** Abstract handle for `ref`-related instructions. */

@@ -236,6 +236,11 @@ private case class I32Impl(gen: BinaryenJSBackend, mod: Opt[ModRef])
       gen.db +=\\ doc"${freshId.toJSRepr} = $prefix.i32.const(${value.toString})"
       ExprRef(freshId)
 
+  override def add(left: ExprRef, right: ExprRef): ExprRef =
+    gen.withFreshVarId: freshId =>
+      gen.db +=\\ doc"${freshId.toJSRepr} = $prefix.i32.add(${left.toJSRepr}, ${right.toJSRepr})"
+      ExprRef(freshId)
+
   override def toJSRepr: Document = doc"${gen.modId}.i32"
 end I32Impl
 
