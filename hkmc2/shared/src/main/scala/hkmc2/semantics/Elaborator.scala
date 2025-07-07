@@ -202,6 +202,7 @@ object Elaborator:
     val importSymbol = new VarSymbol(syntax.Tree.Ident("import"))
     val runtimeSymbol = TempSymbol(N, "runtime")
     val termSymbol = TempSymbol(N, "Term")
+    val wasmSymbol = TempSymbol(N, "wasm")
     val effectSigSymbol = ClassSymbol(DummyTypeDef(syntax.Cls), Ident("EffectSig"))
     val nonLocalRetHandlerTrm =
       val id = new Ident("NonLocalReturn")

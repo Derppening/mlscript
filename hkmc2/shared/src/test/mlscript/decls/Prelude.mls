@@ -84,6 +84,20 @@ declare val process
 declare val fs
 declare val Infinity
 
+// Wasm support
+declare class Promise with
+  fun resolve
+declare object WebAssembly with
+  declare class Memory
+  declare object Module with
+    fun
+      exports
+      imports
+
+  fun
+    instantiate
+    validate
+
 // declare fun typeof: (Any) -> Str
 
 declare fun parseInt(str: Str, radix: Int): Int
