@@ -877,7 +877,8 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
     
     Program(
       imps.map(imp => imp.sym -> imp.file),
-      res
+      res,
+      CompilationTarget.JS
     )
   
   
