@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "binaryen": "^123.0.0-nightly.20250704",
     "typescript": "^4.7.4"
   }
 }
