@@ -42,6 +42,9 @@ case class MemorySegment[E <: Expression[E]](
 /** Abstract class representing a Wasm type. */
 abstract class Type
 
+/** Abstract class representing a Wasm packed type. */
+abstract class PackedType
+
 /** Abstract class representing a builder that creates heap types. */
 abstract class TypeBuilder[T <: Type]:
 
@@ -283,10 +286,7 @@ end Module
  * @note
  *   The API of this class is based on the `binaryen.js` API.
  */
-abstract class WasmGenerator[T <: Type, M <: Module[
-  T,
-  E
-], TB <: TypeBuilder[T], E <: Expression[E]]
+abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T], E <: Expression[E]]
     extends CodeBuilder:
 
   /** Type alias for representing multiple Wasm types. */
@@ -336,6 +336,15 @@ abstract class WasmGenerator[T <: Type, M <: Module[
    */
   lazy val unreachable: T
 
+  /** A special packed type indicating that a type is not packed. */
+  lazy val notPacked: PT
+
+  /** The 8-bit integer packed type. */
+  lazy val i8: PT
+
+  /** The 16-bit integer packed type. */
+  lazy val i16: PT
+
   /** Creates a multi-value type from [[TypeRefs an array of types]].
    */
   def createType(types: TypeRefs): T
@@ -367,11 +376,8 @@ abstract class WasmGenerator[T <: Type, M <: Module[
 
 object WasmGenerator:
   /** Test function for creating a simple module. */
-  def mkSimpleModule[T <: Type, M <: Module[
-    T,
-    E
-  ], TB <: TypeBuilder[T], E <: Expression[E]](
-      gen: WasmGenerator[T, M, TB, E]
+  def mkSimpleModule[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T], E <: Expression[E]](
+      gen: WasmGenerator[T, PT, M, TB, E]
   ): M =
     val mod = gen.newModule
     locally:

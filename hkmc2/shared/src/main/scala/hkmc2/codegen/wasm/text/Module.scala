@@ -24,6 +24,13 @@ private case object StringRefType extends WasmType
 private case object UnreachableType extends WasmType
 private case class MultiValueType(types: Seq[WasmType]) extends WasmType
 
+/** Enumeration of all Wasm packed types. */
+enum WasmPackedType extends PackedType:
+  case NotPacked
+  case I8
+  case I16
+end WasmPackedType
+
 /** Abstract base class for all Wasm heap types. */
 // TODO(Derppening): Do we want first class `AbsHeapType` and `reftype`? Having
 //                   them makes `{...}RefType` obsolete, since they are just

@@ -338,11 +338,20 @@ end TypeBuilder
 /** A reference to a type in Binaryen.
  *
  * @param varId
- *   The identifier of the export in JavaScript code.
+ *   The identifier of the type in JavaScript code.
  */
 case class TypeRef(varId: VarId) extends wasm.Type with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end TypeRef
+
+/** A reference to a packed type in Binaryen.
+ *
+ * @param varId
+ *   The identifier of the packed type in JavaScript code.
+ */
+case class PackedTypeRef(varId: VarId) extends wasm.PackedType with ToJSRepr:
+  override def toJSRepr: Document = varId.toJSRepr
+end PackedTypeRef
 
 /** A [[WasmGenerator]] backend that produces Binaryen.js Javascript calls as
  * its output.
@@ -424,6 +433,21 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
     withFreshVarId: freshId =>
       db +=\\ doc"${freshId.toJSRepr} = $modId.unreachable"
       TypeRef(freshId)
+
+  override lazy val notPacked: PackedTypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.notPacked"
+      PackedTypeRef(freshId)
+
+  override lazy val i8: PackedTypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.i8"
+      PackedTypeRef(freshId)
+
+  override lazy val i16: PackedTypeRef =
+    withFreshVarId: freshId =>
+      db +=\\ doc"${freshId.toJSRepr} = $modId.i16"
+      PackedTypeRef(freshId)
 
   /** Creates a possibly multi-valued type from a [[Seq]] of types. */
   def createType(types: Seq[TypeRef]): TypeRef =

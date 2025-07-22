@@ -496,7 +496,7 @@ end ModuleProxy
 
 /** A [[WasmGenerator]] backend that produces text-based WAT as its output. */
 class WatBackend
-    extends WasmGenerator[WasmType, ModuleProxy, TypeBuilder, ExprProxy]:
+    extends WasmGenerator[WasmType, WasmPackedType, ModuleProxy, TypeBuilder, ExprProxy]:
   override type TypeRefs = Seq[WasmType]
 
   override lazy val none: WasmType = NoneType
@@ -513,6 +513,9 @@ class WatBackend
   override lazy val structref: WasmType = StructRefType
   override lazy val stringref: WasmType = StringRefType
   override lazy val unreachable: WasmType = UnreachableType
+  override lazy val notPacked: WasmPackedType = WasmPackedType.NotPacked
+  override lazy val i8: WasmPackedType = WasmPackedType.I8
+  override lazy val i16: WasmPackedType = WasmPackedType.I16
 
   override def createType(types: TypeRefs): WasmType =
     types.size match
