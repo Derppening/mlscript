@@ -318,7 +318,7 @@ end GlobalRef
  *   The identifier of the type builder in JavaScript code.
  */
 case class TypeBuilder(gen: BinaryenJSBackend, varId: VarId)
-    extends wasm.TypeBuilder[TypeRef]
+    extends wasm.TypeBuilder[TypeRef, PackedTypeRef]
     with ToJSRepr:
   override def setSignatureType(
       index: Int,
@@ -326,6 +326,11 @@ case class TypeBuilder(gen: BinaryenJSBackend, varId: VarId)
       resultTypes: TypeRef
   ): Unit =
     gen.db +=\\ doc"${varId.toJSRepr}.setSignatureType($index, ${paramTypes.toJSRepr}, ${resultTypes.toJSRepr});"
+
+  override def setStructType(index: Int, fields: Seq[(TypeRef, PackedTypeRef, Bool)]): Unit =
+    gen.db +=\\ doc"${varId.toJSRepr}.setStructType($index, ${
+      fields.map(field => doc"{ type: ${field._1.toJSRepr}, packedType: ${field._2.toJSRepr}, mutable: ${field._3.toString} }").mkDocument("[", ", ", "]")
+    });"
 
   override def build(): TypeRef =
     gen.withFreshVarId: freshId =>
@@ -361,7 +366,7 @@ end PackedTypeRef
  *   the JavaScript code.
  */
 class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
-    extends WasmGenerator[TypeRef, ModRef, TypeBuilder, ExprRef]
+    extends WasmGenerator[TypeRef, PackedTypeRef, ModRef, TypeBuilder, ExprRef]
     with AutoCloseable:
   type TypeRefs = VarId
 

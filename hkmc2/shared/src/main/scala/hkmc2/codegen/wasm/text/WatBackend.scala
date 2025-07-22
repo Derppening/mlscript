@@ -105,18 +105,26 @@ class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef]
 
 /** A builder for creating heap types. */
 class TypeBuilder(private val gen: WatBackend, size: Int)
-    extends wasm.TypeBuilder[WasmType]:
+    extends wasm.TypeBuilder[WasmType, WasmPackedType]:
   private val entries = mutable.ArrayBuffer[HeapType]()
   entries.sizeHint(size)
+
+  /** Ensures that the `entries` buffer has at least `index` number of entries. */
+  private def ensureFieldSize(index: Int) =
+    // Pad `entries` until we have the correct number of elements
+    entries ++= Seq.fill((index - entries.size + 1) max 0)(null)
 
   override def setSignatureType(
       index: Int,
       paramTypes: WasmType,
       resultTypes: WasmType
   ): Unit =
-    // Pad `entries` until we have the correct number of elements
-    entries ++= Seq.fill(index - entries.size + 1)(null)
+    ensureFieldSize(index)
     entries(index) = SignatureType(paramTypes, resultTypes)
+
+  override def setStructType(index: Int, fields: Seq[(WasmType, WasmPackedType, Bool)]): Unit =
+    ensureFieldSize(index)
+    entries(index) = StructType(fields.map((ty, packedTy, mut) => Field(ty, packedTy, mut)))
 
   override def build(): WasmType = gen.createType(entries.toSeq)
 end TypeBuilder

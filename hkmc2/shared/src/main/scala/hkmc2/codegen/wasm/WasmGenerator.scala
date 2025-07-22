@@ -46,12 +46,19 @@ abstract class Type
 abstract class PackedType
 
 /** Abstract class representing a builder that creates heap types. */
-abstract class TypeBuilder[T <: Type]:
+abstract class TypeBuilder[T <: Type, PT <: PackedType]:
 
   /** Sets the type at `index` to be a signature type with the given
    * `paramTypes` and `resultTypes`.
    */
   def setSignatureType(index: Int, paramTypes: T, resultTypes: T): Unit
+
+  /** Sets the type at `index` to be a struct type with the given fields.
+   *
+   * The tuple of each field should contain the Wasm type, the Wasm packed
+   * type, and whether the field is mutable respectively.
+   */
+  def setStructType(index: Int, fields: Seq[(T, PT, Bool)]): Unit
 
   /** Builds a heap type from this instance. */
   def build(): T
@@ -286,7 +293,7 @@ end Module
  * @note
  *   The API of this class is based on the `binaryen.js` API.
  */
-abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T], E <: Expression[E]]
+abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T, PT], E <: Expression[E]]
     extends CodeBuilder:
 
   /** Type alias for representing multiple Wasm types. */
@@ -376,7 +383,7 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB 
 
 object WasmGenerator:
   /** Test function for creating a simple module. */
-  def mkSimpleModule[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T], E <: Expression[E]](
+  def mkSimpleModule[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T, PT], E <: Expression[E]](
       gen: WasmGenerator[T, PT, M, TB, E]
   ): M =
     val mod = gen.newModule

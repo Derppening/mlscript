@@ -40,6 +40,12 @@ abstract class HeapType extends WasmType
 /** A type representing a function signature. */
 case class SignatureType(params: WasmType, results: WasmType) extends HeapType
 
+/** A type represening a struct field. */
+case class Field(ty: WasmType, packedType: WasmPackedType, mutable: Bool)
+
+/** A type representing a structure type. */
+case class StructType(fields: Seq[Field]) extends HeapType
+
 /** An abstraction over a generic WebAssembly instructions.
  */
 abstract sealed class Instruction:
