@@ -41,7 +41,10 @@ abstract class HeapType extends WasmType
 case class SignatureType(params: WasmType, results: WasmType) extends HeapType
 
 object Field:
+  /** Creates a field from a [[WasmType]]. */
   def apply(ty: WasmType, mutable: Bool) = new Field(ty, WasmPackedType.NotPacked, mutable)
+
+  /** Creates a field from a [[WasmPackedType]]. */
   def apply(packedType: WasmPackedType, mutable: Bool) =
     assert(packedType != WasmPackedType.NotPacked, "Packed type must not be 'notPacked'")
     new Field(I32Type, packedType, mutable)
