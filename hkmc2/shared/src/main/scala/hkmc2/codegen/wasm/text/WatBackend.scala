@@ -14,7 +14,8 @@ import Message.MessageContext
 import java.util.concurrent.atomic.AtomicLong
 import scala.collection.mutable
 
-/** A reference to an `export` field in a module.
+/**
+ * A reference to an `export` field in a module.
  *
  * @param mod
  *   The module that contains the export.
@@ -23,7 +24,8 @@ import scala.collection.mutable
  */
 case class ExportRef(mod: ModuleProxy, intName: Str) extends Export[ExportRef]
 
-/** A reference to an expression.
+/**
+ * A reference to an expression.
  *
  * @param inner
  *   The [[Expr]] that this proxy represents.
@@ -31,7 +33,7 @@ case class ExportRef(mod: ModuleProxy, intName: Str) extends Export[ExportRef]
 class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
   /** Whether this expression consists of exactly zero instructions. */
   def isEmpty: Boolean = inner match
-    case stackInstr: Ls[StackInstr]    => stackInstr.isEmpty
+    case stackInstr: Ls[StackInstr] => stackInstr.isEmpty
     case foldedInstr: Opt[FoldedInstr] => foldedInstr.isEmpty
 
   /** See [[isEmpty]]. */
@@ -39,24 +41,25 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
 
   /** Returns the type of this expression. */
   def getType: WasmType =
-    (inner match
+    val instrType = inner match
       case stackInstr: Ls[StackInstr] => stackInstr.lastOption.map(_.exprType)
       case foldedInstr: Opt[FoldedInstr] => foldedInstr.map(_.exprType)
-    )
-    .getOrElse(NoneType)
+    instrType.getOrElse(NoneType)
 
-  /** Returns the type of this expression, converted into a WAT-compatible
-   * type if needed.
+  /**
+   * Returns the type of this expression, converted into a WAT-compatible type
+   * if needed.
    *
    * @param expectsValue
-   * Whether this expression is in a context where a value is expected to
-   * be generated.
+   *   Whether this expression is in a context where a value is expected to be
+   *   generated.
    */
   def getWasmType(expectsValue: Bool): WasmType = getType match
     case UnreachableType => if expectsValue then AnyRefType else NoneType
-    case ty              => ty
+    case ty => ty
 
-  /** Converts the inner expression into a [[List]] of
+  /**
+   * Converts the inner expression into a [[List]] of
    * [[StackInstr stack instructions]].
    */
   def toStack: ExprProxy = inner match
@@ -70,7 +73,8 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
     case foldedInstr: Opt[FoldedInstr] => foldedInstr.dlof(_.fmtDoc)(doc"")
 end ExprProxy
 
-/** A reference to a `func` field in a module.
+/**
+ * A reference to a `func` field in a module.
  *
  * @param mod
  *   The module that contains the function.
@@ -81,20 +85,22 @@ case class FuncRef(mod: ModuleProxy, name: Str) extends Function[FuncRef]:
   override type Expr = ExprProxy
 end FuncRef
 
-/** A structure containing function information.
-  *
-  * @param name
-  *   The name of the function.
-  * @param results
-  *   The result type of the function.
-  */
+/**
+ * A structure containing function information.
+ *
+ * @param name
+ *   The name of the function.
+ * @param results
+ *   The result type of the function.
+ */
 case class FunctionInfo(
     name: Str,
     params: WasmType,
     results: WasmType
 ) extends wasm.FunctionInfo[WasmType]
 
-/** A reference to a `global` field in a module.
+/**
+ * A reference to a `global` field in a module.
  *
  * @param mod
  *   The module that contains the global.
@@ -109,7 +115,9 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
   private val entries = mutable.ArrayBuffer[HeapType]()
   entries.sizeHint(size)
 
-  /** Ensures that the `entries` buffer has at least `index` number of entries. */
+  /**
+   * Ensures that the `entries` buffer has at least `index` number of entries.
+   */
   private def ensureFieldSize(index: Int) =
     // Pad `entries` until we have the correct number of elements
     entries ++= Seq.fill((index - entries.size + 1) max 0)(null)
@@ -122,7 +130,10 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
     ensureFieldSize(index)
     entries(index) = SignatureType(paramTypes, resultTypes)
 
-  override def setStructType(index: Int, fields: Seq[(WasmType | WasmPackedType, Bool)]): Unit =
+  override def setStructType(
+      index: Int,
+      fields: Seq[(WasmType | WasmPackedType, Bool)]
+  ): Unit =
     ensureFieldSize(index)
     entries(index) = StructType(
       fields.map: (ty, mut) =>
@@ -134,7 +145,8 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
   override def build(): WasmType = gen.createType(entries.toSeq)
 end TypeBuilder
 
-/** A reference to a WebAssembly module.
+/**
+ * A reference to a WebAssembly module.
  *
  * @param gen
  *   The [[WatBackend]] that generates constructs for this module.
@@ -147,7 +159,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   /** Monotonically increasing counter for giving unique names to types. */
   private val anonTypeCounter = AtomicLong()
 
-  /** Adds a type to this module.
+  /**
+   * Adds a type to this module.
    *
    * @param name
    *   The name of the type, or [[None]] if a type name should be generated.
@@ -166,14 +179,15 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     mod = mod.copy(ty = mod.ty :+ (intName -> doc"(type $$$intName $tyDoc)"))
     intName
 
-  /** Adds a function type to this module.
+  /**
+   * Adds a function type to this module.
    *
    * @param name
-   * The name of the type, or [[None]] if a type name should be generated.
+   *   The name of the type, or [[None]] if a type name should be generated.
    * @param params
-   * The parameter types of the function.
+   *   The parameter types of the function.
    * @param results
-   * The result types of the function.
+   *   The result types of the function.
    */
   private def addFunctionType(
       name: Opt[Str],
@@ -201,7 +215,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     val fnTypeStrIndex = addFunctionType(N, params, results)
 
     val fnDecl =
-      doc"(func $$$name${gen.fmtFuncSig(params, results).optionUnless(_.isEmpty).dlof(sig => doc" $sig ")(doc"")}${(vars
+      doc"(func $$$name${gen.fmtFuncSig(params, results).optionUnless(
+          _.isEmpty
+        ).dlof(sig => doc" $sig ")(doc"")}${(vars
           .map(v => doc"(local ${gen.fmtType(v)})") :+ body.fmtDoc)
           .filterNot(_.isEmpty)
           .optionIf(_.nonEmpty)
@@ -213,10 +229,11 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     )
     new Func(this, name)
 
-  /** Gets a function by name.
-    *
-    * Generates a [[NoSuchElementException]] if the function does not exist.
-    */
+  /**
+   * Gets a function by name.
+   *
+   * Generates a [[NoSuchElementException]] if the function does not exist.
+   */
   override def getFunction(name: Str): Func =
     mod.fn.find(_._1 == name).map((nme, _) => new Func(this, nme)).get
 
@@ -381,9 +398,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
     val resultType = (ifTrue.getType, ifFalse.map(_.getType)) match
       case (thenTy, S(elseTy)) if thenTy eq elseTy => thenTy
-      case (thenTy, S(UnreachableType))            => thenTy
-      case (UnreachableType, S(elseTy))            => elseTy
-      case _                                       => gen.none
+      case (thenTy, S(UnreachableType)) => thenTy
+      case (UnreachableType, S(elseTy)) => elseTy
+      case _ => gen.none
 
     new ExprProxy(
       S(
@@ -509,7 +526,13 @@ end ModuleProxy
 
 /** A [[WasmGenerator]] backend that produces text-based WAT as its output. */
 class WatBackend
-    extends WasmGenerator[WasmType, WasmPackedType, ModuleProxy, TypeBuilder, ExprProxy]:
+    extends WasmGenerator[
+      WasmType,
+      WasmPackedType,
+      ModuleProxy,
+      TypeBuilder,
+      ExprProxy
+    ]:
   override type TypeRefs = Seq[WasmType]
 
   override lazy val none: WasmType = NoneType
@@ -537,8 +560,8 @@ class WatBackend
       case _ => MultiValueType(types)
   override def expandType(ty: WasmType): TypeRefs = ty match
     case MultiValueType(types) => types
-    case NoneType              => Seq()
-    case _                     => Seq(ty)
+    case NoneType => Seq()
+    case _ => Seq(ty)
 
   override def getExpressionType(expr: ExprProxy): WasmType = expr.getType
   override def getExpressionWasmType(
@@ -548,12 +571,13 @@ class WatBackend
 
   /** Formats a type into its text representation. */
   def fmtType(ty: WasmType): Document = ty match
-    case I32Type    => doc"i32"
+    case I32Type => doc"i32"
     case AnyRefType => doc"anyref"
     case I31RefType => doc"i31ref"
     case _ => TODO(s"WatBackend::fmtType not implemented for type `$ty`")
 
-  /** Formats a function signature with the given [[params parameters]] and
+  /**
+   * Formats a function signature with the given [[params parameters]] and
    * [[results]] into its text representation.
    *
    * This function will only generate `(param ...)` and `(result ...)` clauses.
@@ -564,7 +588,8 @@ class WatBackend
       expandType(results)
         .map(r => doc"(result ${fmtType(r)})")).mkDocument(" ")
 
-  /** Formats a function type with the given [[params parameters]] and
+  /**
+   * Formats a function type with the given [[params parameters]] and
    * [[results]] into its text representation.
    *
    * This function will generate the full function type. Use [[fmtFuncSig]] to
@@ -677,7 +702,7 @@ class WatBackend
                     true
                   )
                 case I32Type => lhsOpRaw
-                case _       => ???
+                case _ => ???
               val rhsOpRaw = operand(rhs)
               val rhsOp = rhsOpRaw.getType match
                 case I31RefType =>
@@ -686,7 +711,7 @@ class WatBackend
                     true
                   )
                 case I32Type => lhsOpRaw
-                case _       => ???
+                case _ => ???
               mod.i32.add(lhsOp, rhsOp)
             case lNme =>
               raise(
@@ -783,12 +808,12 @@ class WatBackend
         val resValue = result(res)
         resValue.getType match
           case I32Type => mod.ref.i31(resValue)
-          case _       => resValue
+          case _ => resValue
       case Return(res, false) =>
         val resValue = result(res)
         resValue.getType match
           case I32Type => mod.ret(S(mod.ref.i31(resValue)))
-          case _       => mod.ret(S(resValue))
+          case _ => mod.ret(S(resValue))
       case End(_) =>
         // TODO: Insert `drop`s
         mod.nop()

@@ -17,7 +17,8 @@ private trait ToJSRepr:
   def toJSRepr: Document
 end ToJSRepr
 
-/** Abstraction over a JavaScript variable with a unique number as its
+/**
+ * Abstraction over a JavaScript variable with a unique number as its
  * identifier.
  *
  * This is used to represent intermediate values when generating JavaScript
@@ -28,7 +29,8 @@ case class VarId(id: Long) extends ToJSRepr:
   override def toJSRepr: Document = doc"_${id.toString}"
 end VarId
 
-/** A reference to a Binaryen module.
+/**
+ * A reference to a Binaryen module.
  *
  * @param gen
  *   The [[BinaryenJSBackend]] instance that generates constructs for this
@@ -57,10 +59,11 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
           .mkString("[", ", ", "]")}, ${body.toJSRepr});"
       new Func(freshId)
 
-  /** Gets a function by name.
-    *
-    * Generates a JavaScript runtime assertion if the function does not exist.
-    */
+  /**
+   * Gets a function by name.
+   *
+   * Generates a JavaScript runtime assertion if the function does not exist.
+   */
   override def getFunction(name: Str): Func =
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunction($name);"
@@ -147,7 +150,9 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   ): Unit =
     gen.db +=\\
       doc"${this.toJSRepr}.setMemory(${initial.toString}, ${maximum.toString}, ${exportName.orNull}, ${segments
-          .map(s => s"{offset: ${s.offset.toJSRepr}, data: new Uint8Array(${s.data.mkString("[", ", ", "]")}), passive: ${s.passive}")
+          .map(s =>
+            s"{offset: ${s.offset.toJSRepr}, data: new Uint8Array(${s.data.mkString("[", ", ", "]")}), passive: ${s.passive}"
+          )
           .mkString("[", ", ", "]")}, ${shared.toString});"
 
   override def setStart(start: Func): Unit =
@@ -259,14 +264,17 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   override def i31ref: I31Ref = new I31Ref:
     override def get(i31: ExprRef, signed: Bool): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i31.get_${if signed then "s" else "u"}(${i31.toJSRepr});"
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.i31.get_${
+            if signed then "s" else "u"
+          }(${i31.toJSRepr});"
         new ExprRef(freshId)
   end i31ref
 
   override def toJSRepr: Document = varId.toJSRepr
 end ModRef
 
-/** A reference to an `export` field in Binaryen.
+/**
+ * A reference to an `export` field in Binaryen.
  *
  * @param varId
  *   The identifier of the export in JavaScript code.
@@ -275,7 +283,8 @@ case class ExportRef(varId: VarId) extends Export[ExportRef] with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end ExportRef
 
-/** A reference to an `func` field in Binaryen.
+/**
+ * A reference to an `func` field in Binaryen.
  *
  * @param varId
  *   The identifier of the export in JavaScript code.
@@ -291,7 +300,8 @@ case class FuncInfoRef(varId: VarId)
   override def toJSRepr: Document = varId.toJSRepr
 end FuncInfoRef
 
-/** A reference to an expression in Binaryen.
+/**
+ * A reference to an expression in Binaryen.
  *
  * @param varId
  *   The identifier of the export in JavaScript code.
@@ -300,7 +310,8 @@ case class ExprRef(varId: VarId) extends Expression[ExprRef] with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end ExprRef
 
-/** A reference to a global in Binaryen.
+/**
+ * A reference to a global in Binaryen.
  *
  * @param varId
  *   The identifier of the export in JavaScript code.
@@ -309,7 +320,8 @@ case class GlobalRef(varId: VarId) extends Global[GlobalRef] with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end GlobalRef
 
-/** A reference to a heap type builder in Binaryen.
+/**
+ * A reference to a heap type builder in Binaryen.
  *
  * @param gen
  *   The [[BinaryenJSBackend]] instance that generates constructs for this type
@@ -327,16 +339,22 @@ case class TypeBuilder(gen: BinaryenJSBackend, varId: VarId)
   ): Unit =
     gen.db +=\\ doc"${varId.toJSRepr}.setSignatureType($index, ${paramTypes.toJSRepr}, ${resultTypes.toJSRepr});"
 
-  override def setStructType(index: Int, fields: Seq[(TypeRef | PackedTypeRef, Bool)]): Unit =
-    def fieldToObj(field: (TypeRef | PackedTypeRef, Bool)): Document = field._1 match
-      case ty: TypeRef => doc"{ type: ${ty.toJSRepr}, packedType: ${gen.notPacked.toJSRepr}, mutable: ${field._2.toString} }"
-      case packedTy: PackedTypeRef =>
-        assert(packedTy != gen.notPacked, "Packed type must not be 'notPacked'")
-        doc"{ type: ${gen.i32.toJSRepr}, packedType: ${packedTy.toJSRepr}, mutable: ${field._2.toString} }"
+  override def setStructType(
+      index: Int,
+      fields: Seq[(TypeRef | PackedTypeRef, Bool)]
+  ): Unit =
+    def fieldToObj(field: (TypeRef | PackedTypeRef, Bool)): Document =
+      field._1 match
+        case ty: TypeRef =>
+          doc"{ type: ${ty.toJSRepr}, packedType: ${gen.notPacked.toJSRepr}, mutable: ${field._2.toString} }"
+        case packedTy: PackedTypeRef =>
+          assert(
+            packedTy != gen.notPacked,
+            "Packed type must not be 'notPacked'"
+          )
+          doc"{ type: ${gen.i32.toJSRepr}, packedType: ${packedTy.toJSRepr}, mutable: ${field._2.toString} }"
 
-    gen.db +=\\ doc"${varId.toJSRepr}.setStructType($index, ${
-      fields.map(fieldToObj).mkDocument("[", ", ", "]")
-    });"
+    gen.db +=\\ doc"${varId.toJSRepr}.setStructType($index, ${fields.map(fieldToObj).mkDocument("[", ", ", "]")});"
 
   override def build(): TypeRef =
     gen.withFreshVarId: freshId =>
@@ -346,7 +364,8 @@ case class TypeBuilder(gen: BinaryenJSBackend, varId: VarId)
   override def toJSRepr: Document = varId.toJSRepr
 end TypeBuilder
 
-/** A reference to a type in Binaryen.
+/**
+ * A reference to a type in Binaryen.
  *
  * @param varId
  *   The identifier of the type in JavaScript code.
@@ -355,7 +374,8 @@ case class TypeRef(varId: VarId) extends wasm.Type with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end TypeRef
 
-/** A reference to a packed type in Binaryen.
+/**
+ * A reference to a packed type in Binaryen.
  *
  * @param varId
  *   The identifier of the packed type in JavaScript code.
@@ -364,8 +384,9 @@ case class PackedTypeRef(varId: VarId) extends wasm.PackedType with ToJSRepr:
   override def toJSRepr: Document = varId.toJSRepr
 end PackedTypeRef
 
-/** A [[WasmGenerator]] backend that produces Binaryen.js Javascript calls as
- * its output.
+/**
+ * A [[WasmGenerator]] backend that produces Binaryen.js Javascript calls as its
+ * output.
  *
  * @param modId
  *   The identifier of which the Binaryen module is loaded and referred to in
@@ -376,7 +397,8 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
     with AutoCloseable:
   type TypeRefs = VarId
 
-  /** A monotonically increasing counter for generating variable names of
+  /**
+   * A monotonically increasing counter for generating variable names of
    * intermediate Binaryen values.
    */
   private val varCounter = AtomicLong()
@@ -384,7 +406,8 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
   /** The [[DocBuilder]] instance housing all generated JavaScript code. */
   private[binaryen] val db = DocBuilder()
 
-  /** A [[set mutable.HashSet]] of all created modules by the Binaryen backend.
+  /**
+   * A [[set mutable.HashSet]] of all created modules by the Binaryen backend.
    */
   private val moduleIds = mutable.HashSet[VarId]()
 
@@ -494,7 +517,8 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
       }"""
       TypeRef(freshId)
 
-  /** Creates a fresh [[VarId]], executes [[block]], and returns the result of
+  /**
+   * Creates a fresh [[VarId]], executes [[block]], and returns the result of
    * the block.
    *
    * This is used to simplify capturing intermediate Binaryen values.
@@ -519,8 +543,9 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
       db +=\\ doc"${id.toJSRepr}.drop();"
     moduleIds.clear()
 
-  /** Converts all collected JavScript calls into a [[Document]] for execution.
-    */
+  /**
+   * Converts all collected JavScript calls into a [[Document]] for execution.
+   */
   def dumpJS: Document =
     val prelude = (0L until varCounter.get())
       .map(VarId(_).toJSRepr)

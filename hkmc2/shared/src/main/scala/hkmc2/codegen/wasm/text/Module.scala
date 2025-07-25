@@ -42,11 +42,15 @@ case class SignatureType(params: WasmType, results: WasmType) extends HeapType
 
 object Field:
   /** Creates a field from a [[WasmType]]. */
-  def apply(ty: WasmType, mutable: Bool) = new Field(ty, WasmPackedType.NotPacked, mutable)
+  def apply(ty: WasmType, mutable: Bool) =
+    new Field(ty, WasmPackedType.NotPacked, mutable)
 
   /** Creates a field from a [[WasmPackedType]]. */
   def apply(packedType: WasmPackedType, mutable: Bool) =
-    assert(packedType != WasmPackedType.NotPacked, "Packed type must not be 'notPacked'")
+    assert(
+      packedType != WasmPackedType.NotPacked,
+      "Packed type must not be 'notPacked'"
+    )
     new Field(I32Type, packedType, mutable)
 
 /** A type represening a struct field. */
@@ -55,13 +59,15 @@ case class Field(ty: WasmType, packedType: WasmPackedType, mutable: Bool)
 /** A type representing a structure type. */
 case class StructType(fields: Seq[Field]) extends HeapType
 
-/** An abstraction over a generic WebAssembly instructions.
+/**
+ * An abstraction over a generic WebAssembly instructions.
  */
 abstract sealed class Instruction:
   /** The mnemonic of the instruction, e.g. "i32.add". */
   val mnemonic: String
 
-  /** The arguments to the instruction. Note that this only includes arguments
+  /**
+   * The arguments to the instruction. Note that this only includes arguments
    * that are directly part of the instruction, not the stack arguments.
    *
    * For example, for `i32.add` this would be empty, but for `i32.const 42`,
@@ -88,12 +94,14 @@ case class StackInstr(
 end StackInstr
 
 object FoldedInstr:
-  /** Instruction mnemonics that do not (yet) support lowering from folded
-    * instructions to stack instructions.
-    */
+  /**
+   * Instruction mnemonics that do not (yet) support lowering from folded
+   * instructions to stack instructions.
+   */
   val unsupportedToStackMnemonics = Set("if", "then", "else")
 
-/** A WebAssembly folded instruction.
+/**
+ * A WebAssembly folded instruction.
  *
  * @param stackargs
  *   The stack arguments of the instruction.
@@ -130,29 +138,31 @@ case class FoldedInstr(
                   case stackInstr: Ls[StackInstr] =>
                     stackInstr.map(_.fmtDoc).mkDocument(" # ")
                   case S(foldedInstr) => foldedInstr.fmtDoc
-                  case N              => doc""
+                  case N => doc""
                 }"
             )
             .mkDocument(doc" # ")} #} "
       )(doc"")})"
 end FoldedInstr
 
-/** A WebAssembly expression, comprised of zero of more instructions that
+/**
+ * A WebAssembly expression, comprised of zero of more instructions that
  * generate a result value.
  */
 type Expr = Opt[FoldedInstr] | Ls[StackInstr]
 
-/** A module function.
-  *
-  * @param typeId
-  *   The identifier of the function type in the module's `type` section.
-  * @param paramTypes
-  *   The parameter type(s) of this function, without the `(param)` construct.
-  * @param resultTypes
-  *   The result type(s) of this function, without the `(result)` construct.
-  * @param doc
-  *   The content of the module function.
-  */
+/**
+ * A module function.
+ *
+ * @param typeId
+ *   The identifier of the function type in the module's `type` section.
+ * @param paramTypes
+ *   The parameter type(s) of this function, without the `(param)` construct.
+ * @param resultTypes
+ *   The result type(s) of this function, without the `(result)` construct.
+ * @param doc
+ *   The content of the module function.
+ */
 case class ModFunc(
     val typeId: Str,
     val paramTypes: WasmType,
@@ -160,7 +170,8 @@ case class ModFunc(
     val doc: Document
 )
 
-/** A WebAssembly module definition.
+/**
+ * A WebAssembly module definition.
  *
  * @param id
  *   The identifier of the module, if any.

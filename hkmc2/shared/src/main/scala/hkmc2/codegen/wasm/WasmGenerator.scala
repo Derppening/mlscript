@@ -8,17 +8,18 @@ import js.CodeBuilder
 /** Abstract class representing a Wasm `export` section. */
 abstract class Export[E <: Export[E]]
 
-/** Abstract class representing a Wasm expression, which is composed of zero or
+/**
+ * Abstract class representing a Wasm expression, which is composed of zero or
  * more instructions.
  */
 abstract class Expression[E <: Expression[E]]
 
-/** Abstract class representing a structure containing information of a
-  * function.
-  *
-  * @tparam T
-  *   The type representing Wasm types.
-  */
+/**
+ * Abstract class representing a structure containing information of a function.
+ *
+ * @tparam T
+ *   The type representing Wasm types.
+ */
 abstract class FunctionInfo[T <: Type]
 
 /** Abstract class representing a Wasm function. */
@@ -30,7 +31,8 @@ end Function
 /** Abstract class representing a Wasm `global` section. */
 abstract class Global[G <: Global[G]]
 
-/** Represention of a data segment used to initialize Wasm memories. See
+/**
+ * Represention of a data segment used to initialize Wasm memories. See
  * [[https://webassembly.github.io/gc/core/text/modules.html#data-segments]]
  */
 case class MemorySegment[E <: Expression[E]](
@@ -48,12 +50,14 @@ abstract class PackedType
 /** Abstract class representing a builder that creates heap types. */
 abstract class TypeBuilder[T <: Type, PT <: PackedType]:
 
-  /** Sets the type at `index` to be a signature type with the given
-   * `paramTypes` and `resultTypes`.
+  /**
+   * Sets the type at `index` to be a signature type with the given `paramTypes`
+   * and `resultTypes`.
    */
   def setSignatureType(index: Int, paramTypes: T, resultTypes: T): Unit
 
-  /** Sets the type at `index` to be a struct type with the given fields.
+  /**
+   * Sets the type at `index` to be a struct type with the given fields.
    *
    * The tuple of each field should contain the Wasm type or the Wasm packed
    * type, and whether the field is mutable respectively.
@@ -64,7 +68,8 @@ abstract class TypeBuilder[T <: Type, PT <: PackedType]:
   def build(): T
 end TypeBuilder
 
-/** Abstract class representing a Wasm `module`.
+/**
+ * Abstract class representing a Wasm `module`.
  *
  * @tparam Type
  *   The backend-specific handle for Wasm types.
@@ -83,7 +88,8 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Abstract handle for `ref`-related instructions. */
   abstract class Ref:
-    /** Creates a `ref.func` instruction to a function with the given `name` and
+    /**
+     * Creates a `ref.func` instruction to a function with the given `name` and
      * return type `ty`.
      */
     def func(name: Str, ty: Type): Expr
@@ -91,8 +97,9 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     /** Creates a `ref.i31` instruction with the given `value`. */
     def i31(value: Expr): Expr
 
-    /** Creates a `ref.null` instruction, downcasting the value to `castType`.
-      */
+    /**
+     * Creates a `ref.null` instruction, downcasting the value to `castType`.
+     */
     def cast(value: Expr, castType: Type): Expr
   end Ref
 
@@ -108,9 +115,10 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   /** Concrete type representing a `func` section. */
   type Func <: Function[Func]
 
-  /** Concrete type representing a structure containing information of a
-    * function.
-    */
+  /**
+   * Concrete type representing a structure containing information of a
+   * function.
+   */
   type FuncInfo <: FunctionInfo[Type]
 
   /** Concrete type representing a `global` section. */
@@ -125,11 +133,12 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
       body: Expr
   ): Func
 
-  /** Gets a function by name.
-    *
-    * Refer to the implementation documentation for the specific handling if the
-    * function with the given name is not found.
-    */
+  /**
+   * Gets a function by name.
+   *
+   * Refer to the implementation documentation for the specific handling if the
+   * function with the given name is not found.
+   */
   def getFunction(name: Str): Func
 
   /** Removes the function with the given `name` from this module. */
@@ -199,7 +208,8 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   /** Obtains information about a function. */
   def getFunctionInfo(name: Func): FuncInfo
 
-  /** Creates a `block` instruction.
+  /**
+   * Creates a `block` instruction.
    *
    * @param label
    *   The label identifier of the block.
@@ -214,14 +224,16 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
       resultType: Opt[Type]
   ): Expr
 
-  /** Creates an `if` instruction.
-    */
+  /**
+   * Creates an `if` instruction.
+   */
   def `if`(condition: Expr, ifTrue: Expr, ifFalse: Opt[Expr]): Expr
 
   /** Creates a `nop` instruction. */
   def nop(): Expr
 
-  /** Creates a `ret` instruction.
+  /**
+   * Creates a `ret` instruction.
    *
    * @param value
    *   The value to return. If `None`, the function does not return a value.
@@ -231,14 +243,16 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   /** Creates an `unreachable` instruction. */
   def unreachable(): Expr
 
-  /** Creates a `drop` instruction.
+  /**
+   * Creates a `drop` instruction.
    *
    * @param value
    *   The value to discard.
    */
   def drop(value: Expr): Expr
 
-  /** Creates a `call` instruction.
+  /**
+   * Creates a `call` instruction.
    *
    * @param name
    *   The name of the function to call.
@@ -249,7 +263,8 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
    */
   def call(name: Str, operands: Seq[Expr], returnType: Type): Expr
 
-  /** Create a `call_ref` instruction.
+  /**
+   * Create a `call_ref` instruction.
    *
    * @param target
    *   The function reference to call.
@@ -278,7 +293,8 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
 end Module
 
-/** Base implementation for generating Wasm.
+/**
+ * Base implementation for generating Wasm.
  *
  * This class should be implemented by all backends that generate Wasm code.
  *
@@ -293,7 +309,10 @@ end Module
  * @note
  *   The API of this class is based on the `binaryen.js` API.
  */
-abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T, PT], E <: Expression[E]]
+abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[
+  T,
+  E
+], TB <: TypeBuilder[T, PT], E <: Expression[E]]
     extends CodeBuilder:
 
   /** Type alias for representing multiple Wasm types. */
@@ -338,8 +357,9 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB 
   /** The string reference type. */
   lazy val stringref: T
 
-  /** A special type indicating unreachable code when obtaining information
-   * about an expression.
+  /**
+   * A special type indicating unreachable code when obtaining information about
+   * an expression.
    */
   lazy val unreachable: T
 
@@ -352,7 +372,8 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB 
   /** The 16-bit integer packed type. */
   lazy val i16: PT
 
-  /** Creates a multi-value type from [[TypeRefs an array of types]].
+  /**
+   * Creates a multi-value type from [[TypeRefs an array of types]].
    */
   def createType(types: TypeRefs): T
 
@@ -362,7 +383,8 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB 
   /** Returns the type of this expression `expr`. */
   def getExpressionType(expr: E): T
 
-  /** Returns the type of this expression `expr`, lowering internal types into
+  /**
+   * Returns the type of this expression `expr`, lowering internal types into
    * Wasm types where necessary.
    *
    * @param expectsValue
@@ -374,7 +396,8 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB 
   /** Creates a new module using this backend. */
   def newModule: M
 
-  /** Creates a new type builder using this backend for generating heap types.
+  /**
+   * Creates a new type builder using this backend for generating heap types.
    *
    * @param size
    *   The initial size of the type builder.
@@ -383,12 +406,15 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB 
 
 object WasmGenerator:
   /** Test function for creating a simple module. */
-  def mkSimpleModule[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[T, PT], E <: Expression[E]](
+  def mkSimpleModule[T <: Type, PT <: PackedType, M <: Module[
+    T,
+    E
+  ], TB <: TypeBuilder[T, PT], E <: Expression[E]](
       gen: WasmGenerator[T, PT, M, TB, E]
   ): M =
     val mod = gen.newModule
     locally:
-      import mod._
+      import mod.*
       addFunction(
         "main",
         gen.none,
