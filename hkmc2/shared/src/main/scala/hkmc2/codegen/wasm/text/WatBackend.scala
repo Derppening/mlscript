@@ -122,9 +122,14 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
     ensureFieldSize(index)
     entries(index) = SignatureType(paramTypes, resultTypes)
 
-  override def setStructType(index: Int, fields: Seq[(WasmType, WasmPackedType, Bool)]): Unit =
+  override def setStructType(index: Int, fields: Seq[(WasmType | WasmPackedType, Bool)]): Unit =
     ensureFieldSize(index)
-    entries(index) = StructType(fields.map((ty, packedTy, mut) => Field(ty, packedTy, mut)))
+    entries(index) = StructType(
+      fields.map: (ty, mut) =>
+        ty match
+          case packedTy: WasmPackedType => Field(packedTy, mut)
+          case ty: WasmType => Field(ty, mut)
+    )
 
   override def build(): WasmType = gen.createType(entries.toSeq)
 end TypeBuilder

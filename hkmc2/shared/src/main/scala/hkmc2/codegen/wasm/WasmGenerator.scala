@@ -55,10 +55,10 @@ abstract class TypeBuilder[T <: Type, PT <: PackedType]:
 
   /** Sets the type at `index` to be a struct type with the given fields.
    *
-   * The tuple of each field should contain the Wasm type, the Wasm packed
+   * The tuple of each field should contain the Wasm type or the Wasm packed
    * type, and whether the field is mutable respectively.
    */
-  def setStructType(index: Int, fields: Seq[(T, PT, Bool)]): Unit
+  def setStructType(index: Int, fields: Seq[(T | PT, Bool)] = Seq()): Unit
 
   /** Builds a heap type from this instance. */
   def build(): T

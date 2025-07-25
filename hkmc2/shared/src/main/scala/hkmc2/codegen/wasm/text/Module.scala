@@ -40,6 +40,12 @@ abstract class HeapType extends WasmType
 /** A type representing a function signature. */
 case class SignatureType(params: WasmType, results: WasmType) extends HeapType
 
+object Field:
+  def apply(ty: WasmType, mutable: Bool) = new Field(ty, WasmPackedType.NotPacked, mutable)
+  def apply(packedType: WasmPackedType, mutable: Bool) =
+    assert(packedType != WasmPackedType.NotPacked, "Packed type must not be 'notPacked'")
+    new Field(I32Type, packedType, mutable)
+
 /** A type represening a struct field. */
 case class Field(ty: WasmType, packedType: WasmPackedType, mutable: Bool)
 

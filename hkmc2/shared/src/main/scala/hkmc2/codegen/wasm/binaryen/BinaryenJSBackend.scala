@@ -327,9 +327,15 @@ case class TypeBuilder(gen: BinaryenJSBackend, varId: VarId)
   ): Unit =
     gen.db +=\\ doc"${varId.toJSRepr}.setSignatureType($index, ${paramTypes.toJSRepr}, ${resultTypes.toJSRepr});"
 
-  override def setStructType(index: Int, fields: Seq[(TypeRef, PackedTypeRef, Bool)]): Unit =
+  override def setStructType(index: Int, fields: Seq[(TypeRef | PackedTypeRef, Bool)]): Unit =
+    def fieldToObj(field: (TypeRef | PackedTypeRef, Bool)): Document = field._1 match
+      case ty: TypeRef => doc"{ type: ${ty.toJSRepr}, packedType: ${gen.notPacked.toJSRepr}, mutable: ${field._2.toString} }"
+      case packedTy: PackedTypeRef =>
+        assert(packedTy != gen.notPacked, "Packed type must not be 'notPacked'")
+        doc"{ type: ${gen.i32.toJSRepr}, packedType: ${packedTy.toJSRepr}, mutable: ${field._2.toString} }"
+
     gen.db +=\\ doc"${varId.toJSRepr}.setStructType($index, ${
-      fields.map(field => doc"{ type: ${field._1.toJSRepr}, packedType: ${field._2.toJSRepr}, mutable: ${field._3.toString} }").mkDocument("[", ", ", "]")
+      fields.map(fieldToObj).mkDocument("[", ", ", "]")
     });"
 
   override def build(): TypeRef =
