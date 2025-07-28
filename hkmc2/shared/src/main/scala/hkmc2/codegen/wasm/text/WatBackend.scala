@@ -489,6 +489,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       new ExprProxy(
         S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty))
       )
+
     def i31(value: ExprProxy): ExprProxy =
       new ExprProxy(
         S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), I31RefType))
