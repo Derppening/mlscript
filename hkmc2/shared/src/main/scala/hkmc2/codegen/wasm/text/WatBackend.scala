@@ -55,7 +55,8 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
    *   generated.
    */
   def getWasmType(expectsValue: Bool): WasmType = getType match
-    case UnreachableType => if expectsValue then AnyRefType else NoneType
+    case UnreachableType =>
+      if expectsValue then RefType(HeapType.Any, nullable = true) else NoneType
     case ty => ty
 
   /**
@@ -142,7 +143,8 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
           case ty: WasmType => Field(ty, mut)
     )
 
-  def build(): WasmType = gen.createType(entries.toSeq)
+  def build(): WasmType =
+    gen.createType(entries.map(entry => RefType(entry, false)).toSeq)
 end TypeBuilder
 
 /**
@@ -485,14 +487,15 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       //                   since the instruction's return type in Binaryen is
       //                   `(ref (exact $idx))`, but this appears to be a Wasm
       //                   proposal...
-      require(ty.isInstanceOf[SignatureType])
+      require(ty.isInstanceOf[RefType])
+      require(ty.asInstanceOf[RefType].heapType.isInstanceOf[SignatureType])
       new ExprProxy(
         S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty))
       )
 
     def i31(value: ExprProxy): ExprProxy =
       new ExprProxy(
-        S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), I31RefType))
+        S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), gen.i31ref))
       )
 
     def cast(value: ExprProxy, castType: WasmType): ExprProxy =
@@ -542,13 +545,13 @@ class WatBackend
   lazy val f32: WasmType = F32Type
   lazy val f64: WasmType = F64Type
   lazy val v128: WasmType = V128Type
-  lazy val funcref: WasmType = FuncRefType
-  lazy val externref: WasmType = ExternRefType
-  lazy val anyref: WasmType = AnyRefType
-  lazy val eqref: WasmType = EqRefType
-  lazy val i31ref: WasmType = I31RefType
-  lazy val structref: WasmType = StructRefType
-  lazy val stringref: WasmType = StringRefType
+  lazy val funcref: WasmType = RefType(HeapType.Func, nullable = true)
+  lazy val externref: WasmType = RefType(HeapType.Ext, nullable = true)
+  lazy val anyref: WasmType = RefType(HeapType.Any, nullable = true)
+  lazy val eqref: WasmType = RefType(HeapType.Eq, nullable = true)
+  lazy val i31ref: WasmType = RefType(HeapType.I31, nullable = true)
+  lazy val structref: WasmType = RefType(HeapType.Struct, nullable = true)
+  lazy val stringref: WasmType = RefType(HeapType.String, nullable = true)
   lazy val unreachable: WasmType = UnreachableType
   lazy val notPacked: WasmPackedType = WasmPackedType.NotPacked
   lazy val i8: WasmPackedType = WasmPackedType.I8
@@ -570,11 +573,17 @@ class WatBackend
       expectsValue: Bool
   ): WasmType = expr.getWasmType(expectsValue)
 
-  /** Formats a type into its text representation. */
+  /** Formats a [[HeapType]] into its text representation. */
+  def fmtType(ty: HeapType): Document = ty match
+    case HeapType.Func => doc"func"
+    case HeapType.I31 => doc"i31"
+    case _ => ???
+
+  /** Formats a [[WasmType]] into its text representation. */
   def fmtType(ty: WasmType): Document = ty match
     case I32Type => doc"i32"
-    case AnyRefType => doc"anyref"
-    case I31RefType => doc"i31ref"
+    case RefType(heapType, nullable) =>
+      doc"(ref ${if nullable then "null " else ""}${fmtType(heapType)})"
     case _ => TODO(s"WatBackend::fmtType not implemented for type `$ty`")
 
   /**
@@ -697,7 +706,7 @@ class WatBackend
               // TODO(Derppening): Omit emitting sanity checks
               val lhsOpRaw = operand(lhs)
               val lhsOp = lhsOpRaw.getType match
-                case I31RefType =>
+                case RefType(HeapType.I31, _) =>
                   mod.i31ref.get(
                     mod.ref.cast(lhsOpRaw, i31ref),
                     true
@@ -706,7 +715,7 @@ class WatBackend
                 case _ => ???
               val rhsOpRaw = operand(rhs)
               val rhsOp = rhsOpRaw.getType match
-                case I31RefType =>
+                case RefType(HeapType.I31, _) =>
                   mod.i31ref.get(
                     mod.ref.cast(rhsOpRaw, i31ref),
                     true
@@ -756,7 +765,9 @@ class WatBackend
         val base = subexpression(fun)
         // Propagate `unreachable` to its parent expression
         if base.getType != UnreachableType then
-          val baseTy = base.getType.asInstanceOf[SignatureType]
+          val baseTy = base.getType.asInstanceOf[
+            RefType
+          ].heapType.asInstanceOf[SignatureType]
           val wasmArgs = args.map(argument)
           mod.callRef(base, wasmArgs, baseTy.params, baseTy.results)
         else base

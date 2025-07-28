@@ -14,13 +14,6 @@ private case object I64Type extends WasmType
 private case object F32Type extends WasmType
 private case object F64Type extends WasmType
 private case object V128Type extends WasmType
-private case object FuncRefType extends WasmType
-private case object ExternRefType extends WasmType
-private case object AnyRefType extends WasmType
-private case object EqRefType extends WasmType
-private case object I31RefType extends WasmType
-private case object StructRefType extends WasmType
-private case object StringRefType extends WasmType
 private case object UnreachableType extends WasmType
 private case class MultiValueType(types: Seq[WasmType]) extends WasmType
 
@@ -31,11 +24,24 @@ enum WasmPackedType extends PackedType:
   case I16
 end WasmPackedType
 
+/** Wasm type representing a reference to a [[HeapType]]. */
+case class RefType(heapType: HeapType, nullable: Bool) extends WasmType
+
+object HeapType:
+  case object Func extends HeapType
+  case object Ext extends HeapType
+  case object Any extends HeapType
+  case object Eq extends HeapType
+  case object I31 extends HeapType
+  case object Struct extends HeapType
+  case object Array extends HeapType
+  case object String extends HeapType
+  case object None extends HeapType
+  case object NoExt extends HeapType
+  case object NoFunc extends HeapType
+
 /** Abstract base class for all Wasm heap types. */
-// TODO(Derppening): Do we want first class `AbsHeapType` and `reftype`? Having
-//                   them makes `{...}RefType` obsolete, since they are just
-//                   `ref null {...}`, but might break a lot of things...
-abstract class HeapType extends WasmType
+abstract class HeapType
 
 /** A type representing a function signature. */
 case class SignatureType(params: WasmType, results: WasmType) extends HeapType
