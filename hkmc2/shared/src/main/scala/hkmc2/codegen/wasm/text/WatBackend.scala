@@ -82,7 +82,7 @@ end ExprProxy
  *   The name of the function.
  */
 case class FuncRef(mod: ModuleProxy, name: Str) extends Function[FuncRef]:
-  override type Expr = ExprProxy
+  type Expr = ExprProxy
 end FuncRef
 
 /**
@@ -122,7 +122,7 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
     // Pad `entries` until we have the correct number of elements
     entries ++= Seq.fill((index - entries.size + 1) max 0)(null)
 
-  override def setSignatureType(
+  def setSignatureType(
       index: Int,
       paramTypes: WasmType,
       resultTypes: WasmType
@@ -130,7 +130,7 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
     ensureFieldSize(index)
     entries(index) = SignatureType(paramTypes, resultTypes)
 
-  override def setStructType(
+  def setStructType(
       index: Int,
       fields: Seq[(WasmType | WasmPackedType, Bool)]
   ): Unit =
@@ -142,7 +142,7 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
           case ty: WasmType => Field(ty, mut)
     )
 
-  override def build(): WasmType = gen.createType(entries.toSeq)
+  def build(): WasmType = gen.createType(entries.toSeq)
 end TypeBuilder
 
 /**
@@ -195,12 +195,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       results: WasmType
   ): Str = addType(name, gen.fmtFuncType(params, results))
 
-  override type Exprt = ExportRef
-  override type Func = FuncRef
-  override type FuncInfo = FunctionInfo
-  override type Glob = GlobalRef
+  type Exprt = ExportRef
+  type Func = FuncRef
+  type FuncInfo = FunctionInfo
+  type Glob = GlobalRef
 
-  override def addFunction(
+  def addFunction(
       name: Str,
       params: WasmType,
       results: WasmType,
@@ -234,13 +234,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
    *
    * Generates a [[NoSuchElementException]] if the function does not exist.
    */
-  override def getFunction(name: Str): Func =
+  def getFunction(name: Str): Func =
     mod.fn.find(_._1 == name).map((nme, _) => new Func(this, nme)).get
 
-  override def removeFunction(name: Str): Unit =
+  def removeFunction(name: Str): Unit =
     mod = mod.copy(fn = mod.fn.filterNot((nm, _) => nm == name))
 
-  override def addFunctionImport(
+  def addFunctionImport(
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str,
@@ -258,7 +258,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
     mod = mod.copy(im = mod.im :+ internalName -> funcImp)
 
-  override def addTableImport(
+  def addTableImport(
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str
@@ -268,7 +268,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
     mod = mod.copy(im = mod.im :+ internalName -> tableImp)
 
-  override def addMemoryImport(
+  def addMemoryImport(
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str
@@ -278,7 +278,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
     mod = mod.copy(im = mod.im :+ internalName -> memImp)
 
-  override def addGlobalImport(
+  def addGlobalImport(
       internalName: Str,
       externalModuleName: Str,
       externalBaseName: Str,
@@ -289,7 +289,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
     mod = mod.copy(im = mod.im :+ internalName -> globalImp)
 
-  override def addFunctionExport(
+  def addFunctionExport(
       internalName: Str,
       externalName: Str
   ): Exprt =
@@ -298,13 +298,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     mod = mod.copy(ex = mod.ex :+ externalName -> funcExp)
     new Exprt(this, externalName)
 
-  override def addTableExport(internalName: Str, externalName: Str): Exprt =
+  def addTableExport(internalName: Str, externalName: Str): Exprt =
     val tableExp = doc"""(export "$externalName" (table $$$internalName))"""
 
     mod = mod.copy(ex = mod.ex :+ externalName -> tableExp)
     new Exprt(this, externalName)
 
-  override def addMemoryExport(
+  def addMemoryExport(
       internalName: Str,
       externalName: Str
   ): Exprt =
@@ -313,7 +313,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     mod = mod.copy(ex = mod.ex :+ externalName -> memoryExp)
     new Exprt(this, externalName)
 
-  override def addGlobalExport(
+  def addGlobalExport(
       internalName: Str,
       externalName: Str
   ): Exprt =
@@ -322,7 +322,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     mod = mod.copy(ex = mod.ex :+ externalName -> globalExp)
     new Exprt(this, externalName)
 
-  override def addGlobal(
+  def addGlobal(
       name: Str,
       ty: WasmType,
       mutable: Bool,
@@ -335,12 +335,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     mod = mod.copy(gl = mod.gl :+ name -> globalDecl)
     new Glob(this, name)
 
-  override def removeGlobal(name: Str): Unit =
+  def removeGlobal(name: Str): Unit =
     mod = mod.copy(gl = mod.gl.filterNot((nm, _) => nm == name))
 
     // TODO(Derppening): We probably will need to relax this to support the multiple
     //                   memories feature in Wasm...
-  override def setMemory(
+  def setMemory(
       initial: Int,
       maximum: Int,
       exportName: Opt[Str],
@@ -360,10 +360,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     exportName.foreach:
       this.addMemoryExport("0", _)
 
-  override def setStart(start: Func): Unit =
+  def setStart(start: Func): Unit =
     mod = mod.copy(st = S(start.name))
 
-  override def getFunctionInfo(ftype: Func): FuncInfo =
+  def getFunctionInfo(ftype: Func): FuncInfo =
     val func = mod.fn.find(_._1 == ftype.name).map(_._2).get
     new FunctionInfo(
       name = func._1,
@@ -371,7 +371,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       results = func.resultTypes
     )
 
-  override def block(
+  def block(
       label: Opt[Str],
       children: Seq[ExprProxy],
       resultType: Opt[WasmType]
@@ -389,7 +389,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
     )
 
-  override def `if`(
+  def `if`(
       condition: ExprProxy,
       ifTrue: ExprProxy,
       ifFalse: Opt[ExprProxy]
@@ -421,10 +421,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
     )
 
-  override def nop(): ExprProxy =
+  def nop(): ExprProxy =
     new ExprProxy(S(FoldedInstr("nop", Seq(), Seq(), NoneType)))
 
-  override def ret(value: Opt[ExprProxy]): ExprProxy =
+  def ret(value: Opt[ExprProxy]): ExprProxy =
     new ExprProxy(
       S(
         FoldedInstr(
@@ -436,13 +436,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
     )
 
-  override def unreachable(): ExprProxy =
+  def unreachable(): ExprProxy =
     new ExprProxy(S(FoldedInstr("unreachable", Seq(), Seq(), UnreachableType)))
 
-  override def drop(value: ExprProxy): ExprProxy =
+  def drop(value: ExprProxy): ExprProxy =
     new ExprProxy(S(FoldedInstr("drop", Seq(), Seq(value.inner), NoneType)))
 
-  override def call(
+  def call(
       name: Str,
       operands: Seq[ExprProxy],
       returnType: WasmType
@@ -451,7 +451,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       S(FoldedInstr("call", Seq(s"$$$name"), operands.map(_.inner), returnType))
     )
 
-  override def callRef(
+  def callRef(
       target: ExprProxy,
       operands: Seq[ExprProxy],
       params: WasmType,
@@ -469,18 +469,18 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
     )
 
-  override def i32 = new I32:
-    override def const(value: Int): ExprProxy =
+  def i32 = new I32:
+    def const(value: Int): ExprProxy =
       new ExprProxy(S(FoldedInstr("i32.const", Seq(s"$value"), Seq(), I32Type)))
 
-    override def add(left: ExprProxy, right: ExprProxy): ExprProxy =
+    def add(left: ExprProxy, right: ExprProxy): ExprProxy =
       new ExprProxy(
         S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner), I32Type))
       )
   end i32
 
-  override def ref = new Ref:
-    override def func(name: Str, ty: WasmType): ExprProxy =
+  def ref = new Ref:
+    def func(name: Str, ty: WasmType): ExprProxy =
       // TODO(Derppening): See if need to convert `ty` into an exact type,
       //                   since the instruction's return type in Binaryen is
       //                   `(ref (exact $idx))`, but this appears to be a Wasm
@@ -489,12 +489,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       new ExprProxy(
         S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty))
       )
-    override def i31(value: ExprProxy): ExprProxy =
+    def i31(value: ExprProxy): ExprProxy =
       new ExprProxy(
         S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), I31RefType))
       )
 
-    override def cast(value: ExprProxy, castType: WasmType): ExprProxy =
+    def cast(value: ExprProxy, castType: WasmType): ExprProxy =
       new ExprProxy(
         S(
           FoldedInstr(
@@ -507,8 +507,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
   end ref
 
-  override def i31ref = new I31Ref:
-    override def get(i31: ExprProxy, signed: Bool): ExprProxy =
+  def i31ref = new I31Ref:
+    def get(i31: ExprProxy, signed: Bool): ExprProxy =
       ExprProxy(
         S(
           FoldedInstr(
@@ -533,38 +533,38 @@ class WatBackend
       TypeBuilder,
       ExprProxy
     ]:
-  override type TypeRefs = Seq[WasmType]
+  type TypeRefs = Seq[WasmType]
 
-  override lazy val none: WasmType = NoneType
-  override lazy val i32: WasmType = I32Type
-  override lazy val i64: WasmType = I64Type
-  override lazy val f32: WasmType = F32Type
-  override lazy val f64: WasmType = F64Type
-  override lazy val v128: WasmType = V128Type
-  override lazy val funcref: WasmType = FuncRefType
-  override lazy val externref: WasmType = ExternRefType
-  override lazy val anyref: WasmType = AnyRefType
-  override lazy val eqref: WasmType = EqRefType
-  override lazy val i31ref: WasmType = I31RefType
-  override lazy val structref: WasmType = StructRefType
-  override lazy val stringref: WasmType = StringRefType
-  override lazy val unreachable: WasmType = UnreachableType
-  override lazy val notPacked: WasmPackedType = WasmPackedType.NotPacked
-  override lazy val i8: WasmPackedType = WasmPackedType.I8
-  override lazy val i16: WasmPackedType = WasmPackedType.I16
+  lazy val none: WasmType = NoneType
+  lazy val i32: WasmType = I32Type
+  lazy val i64: WasmType = I64Type
+  lazy val f32: WasmType = F32Type
+  lazy val f64: WasmType = F64Type
+  lazy val v128: WasmType = V128Type
+  lazy val funcref: WasmType = FuncRefType
+  lazy val externref: WasmType = ExternRefType
+  lazy val anyref: WasmType = AnyRefType
+  lazy val eqref: WasmType = EqRefType
+  lazy val i31ref: WasmType = I31RefType
+  lazy val structref: WasmType = StructRefType
+  lazy val stringref: WasmType = StringRefType
+  lazy val unreachable: WasmType = UnreachableType
+  lazy val notPacked: WasmPackedType = WasmPackedType.NotPacked
+  lazy val i8: WasmPackedType = WasmPackedType.I8
+  lazy val i16: WasmPackedType = WasmPackedType.I16
 
-  override def createType(types: TypeRefs): WasmType =
+  def createType(types: TypeRefs): WasmType =
     types.size match
       case 0 => NoneType
       case 1 => types.head
       case _ => MultiValueType(types)
-  override def expandType(ty: WasmType): TypeRefs = ty match
+  def expandType(ty: WasmType): TypeRefs = ty match
     case MultiValueType(types) => types
     case NoneType => Seq()
     case _ => Seq(ty)
 
-  override def getExpressionType(expr: ExprProxy): WasmType = expr.getType
-  override def getExpressionWasmType(
+  def getExpressionType(expr: ExprProxy): WasmType = expr.getType
+  def getExpressionWasmType(
       expr: ExprProxy,
       expectsValue: Bool
   ): WasmType = expr.getWasmType(expectsValue)
@@ -600,9 +600,9 @@ class WatBackend
         .optionUnless(_.isEmpty)
         .dlof(tyDoc => doc" $tyDoc")(doc"")})"
 
-  override def newModule: ModuleProxy = ModuleProxy(this, Module())
+  def newModule: ModuleProxy = ModuleProxy(this, Module())
 
-  override def newTypeBuilder(size: Int): TypeBuilder = TypeBuilder(this, size)
+  def newTypeBuilder(size: Int): TypeBuilder = TypeBuilder(this, size)
 
   /* Functions taken from JSBuilder */
 

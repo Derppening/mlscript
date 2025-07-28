@@ -84,11 +84,11 @@ end Instruction
 
 /** A WebAssembly stack instruction. */
 case class StackInstr(
-    override val mnemonic: Str,
-    override val instrargs: Seq[Any],
-    override val exprType: WasmType
+    val mnemonic: Str,
+    val instrargs: Seq[Any],
+    val exprType: WasmType
 ) extends Instruction:
-  override def fmtDoc: Document = doc"$mnemonic${instrargs
+  def fmtDoc: Document = doc"$mnemonic${instrargs
       .optionIf(_.nonEmpty)
       .dlof(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))(doc"")}"
 end StackInstr
@@ -107,10 +107,10 @@ object FoldedInstr:
  *   The stack arguments of the instruction.
  */
 case class FoldedInstr(
-    override val mnemonic: Str,
-    override val instrargs: Seq[Any],
+    val mnemonic: Str,
+    val instrargs: Seq[Any],
     stackargs: Seq[Expr],
-    override val exprType: WasmType
+    val exprType: WasmType
 ) extends Instruction:
   /** Converts this folded instruction into a sequence of stack instructions. */
   def toStack: Ls[StackInstr] =
@@ -127,7 +127,7 @@ case class FoldedInstr(
             foldedInstr.map(_.toStack).getOrElse(Ls())
       .toList :+ StackInstr(mnemonic, instrargs, exprType)
 
-  override def fmtDoc: Document = doc"($mnemonic${instrargs
+  def fmtDoc: Document = doc"($mnemonic${instrargs
       .optionIf(_.nonEmpty)
       .dlof(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))(doc"")}${stackargs
       .optionIf(_.nonEmpty)
