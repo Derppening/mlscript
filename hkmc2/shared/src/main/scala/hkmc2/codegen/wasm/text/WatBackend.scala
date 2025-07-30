@@ -541,7 +541,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
       ExprProxy(
         S(
-          FoldedInstr(s"struct.new", Seq(modTy), operands.map(_.inner), ty)
+          FoldedInstr(s"struct.new", Seq(s"$$$modTy"), operands.map(_.inner), ty)
         )
       )
   end struct
@@ -692,7 +692,14 @@ class WatBackend
                     true
                   )
                 case I32Type => lhsOpRaw
-                case _ => ???
+                case ty =>
+                  raise(
+                    WarningReport(
+                      msg"WasmBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
+                      source = Diagnostic.Source.Compilation
+                    )
+                  )
+                  mod.unreachable()
               val rhsOpRaw = operand(rhs)
               val rhsOp = rhsOpRaw.getType match
                 case RefType(HeapType.I31, _) =>
@@ -700,8 +707,15 @@ class WatBackend
                     mod.ref.cast(rhsOpRaw, i31ref),
                     true
                   )
-                case I32Type => lhsOpRaw
-                case _ => ???
+                case I32Type => rhsOpRaw
+                case ty =>
+                  raise(
+                    WarningReport(
+                      msg"WasmBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
+                      source = Diagnostic.Source.Compilation
+                    )
+                  )
+                  mod.unreachable()
               mod.i32.add(lhsOp, rhsOp)
             case lNme =>
               raise(
@@ -775,7 +789,7 @@ class WatBackend
                   source = Diagnostic.Source.Compilation
                 )
               )
-              ???
+              return mod.unreachable()
             val bodyExpr = block(body)
             mod.addFunction(
               sym.nme,
