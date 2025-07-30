@@ -6,44 +6,119 @@ import mlscript.utils.*, shorthands.*
 
 import document.*
 
+/** Trait indicating a WAT representation is available. */
+trait ToWat:
+
+  /** Converts this object into a WAT representation. */
+  def toWat: Document
+end ToWat
+
 /** Abstract base class for all Wasm types. */
-abstract class WasmType extends Type
-private case object NoneType extends WasmType
-private case object I32Type extends WasmType
-private case object I64Type extends WasmType
-private case object F32Type extends WasmType
-private case object F64Type extends WasmType
-private case object V128Type extends WasmType
-private case object UnreachableType extends WasmType
-private case class MultiValueType(types: Seq[WasmType]) extends WasmType
+abstract class WasmType extends Type, ToWat:
+  def toSeq: Seq[WasmType] = this match
+    case MultiValueType(types) => types
+    case NoneType => Seq()
+    case ty => Seq(ty)
+end WasmType
+
+private case object NoneType extends WasmType:
+  def toWat: Document = throw UnsupportedOperationException(
+    s"${toString} is a compiler-internal type and cannot be converted to WAT"
+  )
+end NoneType
+private case object I32Type extends WasmType:
+  def toWat: Document = doc"i32"
+end I32Type
+private case object I64Type extends WasmType:
+  def toWat: Document = doc"i64"
+end I64Type
+private case object F32Type extends WasmType:
+  def toWat: Document = doc"f32"
+end F32Type
+private case object F64Type extends WasmType:
+  def toWat: Document = doc"f64"
+end F64Type
+private case object V128Type extends WasmType:
+  def toWat: Document = doc"v128"
+end V128Type
+private case object UnreachableType extends WasmType:
+  def toWat: Document = throw UnsupportedOperationException(
+    s"${toString} is a compiler-internal type and cannot be converted to WAT"
+  )
+end UnreachableType
+private case class MultiValueType(types: Seq[WasmType]) extends WasmType:
+  def toWat: Document = throw UnsupportedOperationException(
+    s"${toString} is a compiler-internal type and cannot be converted to WAT"
+  )
+end MultiValueType
 
 /** Enumeration of all Wasm packed types. */
-enum WasmPackedType extends PackedType:
+enum WasmPackedType extends PackedType, ToWat:
   case NotPacked
   case I8
   case I16
+
+  def toWat: Document = this match
+    case WasmPackedType.I8 => doc"i8"
+    case WasmPackedType.I16 => doc"i16"
+    case _ => throw IllegalArgumentException(
+        "WasmPackedType.NotPacked cannot be converted to Wat"
+      )
+  end toWat
 end WasmPackedType
 
 /** Wasm type representing a reference to a [[HeapType]]. */
-case class RefType(heapType: HeapType, nullable: Bool) extends WasmType
+case class RefType(heapType: HeapType, nullable: Bool) extends WasmType:
+  def toWat: Document =
+    doc"(ref${if nullable then " null" else ""} ${heapType.toWat})"
+end RefType
 
 object HeapType:
-  case object Func extends HeapType
-  case object Ext extends HeapType
-  case object Any extends HeapType
-  case object Eq extends HeapType
-  case object I31 extends HeapType
-  case object Struct extends HeapType
-  case object Array extends HeapType
-  case object None extends HeapType
-  case object NoExt extends HeapType
-  case object NoFunc extends HeapType
+  case object Func extends HeapType:
+    def toWat: Document = doc"func"
+  end Func
+  case object Ext extends HeapType:
+    def toWat: Document = doc"extern"
+  end Ext
+  case object Any extends HeapType:
+    def toWat: Document = doc"any"
+  end Any
+  case object Eq extends HeapType:
+    def toWat: Document = doc"eq"
+  end Eq
+  case object I31 extends HeapType:
+    def toWat: Document = doc"i31"
+  end I31
+  case object Struct extends HeapType:
+    def toWat: Document = doc"struct"
+  end Struct
+  case object Array extends HeapType:
+    def toWat: Document = doc"array"
+  end Array
+  case object None extends HeapType:
+    def toWat: Document = doc"none"
+  end None
+  case object NoExt extends HeapType:
+    def toWat: Document = doc"noextern"
+  end NoExt
+  case object NoFunc extends HeapType:
+    def toWat: Document = doc"nofunc"
+  end NoFunc
 
 /** Abstract base class for all Wasm heap types. */
-abstract class HeapType
+abstract class HeapType extends ToWat
 
 /** A type representing a function signature. */
-case class SignatureType(params: WasmType, results: WasmType) extends HeapType
+case class SignatureType(params: WasmType, results: WasmType) extends HeapType,
+      ToWat:
+  def signatureToWat: Document =
+    (params.toSeq.map(p => doc"(param ${p.toWat}") ++ results.toSeq.map(r =>
+      doc"(result ${r.toWat})"
+    )).mkDocument(" ")
+
+  def toWat: Document =
+    doc"(func${signatureToWat.optionUnless(_.isEmpty).dlof(sig => doc" $sig")(doc"")})"
+end SignatureType
 
 object Field:
   /** Creates a field from a [[WasmType]]. */
@@ -60,14 +135,25 @@ object Field:
 
 /** A type represening a struct field. */
 case class Field(ty: WasmType, packedType: WasmPackedType, mutable: Bool)
+    extends ToWat:
+  def toWat: Document =
+    val tyWat = if packedType != WasmPackedType.NotPacked then packedType.toWat
+    else ty.toWat
+    doc"(field ${if mutable then doc"(mut ${tyWat})" else tyWat})"
+end Field
 
 /** A type representing a structure type. */
-case class StructType(fields: Seq[Field]) extends HeapType
+case class StructType(fields: Seq[Field]) extends HeapType:
+  def toWat: Document =
+    doc"(struct${fields.map(
+        _.toWat
+      ).mkDocument(doc" ").optionUnless(_.isEmpty).dlof(f => doc" $f")(doc"")})"
+end StructType
 
 /**
  * An abstraction over a generic WebAssembly instructions.
  */
-abstract sealed class Instruction:
+abstract sealed class Instruction extends ToWat:
   /** The mnemonic of the instruction, e.g. "i32.add". */
   val mnemonic: String
 
@@ -82,9 +168,6 @@ abstract sealed class Instruction:
 
   /** The result type of this expression. */
   val exprType: WasmType
-
-  /** Formats this instruction into a [[Document]]. */
-  def fmtDoc: Document
 end Instruction
 
 /** A WebAssembly stack instruction. */
@@ -93,7 +176,7 @@ case class StackInstr(
     val instrargs: Seq[Any],
     val exprType: WasmType
 ) extends Instruction:
-  def fmtDoc: Document = doc"$mnemonic${instrargs
+  def toWat: Document = doc"$mnemonic${instrargs
       .optionIf(_.nonEmpty)
       .dlof(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))(doc"")}"
 end StackInstr
@@ -132,7 +215,7 @@ case class FoldedInstr(
             foldedInstr.map(_.toStack).getOrElse(Ls())
       .toList :+ StackInstr(mnemonic, instrargs, exprType)
 
-  def fmtDoc: Document = doc"($mnemonic${instrargs
+  def toWat: Document = doc"($mnemonic${instrargs
       .optionIf(_.nonEmpty)
       .dlof(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))(doc"")}${stackargs
       .optionIf(_.nonEmpty)
@@ -141,8 +224,8 @@ case class FoldedInstr(
             .map(sarg =>
               doc"${sarg match
                   case stackInstr: Ls[StackInstr] =>
-                    stackInstr.map(_.fmtDoc).mkDocument(" # ")
-                  case S(foldedInstr) => foldedInstr.fmtDoc
+                    stackInstr.map(_.toWat).mkDocument(" # ")
+                  case S(foldedInstr) => foldedInstr.toWat
                   case N => doc""
                 }"
             )
@@ -213,8 +296,8 @@ case class Module(
     st: Opt[Str] = N,
     el: Seq[Str -> Document] = Seq(),
     da: Seq[Str -> Document] = Seq()
-):
-  def emitText: Document =
+) extends ToWat:
+  def toWat: Document =
     doc"(module${id.dlof(id => doc" $id")(doc"")} #{  # ${Seq(
         ty.map(_._2),
         im.map(_._2),

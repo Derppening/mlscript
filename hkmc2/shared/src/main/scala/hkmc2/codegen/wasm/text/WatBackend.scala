@@ -22,7 +22,10 @@ import scala.collection.mutable
  * @param intName
  *   The internal name of the export.
  */
-case class ExportRef(mod: ModuleProxy, intName: Str) extends Export[ExportRef]
+case class ExportRef(mod: ModuleProxy, intName: Str) extends Export[ExportRef],
+      ToWat:
+  def toWat: Document = doc"$$$intName"
+end ExportRef
 
 /**
  * A reference to an expression.
@@ -30,7 +33,7 @@ case class ExportRef(mod: ModuleProxy, intName: Str) extends Export[ExportRef]
  * @param inner
  *   The [[Expr]] that this proxy represents.
  */
-class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
+class ExprProxy(val inner: Expr) extends Expression[ExprProxy], ToWat:
   /** Whether this expression consists of exactly zero instructions. */
   def isEmpty: Boolean = inner match
     case stackInstr: Ls[StackInstr] => stackInstr.isEmpty
@@ -68,10 +71,10 @@ class ExprProxy(val inner: Expr) extends Expression[ExprProxy]:
     case foldedInstr: Opt[FoldedInstr] =>
       ExprProxy(foldedInstr.map(_.toStack).getOrElse(Ls()))
 
-  def fmtDoc: Document = inner match
+  def toWat: Document = inner match
     case stackInstr: Ls[StackInstr] =>
-      stackInstr.map(_.fmtDoc).mkDocument(" # ")
-    case foldedInstr: Opt[FoldedInstr] => foldedInstr.dlof(_.fmtDoc)(doc"")
+      stackInstr.map(_.toWat).mkDocument(" # ")
+    case foldedInstr: Opt[FoldedInstr] => foldedInstr.dlof(_.toWat)(doc"")
 end ExprProxy
 
 /**
@@ -82,8 +85,11 @@ end ExprProxy
  * @param name
  *   The name of the function.
  */
-case class FuncRef(mod: ModuleProxy, name: Str) extends Function[FuncRef]:
+case class FuncRef(mod: ModuleProxy, name: Str) extends Function[FuncRef],
+      ToWat:
   type Expr = ExprProxy
+
+  def toWat: Document = doc"$$$name"
 end FuncRef
 
 /**
@@ -108,7 +114,9 @@ case class FunctionInfo(
  * @param name
  *   The name of the global.
  */
-class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef]
+class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef], ToWat:
+  def toWat: Document = doc"$$$name"
+end GlobalRef
 
 /** A builder for creating heap types. */
 class TypeBuilder(private val gen: WatBackend, size: Int)
@@ -156,7 +164,7 @@ end TypeBuilder
  *   The underlying [[wasm.Module]] that this proxy represents.
  */
 class ModuleProxy(private val gen: WatBackend, private var mod: Module)
-    extends WasmModule[WasmType, ExprProxy]:
+    extends WasmModule[WasmType, ExprProxy], ToWat:
 
   /** Monotonically increasing counter for giving unique names to types. */
   private val anonTypeCounter = AtomicLong()
@@ -195,7 +203,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       name: Opt[Str],
       params: WasmType,
       results: WasmType
-  ): Str = addType(name, gen.fmtFuncType(params, results))
+  ): Str = addType(name, SignatureType(params, results).toWat)
 
   type Exprt = ExportRef
   type Func = FuncRef
@@ -217,10 +225,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     val fnTypeStrIndex = addFunctionType(N, params, results)
 
     val fnDecl =
-      doc"(func $$$name${gen.fmtFuncSig(params, results).optionUnless(
+      doc"(func $$$name${SignatureType(params, results).signatureToWat.optionUnless(
           _.isEmpty
         ).dlof(sig => doc" $sig ")(doc"")}${(vars
-          .map(v => doc"(local ${gen.fmtType(v)})") :+ body.fmtDoc)
+          .map(v => doc"(local ${v.toWat})") :+ body.toWat)
           .filterNot(_.isEmpty)
           .optionIf(_.nonEmpty)
           .dlof(docs => doc" #{  # ${docs.mkDocument(Document.forceBreak)}) #} ")(doc")")}"
@@ -250,13 +258,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       results: WasmType
   ): Unit =
     val funcImp =
-      doc"(import \"$externalModuleName\" \"$externalBaseName\" (func $$$internalName${gen
-          .expandType(params)
-          .optionIf(_.nonEmpty)
-          .dlof(_.map(p => doc"(param ${gen.fmtType(p)})").mkDocument(" ", " ", ""))(doc"")}${gen
-          .expandType(results)
-          .optionIf(_.nonEmpty)
-          .dlof(_.map(r => doc"(result ${gen.fmtType(r)})").mkDocument(" ", " ", ""))(doc"")}))"
+      doc"(import \"$externalModuleName\" \"$externalBaseName\" (func $$$internalName${SignatureType(params, results).signatureToWat.optionUnless(
+          _.isEmpty
+        ).dlof(s => doc" $s")(doc"")}"
 
     mod = mod.copy(im = mod.im :+ internalName -> funcImp)
 
@@ -266,7 +270,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       externalBaseName: Str
   ): Unit =
     val tableImp =
-      doc"(import \"$externalModuleName\" \"$externalBaseName\" (table $$$internalName funcref))"
+      doc"(import \"$externalModuleName\" \"$externalBaseName\" (table $$$internalName (ref null func)))"
 
     mod = mod.copy(im = mod.im :+ internalName -> tableImp)
 
@@ -287,7 +291,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       globalType: WasmType
   ): Unit =
     val globalImp =
-      doc"(import \"$externalModuleName\" \"$externalBaseName\" (global $$$internalName ${gen.fmtType(globalType)}))"
+      doc"(import \"$externalModuleName\" \"$externalBaseName\" (global $$$internalName ${globalType.toWat}))"
 
     mod = mod.copy(im = mod.im :+ internalName -> globalImp)
 
@@ -331,8 +335,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       value: ExprProxy
   ): Glob =
     val globalDecl = doc"(global $name ${
-        if mutable then doc"(mut ${gen.fmtType(ty)})" else gen.fmtType(ty)
-      } (${value.fmtDoc}))"
+        if mutable then doc"(mut ${ty.toWat})" else ty.toWat
+      } (${value.toWat}))"
 
     mod = mod.copy(gl = mod.gl :+ name -> globalDecl)
     new Glob(this, name)
@@ -356,7 +360,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       me = Seq("0" -> memDecl),
       da = segments.zipWithIndex.map: (segment, index) =>
         s"$index" -> s"(data $$$index${
-            if segment.passive then doc"" else doc" ${segment.offset.fmtDoc}"
+            if segment.passive then doc"" else doc" ${segment.offset.toWat}"
           } \"${segment.data.mkString}\")"
     )
     exportName.foreach:
@@ -382,9 +386,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       S(
         FoldedInstr(
           "block",
-          label.map(label => s"$$$label").toSeq ++ resultType
-            .map(gen.expandType(_))
-            .map(_.map(resTy => s"(result ${gen.fmtType(resTy)})")),
+          label.map(label => s"$$$label").toSeq ++ resultType.map(
+            _.toSeq.map(SignatureType(NoneType, _).signatureToWat)
+          ),
           children.map(_.inner),
           resultType.getOrElse(NoneType)
         )
@@ -408,8 +412,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       S(
         FoldedInstr(
           "if",
-          if resultType eq gen.none then Seq()
-          else Seq(s"(result ${gen.fmtType(resultType)})"),
+          resultType.toSeq.map(SignatureType(NoneType, _).signatureToWat),
           Seq(
             condition.inner,
             S(FoldedInstr("then", Seq(), Seq(ifTrue.inner), ifTrue.getType))
@@ -503,7 +506,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         S(
           FoldedInstr(
             "ref.cast",
-            Seq(gen.fmtType(castType)),
+            Seq(castType.toWat),
             Seq(value.inner),
             castType
           )
@@ -531,14 +534,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       require(ty.asInstanceOf[RefType].heapType.isInstanceOf[StructType])
 
       val structTy = ty.asInstanceOf[RefType].heapType.asInstanceOf[StructType]
-      val structWat = doc"(struct ${structTy.fields.map(field =>
-          doc"(field ${
-              if field.mutable then doc"(mut ${gen.fmtType(field.ty)})"
-              else gen.fmtType(field.ty)
-            })"
-        ).mkDocument(" ")})"
+      val modTy = addType(N, structTy.toWat)
 
-      val modTy = addType(N, structWat)
       ExprProxy(
         S(
           FoldedInstr(s"struct.new", Seq(???), operands.map(_.inner), ty)
@@ -546,7 +543,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
   end struct
 
-  def emitText: Document = mod.emitText
+  def toWat: Document = mod.toWat
 end ModuleProxy
 
 /** A [[WasmGenerator]] backend that produces text-based WAT as its output. */
@@ -582,53 +579,13 @@ class WatBackend
       case 0 => NoneType
       case 1 => types.head
       case _ => MultiValueType(types)
-  def expandType(ty: WasmType): TypeRefs = ty match
-    case MultiValueType(types) => types
-    case NoneType => Seq()
-    case _ => Seq(ty)
+  def expandType(ty: WasmType): TypeRefs = ty.toSeq
 
   def getExpressionType(expr: ExprProxy): WasmType = expr.getType
   def getExpressionWasmType(
       expr: ExprProxy,
       expectsValue: Bool
   ): WasmType = expr.getWasmType(expectsValue)
-
-  /** Formats a [[HeapType]] into its text representation. */
-  def fmtType(ty: HeapType): Document = ty match
-    case HeapType.Func => doc"func"
-    case HeapType.I31 => doc"i31"
-    case _ => ???
-
-  /** Formats a [[WasmType]] into its text representation. */
-  def fmtType(ty: WasmType): Document = ty match
-    case I32Type => doc"i32"
-    case RefType(heapType, nullable) =>
-      doc"(ref ${if nullable then "null " else ""}${fmtType(heapType)})"
-    case _ => TODO(s"WatBackend::fmtType not implemented for type `$ty`")
-
-  /**
-   * Formats a function signature with the given [[params parameters]] and
-   * [[results]] into its text representation.
-   *
-   * This function will only generate `(param ...)` and `(result ...)` clauses.
-   * Use [[fmtFuncType]] to generate the function type.
-   */
-  def fmtFuncSig(params: WasmType, results: WasmType): Document =
-    (expandType(params).map(p => doc"(param ${fmtType(p)})") ++
-      expandType(results)
-        .map(r => doc"(result ${fmtType(r)})")).mkDocument(" ")
-
-  /**
-   * Formats a function type with the given [[params parameters]] and
-   * [[results]] into its text representation.
-   *
-   * This function will generate the full function type. Use [[fmtFuncSig]] to
-   * only generate the parameter and result clauses.
-   */
-  def fmtFuncType(params: WasmType, results: WasmType): Document =
-    doc"(func${fmtFuncSig(params, results)
-        .optionUnless(_.isEmpty)
-        .dlof(tyDoc => doc" $tyDoc")(doc"")})"
 
   def newModule: ModuleProxy = ModuleProxy(this, Module())
 
@@ -900,4 +857,4 @@ end WatBackend
 
 @main
 def main(): Unit =
-  println(WasmGenerator.mkSimpleModule(WatBackend()).emitText)
+  println(WasmGenerator.mkSimpleModule(WatBackend()).toWat)

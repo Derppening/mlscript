@@ -79,11 +79,11 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
 
       if wat.isSet then
         output("Wat:")
-        output(mod.emitText.toString)
+        output(mod.toWat.toString)
 
       if fwat.isSet then
         output("Formatted Wat (Folded):")
-        s"JSON.stringify(await wasm.binaryenFmtWat(`${mod.emitText.toString}`, true))"
+        s"JSON.stringify(await wasm.binaryenFmtWat(`${mod.toWat.toString}`, true))"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
             output(prettifyBinaryenWat(content))
@@ -92,7 +92,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
             return
       if swat.isSet then
         output("Formatted Wat (Stack):")
-        s"JSON.stringify(await wasm.binaryenFmtWat(`${mod.emitText.toString}`, false))"
+        s"JSON.stringify(await wasm.binaryenFmtWat(`${mod.toWat.toString}`, false))"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
             output(prettifyBinaryenWat(content))
@@ -103,7 +103,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       if rwasm.isSet then
         output("rwasm: Running")
 
-        s"await wasm.binaryenRunFunc(`${mod.emitText.toString}`, exports => exports.main())"
+        s"await wasm.binaryenRunFunc(`${mod.toWat.toString}`, exports => exports.main())"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
             output(content)
