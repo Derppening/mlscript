@@ -781,6 +781,8 @@ class WatBackend
     t match
       case Define(defn, rst) =>
         defn match
+          case FunDefn(owner, sym, Nil, body) =>
+            lastWords("cannot generate function with no parameter list")
           case FunDefn(owner, sym, params, body) =>
             if owner.nonEmpty then
               raise(
@@ -801,7 +803,80 @@ class WatBackend
               body = bodyExpr
             )
             returningTerm(rst)
-          case defn =>
+          case ClsLikeDefn(
+                ownr,
+                isym,
+                sym,
+                kind,
+                paramsOpt,
+                auxParams,
+                par,
+                mtds,
+                privFlds,
+                pubFlds,
+                preCtor,
+                ctor
+              ) =>
+            // Guard against unsupported features for now
+            if ownr.nonEmpty then
+              raise(
+                WarningReport(
+                  msg"WasmBackend::returningTerm for ${defn.toString} (`owner.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              return mod.unreachable()
+            if !(kind is syntax.Cls) then
+              raise(
+                WarningReport(
+                  msg"WasmBackend::returningTerm for ${defn.toString} (`!(kind is syntax.Cls)`) not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              return mod.unreachable()
+            if auxParams.nonEmpty then
+              raise(
+                WarningReport(
+                  msg"WasmBackend::returningTerm for ${defn.toString} (`auxParams.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              return mod.unreachable()
+            if par.nonEmpty then
+              raise(
+                WarningReport(
+                  msg"WasmBackend::returningTerm for ${defn.toString} (`parentPath.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              return mod.unreachable()
+            if mtds.nonEmpty then
+              raise(
+                WarningReport(
+                  msg"WasmBackend::returningTerm for ${defn.toString} (`methods.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+            preCtor match
+              case End(_) => ()
+              case _ => raise(
+                  WarningReport(
+                    msg"WasmBackend::returningTerm for ${defn.toString} (`preCtor != End`) not implemented yet" -> N :: Nil,
+                    source = Diagnostic.Source.Compilation
+                  )
+                )
+
+            val clsParams = paramsOpt.fold(Nil)(_.paramSyms)
+            println(s"ClsLikeDefn: clsParams=$clsParams")
+
+            raise(
+              WarningReport(
+                msg"WasmBackend::returningTerm for ${defn.toString} not implemented yet" -> N :: Nil,
+                source = Diagnostic.Source.Compilation
+              )
+            )
+            mod.unreachable()
+          case _ =>
             raise(
               WarningReport(
                 msg"WasmBackend::returningTerm for ${defn.toString} not implemented yet" -> N :: Nil,
