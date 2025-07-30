@@ -468,10 +468,6 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
     withFreshVarId: freshId =>
       db +=\\ doc"${freshId.toJSRepr} = $modId.structref"
       TypeRef(freshId)
-  lazy val stringref: TypeRef =
-    withFreshVarId: freshId =>
-      db +=\\ doc"${freshId.toJSRepr} = $modId.stringref"
-      TypeRef(freshId)
   lazy val unreachable: TypeRef =
     withFreshVarId: freshId =>
       db +=\\ doc"${freshId.toJSRepr} = $modId.unreachable"

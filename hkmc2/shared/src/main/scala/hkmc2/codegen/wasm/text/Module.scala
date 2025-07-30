@@ -35,7 +35,6 @@ object HeapType:
   case object I31 extends HeapType
   case object Struct extends HeapType
   case object Array extends HeapType
-  case object String extends HeapType
   case object None extends HeapType
   case object NoExt extends HeapType
   case object NoFunc extends HeapType

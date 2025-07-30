@@ -363,9 +363,6 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[
   /** The structure reference type. */
   lazy val structref: T
 
-  /** The string reference type. */
-  lazy val stringref: T
-
   /**
    * A special type indicating unreachable code when obtaining information about
    * an expression.

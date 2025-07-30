@@ -572,7 +572,6 @@ class WatBackend
   lazy val eqref: WasmType = RefType(HeapType.Eq, nullable = true)
   lazy val i31ref: WasmType = RefType(HeapType.I31, nullable = true)
   lazy val structref: WasmType = RefType(HeapType.Struct, nullable = true)
-  lazy val stringref: WasmType = RefType(HeapType.String, nullable = true)
   lazy val unreachable: WasmType = UnreachableType
   lazy val notPacked: WasmPackedType = WasmPackedType.NotPacked
   lazy val i8: WasmPackedType = WasmPackedType.I8
