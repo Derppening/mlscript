@@ -525,6 +525,27 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
   end i31ref
 
+  def struct = new Struct:
+    def `new`(operands: Seq[ExprProxy], ty: WasmType): ExprProxy =
+      require(ty.isInstanceOf[RefType])
+      require(ty.asInstanceOf[RefType].heapType.isInstanceOf[StructType])
+
+      val structTy = ty.asInstanceOf[RefType].heapType.asInstanceOf[StructType]
+      val structWat = doc"(struct ${structTy.fields.map(field =>
+          doc"(field ${
+              if field.mutable then doc"(mut ${gen.fmtType(field.ty)})"
+              else gen.fmtType(field.ty)
+            })"
+        ).mkDocument(" ")})"
+
+      val modTy = addType(N, structWat)
+      ExprProxy(
+        S(
+          FoldedInstr(s"struct.new", Seq(???), operands.map(_.inner), ty)
+        )
+      )
+  end struct
+
   def emitText: Document = mod.emitText
 end ModuleProxy
 

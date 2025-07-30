@@ -270,6 +270,15 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
         new ExprRef(freshId)
   end i31ref
 
+  def struct: Struct = new Struct:
+    def `new`(operands: Seq[ExprRef], ty: TypeRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.struct.new(${operands
+            .map(_.toJSRepr)
+            .mkDocument("[", ", ", "]")}, ${ty.toJSRepr});"
+        new ExprRef(freshId)
+  end struct
+
   def toJSRepr: Document = varId.toJSRepr
 end ModRef
 

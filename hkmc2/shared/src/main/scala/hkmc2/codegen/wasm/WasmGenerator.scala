@@ -109,6 +109,12 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     def get(i31: Expr, signed: Bool): Expr
   end I31Ref
 
+  /** Abstract handle for `struct`-related instructions. */
+  abstract class Struct:
+    /** Creates a `struct.new` instruction. */
+    def `new`(operands: Seq[Expr], ty: Type): Expr
+  end Struct
+
   /** Concrete type representing an `export` section. */
   type Exprt <: Export[Exprt]
 
@@ -290,6 +296,9 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Returns a handle to create `i31` instructions. */
   def i31ref: I31Ref
+
+  /** Returns a handle to create `struct` instructions. */
+  def struct: Struct
 
 end Module
 
