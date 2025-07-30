@@ -174,10 +174,11 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
    *
    * @param name
    *   The name of the type, or [[None]] if a type name should be generated.
-   * @param tyDoc
-   *   The document representing the type specification.
+   * @param ty
+   *   The Wasm composite type to add.
    */
-  private def addType(name: Opt[Str], tyDoc: Document): Str =
+  // TODO(Derppening): Consider relaxing this to `rectype` when it is needed
+  private def addType(name: Opt[Str], ty: CompType): Str =
     assume(
       name.forall(name => !mod.ty.exists((nm, _) => nm == name)),
       s"Type `$name` already exists"
@@ -186,7 +187,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     val intName = name.getOrElse:
       s"_${anonTypeCounter.getAndIncrement()}"
 
-    mod = mod.copy(ty = mod.ty :+ (intName -> doc"(type $$$intName $tyDoc)"))
+    mod = mod.copy(ty =
+      mod.ty :+ (intName -> ModType(ty, doc"(type $$$intName ${ty.toWat})"))
+    )
     intName
 
   /**
@@ -203,7 +206,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       name: Opt[Str],
       params: WasmType,
       results: WasmType
-  ): Str = addType(name, SignatureType(params, results).toWat)
+  ): Str = addType(name, SignatureType(params, results))
 
   type Exprt = ExportRef
   type Func = FuncRef
@@ -534,7 +537,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       require(ty.asInstanceOf[RefType].heapType.isInstanceOf[StructType])
 
       val structTy = ty.asInstanceOf[RefType].heapType.asInstanceOf[StructType]
-      val modTy = addType(N, structTy.toWat)
+      val modTy = addType(N, structTy)
 
       ExprProxy(
         S(

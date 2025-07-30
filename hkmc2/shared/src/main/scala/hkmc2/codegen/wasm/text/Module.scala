@@ -150,6 +150,9 @@ case class StructType(fields: Seq[Field]) extends HeapType:
       ).mkDocument(doc" ").optionUnless(_.isEmpty).dlof(f => doc" $f")(doc"")})"
 end StructType
 
+/** A composite type. */
+type CompType = StructType | SignatureType
+
 /**
  * An abstraction over a generic WebAssembly instructions.
  */
@@ -240,6 +243,17 @@ end FoldedInstr
 type Expr = Opt[FoldedInstr] | Ls[StackInstr]
 
 /**
+ * A module type.
+ * @param defn
+ *   The definition of the `type` declaration.
+ * @param doc
+ *   The content of the module type.
+ */
+case class ModType(val defn: CompType, val doc: Document) extends ToWat:
+  def toWat: Document = doc
+end ModType
+
+/**
  * A module function.
  *
  * @param typeId
@@ -256,7 +270,9 @@ case class ModFunc(
     val paramTypes: WasmType,
     val resultTypes: WasmType,
     val doc: Document
-)
+) extends ToWat:
+  def toWat: Document = doc
+end ModFunc
 
 /**
  * A WebAssembly module definition.
@@ -286,7 +302,7 @@ case class ModFunc(
  */
 case class Module(
     id: Opt[Str] = N,
-    ty: Seq[Str -> Document] = Seq(),
+    ty: Seq[Str -> ModType] = Seq(),
     im: Seq[Str -> Document] = Seq(),
     fn: Seq[Str -> ModFunc] = Seq(),
     ta: Seq[Str -> Document] = Seq(),
@@ -299,9 +315,9 @@ case class Module(
 ) extends ToWat:
   def toWat: Document =
     doc"(module${id.dlof(id => doc" $id")(doc"")} #{  # ${Seq(
-        ty.map(_._2),
+        ty.map(_._2.toWat),
         im.map(_._2),
-        fn.map(_._2.doc),
+        fn.map(_._2.toWat),
         ta.map(_._2),
         me.map(_._2),
         gl.map(_._2),
