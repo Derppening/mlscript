@@ -541,7 +541,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
       ExprProxy(
         S(
-          FoldedInstr(s"struct.new", Seq(???), operands.map(_.inner), ty)
+          FoldedInstr(s"struct.new", Seq(modTy), operands.map(_.inner), ty)
         )
       )
   end struct
