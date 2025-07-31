@@ -177,8 +177,8 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
    * @param ty
    *   The Wasm composite type to add.
    */
-  // TODO(Derppening): Consider relaxing this to `rectype` when it is needed
-  private def addType(name: Opt[Str], ty: CompType): Str =
+  // TODO(Derppening): Consider relaxing `ty` to `rectype` when it is needed
+  def addType(name: Opt[Str], ty: CompType): Str =
     assume(
       name.forall(name => !mod.ty.exists((nm, _) => nm == name)),
       s"Type `$name` already exists"
@@ -541,7 +541,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
       ExprProxy(
         S(
-          FoldedInstr(s"struct.new", Seq(s"$$$modTy"), operands.map(_.inner), ty)
+          FoldedInstr(
+            s"struct.new",
+            Seq(s"$$$modTy"),
+            operands.map(_.inner),
+            ty
+          )
         )
       )
   end struct
@@ -866,8 +871,16 @@ class WatBackend
                   )
                 )
 
-            val clsParams = paramsOpt.fold(Nil)(_.paramSyms)
-            println(s"ClsLikeDefn: clsParams=$clsParams")
+            // Generate struct layout
+            val structTyName = mod.addType(
+              S(sym.nme),
+              StructType(
+                Seq.fill(pubFlds.size + privFlds.size)(Field(
+                  this.anyref,
+                  mutable = true
+                ))
+              )
+            )
 
             raise(
               WarningReport(
