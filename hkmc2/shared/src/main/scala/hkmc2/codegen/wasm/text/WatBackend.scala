@@ -432,7 +432,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   def nop(): ExprProxy =
     new ExprProxy(S(FoldedInstr("nop", Seq(), Seq(), NoneType)))
 
-  def ret(value: Opt[ExprProxy]): ExprProxy =
+  def `return`(value: Opt[ExprProxy]): ExprProxy =
     new ExprProxy(
       S(
         FoldedInstr(
@@ -459,7 +459,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       S(FoldedInstr("call", Seq(s"$$$name"), operands.map(_.inner), returnType))
     )
 
-  def callRef(
+  def call_ref(
       target: ExprProxy,
       operands: Seq[ExprProxy],
       params: WasmType,
@@ -768,7 +768,7 @@ class WatBackend
             RefType
           ].heapType.asInstanceOf[SignatureType]
           val wasmArgs = args.map(argument)
-          mod.callRef(base, wasmArgs, baseTy.params, baseTy.results)
+          mod.call_ref(base, wasmArgs, baseTy.params, baseTy.results)
         else base
       case r =>
         raise(
@@ -897,7 +897,7 @@ class WatBackend
               )
             )
             mod.unreachable()
-      case Return(Value.Lit(UnitLit(false)), false) => mod.ret(N)
+      case Return(Value.Lit(UnitLit(false)), false) => mod.`return`(N)
       case Return(res, true) =>
         val resValue = result(res)
         resValue.getType match
@@ -906,8 +906,8 @@ class WatBackend
       case Return(res, false) =>
         val resValue = result(res)
         resValue.getType match
-          case I32Type => mod.ret(S(mod.ref.i31(resValue)))
-          case _ => mod.ret(S(resValue))
+          case I32Type => mod.`return`(S(mod.ref.i31(resValue)))
+          case _ => mod.`return`(S(resValue))
       case End(_) =>
         // TODO: Insert `drop`s
         mod.nop()

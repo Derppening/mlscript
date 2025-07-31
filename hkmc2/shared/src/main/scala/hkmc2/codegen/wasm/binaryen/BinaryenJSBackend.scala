@@ -194,7 +194,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.nop();"
       new ExprRef(freshId)
 
-  def ret(value: Opt[ExprRef]): ExprRef =
+  def `return`(value: Opt[ExprRef]): ExprRef =
     gen.withFreshVarId: freshId =>
       gen.db +=\\
         doc"${freshId.toJSRepr} = ${this.toJSRepr}.return(${value.map(_.toJSRepr).getOrElse("")});"
@@ -224,7 +224,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
             .mkDocument(doc"[", doc", ", doc"]")}, ${returnType.toJSRepr});"
       new ExprRef(freshId)
 
-  def callRef(
+  def call_ref(
       target: ExprRef,
       operands: Seq[ExprRef],
       params: TypeRef,

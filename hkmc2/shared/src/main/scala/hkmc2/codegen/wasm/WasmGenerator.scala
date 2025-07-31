@@ -244,7 +244,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
    * @param value
    *   The value to return. If `None`, the function does not return a value.
    */
-  def ret(value: Opt[Expr]): Expr
+  def `return`(value: Opt[Expr]): Expr
 
   /** Creates an `unreachable` instruction. */
   def unreachable(): Expr
@@ -281,7 +281,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
    * @param results
    *   The result types of the function.
    */
-  def callRef(
+  def call_ref(
       target: Expr,
       operands: Seq[Expr],
       params: Type,
