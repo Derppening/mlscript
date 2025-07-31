@@ -113,6 +113,9 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   abstract class Struct:
     /** Creates a `struct.new` instruction. */
     def `new`(operands: Seq[Expr], ty: Type): Expr
+    
+    /** Creates a `struct.new_default` instruction. */
+    def new_default(ty: Type): Expr
   end Struct
 
   /** Concrete type representing an `export` section. */

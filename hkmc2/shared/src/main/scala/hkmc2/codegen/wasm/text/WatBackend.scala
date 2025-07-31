@@ -549,6 +549,24 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           )
         )
       )
+
+    def new_default(ty: WasmType): ExprProxy =
+      require(ty.isInstanceOf[RefType])
+      require(ty.asInstanceOf[RefType].heapType.isInstanceOf[StructType])
+
+      val structTy = ty.asInstanceOf[RefType].heapType.asInstanceOf[StructType]
+      val modTy = addType(N, structTy)
+
+      ExprProxy(
+        S(
+          FoldedInstr(
+            "struct.new_default",
+            Seq(s"$$$modTy"),
+            Seq(),
+            ty
+          )
+        )
+      )
   end struct
 
   def toWat: Document = mod.toWat

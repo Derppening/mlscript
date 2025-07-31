@@ -277,6 +277,11 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
             .map(_.toJSRepr)
             .mkDocument("[", ", ", "]")}, ${ty.toJSRepr});"
         new ExprRef(freshId)
+
+    def new_default(ty: TypeRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.struct.new_default(${ty.toJSRepr});"
+        new ExprRef(freshId)
   end struct
 
   def toJSRepr: Document = varId.toJSRepr
