@@ -154,6 +154,18 @@ end StructType
 type CompType = StructType | SignatureType
 
 /**
+ * A type that is referenced by its name.
+ *
+ * This is used for types that are defined in the module's `type` section.
+ *
+ * @param id
+ *   The identifier of the type.
+ */
+case class TypeRef(id: Str) extends WasmType, ToWat:
+  def toWat: Document = doc"$$$id"
+end TypeRef
+
+/**
  * An abstraction over a generic WebAssembly instructions.
  */
 abstract sealed class Instruction extends ToWat:
@@ -266,7 +278,7 @@ end ModType
  *   The content of the module function.
  */
 case class ModFunc(
-    val typeId: Str,
+    val typeId: TypeRef,
     val paramTypes: WasmType,
     val resultTypes: WasmType,
     val doc: Document

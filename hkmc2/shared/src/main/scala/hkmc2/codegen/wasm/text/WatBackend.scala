@@ -178,7 +178,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
    *   The Wasm composite type to add.
    */
   // TODO(Derppening): Consider relaxing `ty` to `rectype` when it is needed
-  def addType(name: Opt[Str], ty: CompType): Str =
+  def addType(name: Opt[Str], ty: CompType): TypeRef =
     assume(
       name.forall(name => !mod.ty.exists((nm, _) => nm == name)),
       s"Type `$name` already exists"
@@ -190,7 +190,11 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     mod = mod.copy(ty =
       mod.ty :+ (intName -> ModType(ty, doc"(type $$$intName ${ty.toWat})"))
     )
-    intName
+    TypeRef(intName)
+
+  /** Gets a type by name. */
+  def getType(name: Str): Opt[CompType] =
+    mod.ty.find(_nm => _nm._1 == name).map(_._2.defn)
 
   /**
    * Adds a function type to this module.
@@ -206,7 +210,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       name: Opt[Str],
       params: WasmType,
       results: WasmType
-  ): Str = addType(name, SignatureType(params, results))
+  ): TypeRef = addType(name, SignatureType(params, results))
 
   type Exprt = ExportRef
   type Func = FuncRef
@@ -375,7 +379,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   def getFunctionInfo(ftype: Func): FuncInfo =
     val func = mod.fn.find(_._1 == ftype.name).map(_._2).get
     new FunctionInfo(
-      name = func._1,
+      name = func._1.id,
       params = func.paramTypes,
       results = func.resultTypes
     )
@@ -532,18 +536,40 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   end i31ref
 
   def struct = new Struct:
-    def `new`(operands: Seq[ExprProxy], ty: WasmType): ExprProxy =
-      require(ty.isInstanceOf[RefType])
-      require(ty.asInstanceOf[RefType].heapType.isInstanceOf[StructType])
+    /**
+     * Unwraps the [[WasmType]] passed into `struct.new{,_default}` into a
+     * `StrucType`.
+     */
+    private def unwrapStructNewType(
+        ty: WasmType,
+        instr: Str
+    ): TypeRef =
+      val refType = ty match
+        case typeref @ TypeRef(id) =>
+          unwrapStructNewType(
+            RefType(getType(id).get.asInstanceOf[StructType], nullable = true),
+            instr
+          )
+          return typeref
+        case RefType(heapType, _) => heapType
+        // TODO(Derppening): Update assertion message
+        case ty => throw IllegalArgumentException(
+            s"Expected `$instr` to have a `(ref (struct ...))` type, but got `${ty.toWat}`"
+          )
+      refType match
+        case structType: StructType => addType(N, structType)
+        case _ => throw IllegalArgumentException(
+            s"Expected `$instr` to have a `(ref (struct ...))` type, but got `${ty.toWat}`"
+          )
 
-      val structTy = ty.asInstanceOf[RefType].heapType.asInstanceOf[StructType]
-      val modTy = addType(N, structTy)
+    def `new`(operands: Seq[ExprProxy], ty: WasmType): ExprProxy =
+      val structTy = unwrapStructNewType(ty, "struct.new")
 
       ExprProxy(
         S(
           FoldedInstr(
             s"struct.new",
-            Seq(s"$$$modTy"),
+            Seq(structTy.toWat),
             operands.map(_.inner),
             ty
           )
@@ -551,17 +577,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
 
     def new_default(ty: WasmType): ExprProxy =
-      require(ty.isInstanceOf[RefType])
-      require(ty.asInstanceOf[RefType].heapType.isInstanceOf[StructType])
-
-      val structTy = ty.asInstanceOf[RefType].heapType.asInstanceOf[StructType]
-      val modTy = addType(N, structTy)
+      val structTy = unwrapStructNewType(ty, "struct.new_default")
 
       ExprProxy(
         S(
           FoldedInstr(
             "struct.new_default",
-            Seq(s"$$$modTy"),
+            Seq(structTy.toWat),
             Seq(),
             ty
           )
@@ -889,9 +911,8 @@ class WatBackend
                   )
                 )
 
-            // Generate struct layout
-            val structTyName = mod.addType(
-              S(sym.nme),
+            val structTy = mod.addType(
+              S(isym.nme),
               StructType(
                 Seq.fill(pubFlds.size + privFlds.size)(Field(
                   this.anyref,
@@ -902,11 +923,13 @@ class WatBackend
 
             raise(
               WarningReport(
-                msg"WasmBackend::returningTerm for ${defn.toString} not implemented yet" -> N :: Nil,
+                msg"WasmBackend::returningTerm for ${defn.toString} (constuctor generation) not implemented yet" -> N :: Nil,
                 source = Diagnostic.Source.Compilation
               )
             )
-            mod.unreachable()
+            // TODO(Derppening): This is very wrong - This is just a class def so only a class def should be inserted into the module
+            //                   Should be mod.nop() instead
+            mod.struct.new_default(structTy)
           case _ =>
             raise(
               WarningReport(
