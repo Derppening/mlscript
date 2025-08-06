@@ -911,7 +911,7 @@ class WatBackend
                   )
                 )
 
-            val structTy = mod.addType(
+            mod.addType(
               S(isym.nme),
               StructType(
                 Seq.fill(pubFlds.size + privFlds.size)(Field(
@@ -923,13 +923,12 @@ class WatBackend
 
             raise(
               WarningReport(
-                msg"WasmBackend::returningTerm for ${defn.toString} (constuctor generation) not implemented yet" -> N :: Nil,
+                msg"WasmBackend::returningTerm for ${defn.toString} (constructor/method generation) not implemented yet" -> N :: Nil,
                 source = Diagnostic.Source.Compilation
               )
             )
-            // TODO(Derppening): This is very wrong - This is just a class def so only a class def should be inserted into the module
-            //                   Should be mod.nop() instead
-            mod.struct.new_default(structTy)
+
+            returningTerm(rst)
           case _ =>
             raise(
               WarningReport(
