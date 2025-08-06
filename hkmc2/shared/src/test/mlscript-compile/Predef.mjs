@@ -1,3 +1,5 @@
+const definitionMetadata = globalThis.Symbol.for("mlscript.definitionMetadata");
+const prettyPrint = globalThis.Symbol.for("mlscript.prettyPrint");
 import runtime from "./Runtime.mjs";
 import Term from "./Term.mjs";
 import Runtime from "./Runtime.mjs";
@@ -52,17 +54,20 @@ let Predef1;
     tmp = runtime.safeCall(f6(x7));
     return (tmp , x7)
   } 
+  static alsoDo(x8, eff) {
+    return x8
+  } 
   static andThen(f7, g) {
-    return (x8) => {
+    return (x9) => {
       let tmp;
-      tmp = runtime.safeCall(f7(x8));
+      tmp = runtime.safeCall(f7(x9));
       return runtime.safeCall(g(tmp))
     }
   } 
   static compose(f8, g1) {
-    return (x8) => {
+    return (x9) => {
       let tmp;
-      tmp = runtime.safeCall(g1(x8));
+      tmp = runtime.safeCall(g1(x9));
       return runtime.safeCall(f8(tmp))
     }
   } 
@@ -143,15 +148,15 @@ let Predef1;
   } 
   static mkStr(...xs2) {
     let tmp, tmp1, lambda;
-    lambda = (undefined, function (acc, x8) {
+    lambda = (undefined, function (acc, x9) {
       let tmp2, tmp3, tmp4;
-      if (typeof x8 === 'string') {
+      if (typeof x9 === 'string') {
         tmp2 = true;
       } else {
         tmp2 = false;
       }
       tmp3 = runtime.safeCall(Predef.assert(tmp2));
-      tmp4 = acc + x8;
+      tmp4 = acc + x9;
       return (tmp3 , tmp4)
     });
     tmp = lambda;
@@ -167,6 +172,7 @@ let Predef1;
   static use(instance) {
     return instance
   }
-  static toString() { return "Predef"; }
+  static toString() { return runtime.render(this); }
+  static [definitionMetadata] = ["module", "Predef"]; 
 });
 let Predef = Predef1; export default Predef;

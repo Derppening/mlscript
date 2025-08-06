@@ -682,10 +682,10 @@ class WatBackend
         summon[ModuleProxy].unreachable()
 
   def argument(a: Arg)(using ModuleProxy, Raise): ExprProxy =
-    if a.spread then
+    if a.spread.nonEmpty then
       raise(
         WarningReport(
-          msg"WasmBackend::argument for `${a.toString}` (spread == true) not implemented yet" -> N :: Nil,
+          msg"WasmBackend::argument for `${a.toString}` (spread.nonEmpty) not implemented yet" -> N :: Nil,
           source = Diagnostic.Source.Compilation
         )
       )
@@ -695,7 +695,7 @@ class WatBackend
   def operand(
       a: Arg
   )(using ModuleProxy, Raise): ExprProxy =
-    if a.spread then die else subexpression(a.value)
+    if a.spread.nonEmpty then die else subexpression(a.value)
 
   def subexpression(
       r: Result
