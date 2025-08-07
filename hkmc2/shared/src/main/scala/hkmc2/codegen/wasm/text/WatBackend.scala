@@ -810,6 +810,35 @@ class WatBackend
           val wasmArgs = args.map(argument)
           mod.call_ref(base, wasmArgs, baseTy.params, baseTy.results)
         else base
+      case sel @ Select(qual, id) =>
+        val name = id.name
+        if name == "class" then
+          raise(
+            WarningReport(
+              msg"WasmBackend::result for ${sel.toString} (id == \"class\") not implemented yet" -> N :: Nil,
+              source = Diagnostic.Source.Compilation
+            )
+          )
+          // TODO(Derppening): Resolve class and use struct.new_default as proxy
+          mod.unreachable()
+        else
+          raise(
+            WarningReport(
+              msg"WasmBackend::result for ${sel.toString} not implemented yet" -> N :: Nil,
+              source = Diagnostic.Source.Compilation
+            )
+          )
+          mod.unreachable()
+      case Instantiate(_, cls, as) =>
+        // TODO(Derppening): Do not use result(...) for resolving classes
+        val clazz = result(cls)
+        raise(
+          WarningReport(
+            msg"WasmBackend::result for ${r.toString} (cls=${clazz.toWat.toString}) not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        mod.unreachable()
       case r =>
         raise(
           WarningReport(
