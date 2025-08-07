@@ -474,7 +474,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       S(
         FoldedInstr(
           "call_ref",
-          Seq(s"$$$fnTypeStrIndex"),
+          Seq(fnTypeStrIndex.toWat),
           Seq(target.inner) ++ operands.map(_.inner),
           results
         )
