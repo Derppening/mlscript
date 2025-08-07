@@ -78,7 +78,7 @@ fun inconsistencies(csp, as_) = if csp is CSP(vars, vals, rel) then
       lscomp2(reverse(as_))
   
   lscomp1(as_)
-//│ ═══[COMPILATION ERROR] Name not found: member:reverse
+//│ ═══[COMPILATION ERROR] Name not found: member:not
 //│ Stopped due to an error during the Llir generation
 
 fun consistent(csp)(x) = null_(inconsistencies(csp, x))
@@ -258,13 +258,13 @@ fun lookupCache(csp, t) =
       [[a :: as_, cs], tbl]
   
   mapTree(x => f5(csp, x), t)
-//│ ═══[COMPILATION ERROR] Name not found: member:atIndex
+//│ ═══[COMPILATION ERROR] Name not found: $runtime
 //│ Stopped due to an error during the Llir generation
 
 
 fun cacheChecks(csp, tbl, n) = if n is Node(s, cs) then
   Node([s, tbl], map(x => cacheChecks(csp, fillTable(s, csp, tail(tbl)), x), cs))
-//│ ═══[COMPILATION ERROR] Name not found: member:tail
+//│ ═══[COMPILATION ERROR] Name not found: member:fillTable
 //│ Stopped due to an error during the Llir generation
 
 fun bm(csp, t) = mapTree(fst, lookupCache(csp, cacheChecks(csp, emptyTable(csp), t)))
