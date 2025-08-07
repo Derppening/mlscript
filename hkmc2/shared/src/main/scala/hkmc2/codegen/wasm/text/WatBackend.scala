@@ -277,7 +277,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       externalBaseName: Str
   ): Unit =
     val tableImp =
-      doc"(import \"$externalModuleName\" \"$externalBaseName\" (table $$$internalName (ref null func)))"
+      doc"(import \"$externalModuleName\" \"$externalBaseName\" (table $$$internalName ${gen.funcref.toWat}))"
 
     mod = mod.copy(im = mod.im :+ internalName -> tableImp)
 
