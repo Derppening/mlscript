@@ -659,7 +659,7 @@ class WatBackend
       case ts: semantics.TermSymbol =>
         raise(
           WarningReport(
-            msg"WasmBackend::getVar for ${ts.toString} not implemented yet" -> N :: Nil,
+            msg"WatBackend::getVar for ${ts.toString} not implemented yet" -> N :: Nil,
             source = Diagnostic.Source.Compilation
           )
         )
@@ -667,7 +667,7 @@ class WatBackend
       case ts: semantics.InnerSymbol =>
         raise(
           WarningReport(
-            msg"WasmBackend::getVar for ${ts.toString} not implemented yet" -> N :: Nil,
+            msg"WatBackend::getVar for ${ts.toString} not implemented yet" -> N :: Nil,
             source = Diagnostic.Source.Compilation
           )
         )
@@ -682,7 +682,7 @@ class WatBackend
       case l =>
         raise(
           WarningReport(
-            msg"WasmBackend::getVar for ${l.toString} (${l.getClass().getName()}) not implemented yet" -> N :: Nil,
+            msg"WatBackend::getVar for ${l.toString} (${l.getClass().getName()}) not implemented yet" -> N :: Nil,
             source = Diagnostic.Source.Compilation
           )
         )
@@ -692,7 +692,7 @@ class WatBackend
     if a.spread.nonEmpty then
       raise(
         WarningReport(
-          msg"WasmBackend::argument for `${a.toString}` (spread.nonEmpty) not implemented yet" -> N :: Nil,
+          msg"WatBackend::argument for `${a.toString}` (spread.nonEmpty) not implemented yet" -> N :: Nil,
           source = Diagnostic.Source.Compilation
         )
       )
@@ -721,7 +721,7 @@ class WatBackend
         if l.nullary then
           raise(
             WarningReport(
-              msg"WasmBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
+              msg"WatBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
               source = Diagnostic.Source.Compilation
             )
           )
@@ -747,7 +747,7 @@ class WatBackend
                 case ty =>
                   raise(
                     WarningReport(
-                      msg"WasmBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
+                      msg"WatBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
                       source = Diagnostic.Source.Compilation
                     )
                   )
@@ -763,7 +763,7 @@ class WatBackend
                 case ty =>
                   raise(
                     WarningReport(
-                      msg"WasmBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
+                      msg"WatBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
                       source = Diagnostic.Source.Compilation
                     )
                   )
@@ -772,7 +772,7 @@ class WatBackend
             case lNme =>
               raise(
                 WarningReport(
-                  msg"WasmBackend::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> N :: Nil,
+                  msg"WatBackend::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> N :: Nil,
                   source = Diagnostic.Source.Compilation
                 )
               )
@@ -782,7 +782,7 @@ class WatBackend
         if l.unary then
           raise(
             WarningReport(
-              msg"WasmBackend::result for unary builtin symbol '${l.nme.toString}' not implemented yet" -> N :: Nil,
+              msg"WatBackend::result for unary builtin symbol '${l.nme.toString}' not implemented yet" -> N :: Nil,
               source = Diagnostic.Source.Compilation
             )
           )
@@ -792,7 +792,7 @@ class WatBackend
         if l.functionLike then
           raise(
             WarningReport(
-              msg"WasmBackend::result for builtin symbol '${l.nme.toString}' not implemented yet" -> N :: Nil,
+              msg"WatBackend::result for builtin symbol '${l.nme.toString}' not implemented yet" -> N :: Nil,
               source = Diagnostic.Source.Compilation
             )
           )
@@ -802,7 +802,7 @@ class WatBackend
       case Call(s @ Select(_, id), lhs :: rhs :: Nil) =>
         raise(
           WarningReport(
-            msg"WasmBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
+            msg"WatBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
             source = Diagnostic.Source.Compilation
           )
         )
@@ -842,7 +842,7 @@ class WatBackend
               case _ =>
                 raise(
                   WarningReport(
-                    msg"WasmBackend::result for ${sel.toString} (`sel.symbol == ${sym.toString}`) not implemented yet" -> N :: Nil,
+                    msg"WatBackend::result for ${sel.toString} (`sel.symbol == ${sym.toString}`) not implemented yet" -> N :: Nil,
                     source = Diagnostic.Source.Compilation
                   )
                 )
@@ -860,7 +860,7 @@ class WatBackend
         val clazz = result(cls)
         raise(
           WarningReport(
-            msg"WasmBackend::result for ${r.toString} (cls=${clazz.toWat.toString}) not implemented yet" -> N :: Nil,
+            msg"WatBackend::result for ${r.toString} (constructor call generation) not implemented yet" -> N :: Nil,
             source = Diagnostic.Source.Compilation
           )
         )
@@ -868,7 +868,7 @@ class WatBackend
       case r =>
         raise(
           WarningReport(
-            msg"WasmBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
+            msg"WatBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
             source = Diagnostic.Source.Compilation
           )
         )
@@ -887,7 +887,7 @@ class WatBackend
             if owner.nonEmpty then
               raise(
                 WarningReport(
-                  msg"WasmBackend::returningTerm for ${defn.toString} (owner.nonEmpty == true) not implemented yet" -> N :: Nil,
+                  msg"WatBackend::returningTerm for ${defn.toString} (owner.nonEmpty == true) not implemented yet" -> N :: Nil,
                   source = Diagnostic.Source.Compilation
                 )
               )
@@ -921,7 +921,7 @@ class WatBackend
             if ownr.nonEmpty then
               raise(
                 WarningReport(
-                  msg"WasmBackend::returningTerm for ${defn.toString} (`owner.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  msg"WatBackend::returningTerm for ${defn.toString} (`owner.nonEmpty == true`) not implemented yet" -> N :: Nil,
                   source = Diagnostic.Source.Compilation
                 )
               )
@@ -929,7 +929,7 @@ class WatBackend
             if !(kind is syntax.Cls) then
               raise(
                 WarningReport(
-                  msg"WasmBackend::returningTerm for ${defn.toString} (`!(kind is syntax.Cls)`) not implemented yet" -> N :: Nil,
+                  msg"WatBackend::returningTerm for ${defn.toString} (`!(kind is syntax.Cls)`) not implemented yet" -> N :: Nil,
                   source = Diagnostic.Source.Compilation
                 )
               )
@@ -937,7 +937,7 @@ class WatBackend
             if auxParams.nonEmpty then
               raise(
                 WarningReport(
-                  msg"WasmBackend::returningTerm for ${defn.toString} (`auxParams.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  msg"WatBackend::returningTerm for ${defn.toString} (`auxParams.nonEmpty == true`) not implemented yet" -> N :: Nil,
                   source = Diagnostic.Source.Compilation
                 )
               )
@@ -945,7 +945,7 @@ class WatBackend
             if par.nonEmpty then
               raise(
                 WarningReport(
-                  msg"WasmBackend::returningTerm for ${defn.toString} (`parentPath.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  msg"WatBackend::returningTerm for ${defn.toString} (`parentPath.nonEmpty == true`) not implemented yet" -> N :: Nil,
                   source = Diagnostic.Source.Compilation
                 )
               )
@@ -953,7 +953,7 @@ class WatBackend
             if mtds.nonEmpty then
               raise(
                 WarningReport(
-                  msg"WasmBackend::returningTerm for ${defn.toString} (`methods.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                  msg"WatBackend::returningTerm for ${defn.toString} (`methods.nonEmpty == true`) not implemented yet" -> N :: Nil,
                   source = Diagnostic.Source.Compilation
                 )
               )
@@ -961,7 +961,7 @@ class WatBackend
               case End(_) => ()
               case _ => raise(
                   WarningReport(
-                    msg"WasmBackend::returningTerm for ${defn.toString} (`preCtor != End`) not implemented yet" -> N :: Nil,
+                    msg"WatBackend::returningTerm for ${defn.toString} (`preCtor != End`) not implemented yet" -> N :: Nil,
                     source = Diagnostic.Source.Compilation
                   )
                 )
@@ -979,7 +979,7 @@ class WatBackend
 
             raise(
               WarningReport(
-                msg"WasmBackend::returningTerm for ${defn.toString} (constructor/method generation) not implemented yet" -> N :: Nil,
+                msg"WatBackend::returningTerm for ${defn.toString} (constructor/method generation) not implemented yet" -> N :: Nil,
                 source = Diagnostic.Source.Compilation
               )
             )
@@ -988,7 +988,7 @@ class WatBackend
           case _ =>
             raise(
               WarningReport(
-                msg"WasmBackend::returningTerm for ${defn.toString} not implemented yet" -> N :: Nil,
+                msg"WatBackend::returningTerm for ${defn.toString} not implemented yet" -> N :: Nil,
                 source = Diagnostic.Source.Compilation
               )
             )
@@ -1010,7 +1010,7 @@ class WatBackend
       case t =>
         raise(
           WarningReport(
-            msg"WasmBackend::returningTerm for ${t.toString} not implemented yet" -> N :: Nil,
+            msg"WatBackend::returningTerm for ${t.toString} not implemented yet" -> N :: Nil,
             source = Diagnostic.Source.Compilation
           )
         )
