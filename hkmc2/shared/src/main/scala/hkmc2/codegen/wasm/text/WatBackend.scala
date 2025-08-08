@@ -811,24 +811,39 @@ class WatBackend
           mod.call_ref(base, wasmArgs, baseTy.params, baseTy.results)
         else base
       case sel @ Select(qual, id) =>
-        val name = id.name
-        if name == "class" then
-          raise(
-            WarningReport(
-              msg"WasmBackend::result for ${sel.toString} (id == \"class\") not implemented yet" -> N :: Nil,
-              source = Diagnostic.Source.Compilation
+        sel.symbol match
+          case S(sym) =>
+            sym match
+              case clsSym: ClassSymbol =>
+                // Return the type of the class by using a dummy `struct.new_default` instruction
+                // TODO(Derppening): Migrate to using fully-qualified name
+                mod.getType(clsSym.nme) match
+                  case Some(value: StructType) =>
+                    mod.struct.new_default(RefType(value, nullable = true))
+                  case _ =>
+                    raise(
+                      InternalError(
+                        msg"Cannot find member ${sel.toString} in Wasm module" -> N :: Nil,
+                        source = Diagnostic.Source.Compilation
+                      )
+                    )
+                    mod.unreachable()
+              case _ =>
+                raise(
+                  WarningReport(
+                    msg"WasmBackend::result for ${sel.toString} (`sel.symbol == ${sym.toString}`) not implemented yet" -> N :: Nil,
+                    source = Diagnostic.Source.Compilation
+                  )
+                )
+                mod.unreachable()
+          case N =>
+            raise(
+              InternalError(
+                msg"Unable to resolve symbol `${sel.toString}`" -> N :: Nil,
+                source = Diagnostic.Source.Compilation
+              )
             )
-          )
-          // TODO(Derppening): Resolve class and use struct.new_default as proxy
-          mod.unreachable()
-        else
-          raise(
-            WarningReport(
-              msg"WasmBackend::result for ${sel.toString} not implemented yet" -> N :: Nil,
-              source = Diagnostic.Source.Compilation
-            )
-          )
-          mod.unreachable()
+            mod.unreachable()
       case Instantiate(_, cls, as) =>
         // TODO(Derppening): Do not use result(...) for resolving classes
         val clazz = result(cls)
