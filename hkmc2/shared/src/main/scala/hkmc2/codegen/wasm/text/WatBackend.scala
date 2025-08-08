@@ -858,13 +858,14 @@ class WatBackend
       case Instantiate(_, cls, as) =>
         // TODO(Derppening): Do not use result(...) for resolving classes
         val clazz = result(cls)
-        raise(
-          WarningReport(
-            msg"WatBackend::result for ${r.toString} (constructor call generation) not implemented yet" -> N :: Nil,
-            source = Diagnostic.Source.Compilation
-          )
+        val clazzRefTy = clazz.getType.asInstanceOf[RefType]
+        val clazzStructTy = clazzRefTy.heapType.asInstanceOf[TypeRef]
+
+        mod.call(
+          s"${clazzStructTy.id}::<constructor>",
+          Seq(clazz) ++ as.map(result),
+          clazzRefTy,
         )
-        mod.unreachable()
       case r =>
         raise(
           WarningReport(
@@ -966,8 +967,18 @@ class WatBackend
                   )
                 )
 
+            val clsParams = paramsOpt.fold(Nil)(_.paramSyms)
+            val ctorParams = clsParams
+            val ctorFields = ctorParams.filter: p =>
+              p.decl match
+                case S(Param(flags = FldFlags(isVal = true))) => true
+                case _ => false
+            val ctorAuxParams = auxParams.map(_.params)
+
+            val isModule = kind is syntax.Mod
+
             // TODO(Derppening): Prepend s"$fileName/${isym.nme}$$${counter++}"
-            mod.addType(
+            val typeref = mod.addType(
               S(isym.nme),
               StructType(
                 Seq.fill(pubFlds.size + privFlds.size)(Field(
@@ -982,6 +993,46 @@ class WatBackend
                 msg"WatBackend::returningTerm for ${defn.toString} (constructor/method generation) not implemented yet" -> N :: Nil,
                 source = Diagnostic.Source.Compilation
               )
+            )
+
+            val ctorCode = block(ctor)
+
+            // If there are no ctor params, pop one param list off the aux params
+            val (newCtorAuxParams, initialCtorParams) = paramsOpt match
+              case None => ctorAuxParams match
+                  case head :: next => (next, head)
+                  case Nil => (ctorAuxParams, Nil)
+              case Some(_) => (ctorAuxParams, ctorParams)
+
+            val ctorAux = if newCtorAuxParams.isEmpty then
+              ctorCode
+            else
+              raise(
+                WarningReport(
+                  msg"WatBackend::returningTerm for ${defn.toString} (auxiliary constructor generation) not implemented yet" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              mod.unreachable()
+
+            val ctorBod = if isModule then
+              raise(
+                InternalError(
+                  msg"WatBackend::returningTerm: `isModule` should be guarded and should not reach here!" -> N :: Nil,
+                  source = Diagnostic.Source.Compilation
+                )
+              )
+              mod.unreachable()
+            else
+              ctorAux
+
+            mod.addFunction(
+              s"${isym.nme}::<constructor>",
+              params =
+                createType(Seq(RefType(typeref, nullable = false)) ++ Seq.fill(initialCtorParams.size)(this.anyref)),
+              results = RefType(typeref, nullable = false),
+              vars = Seq(),
+              body = ctorBod
             )
 
             returningTerm(rst)
