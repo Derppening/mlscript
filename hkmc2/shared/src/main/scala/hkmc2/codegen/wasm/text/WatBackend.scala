@@ -940,6 +940,7 @@ class WatBackend
                   )
                 )
 
+            // TODO(Derppening): Prepend s"$fileName/${isym.nme}$$${counter++}"
             mod.addType(
               S(isym.nme),
               StructType(
