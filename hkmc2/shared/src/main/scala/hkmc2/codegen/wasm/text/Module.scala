@@ -112,7 +112,7 @@ abstract class HeapType extends ToWat
 case class SignatureType(params: WasmType, results: WasmType) extends HeapType,
       ToWat:
   def signatureToWat: Document =
-    (params.toSeq.map(p => doc"(param ${p.toWat}") ++ results.toSeq.map(r =>
+    (params.toSeq.map(p => doc"(param ${p.toWat})") ++ results.toSeq.map(r =>
       doc"(result ${r.toWat})"
     )).mkDocument(" ")
 
