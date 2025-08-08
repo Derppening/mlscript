@@ -161,7 +161,7 @@ type CompType = StructType | SignatureType
  * @param id
  *   The identifier of the type.
  */
-case class TypeRef(id: Str) extends WasmType, ToWat:
+case class TypeRef(id: Str) extends HeapType, ToWat:
   def toWat: Document = doc"$$$id"
 end TypeRef
 

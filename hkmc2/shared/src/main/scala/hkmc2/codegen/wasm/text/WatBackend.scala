@@ -536,6 +536,23 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   end i31ref
 
   def struct = new Struct:
+    private def unwrapStructNewType(
+        ty: HeapType,
+        typeref: Opt[TypeRef],
+        instr: Str
+    ): TypeRef =
+      ty match
+        case typeref @ TypeRef(id) =>
+          unwrapStructNewType(getType(id).get, S(typeref), instr)
+        case structType: StructType =>
+          typeref match
+            case S(typeref) => typeref
+            case N => addType(N, structType)
+        case _ =>
+          throw IllegalArgumentException(
+            s"Expected `$instr` to have a `(ref (struct ...))` type, but got `${ty.toWat}`"
+          )
+
     /**
      * Unwraps the [[WasmType]] passed into `struct.new{,_default}` into a
      * `StrucType`.
@@ -545,22 +562,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         instr: Str
     ): TypeRef =
       val refType = ty match
-        case typeref @ TypeRef(id) =>
-          unwrapStructNewType(
-            RefType(getType(id).get.asInstanceOf[StructType], nullable = true),
-            instr
-          )
-          return typeref
         case RefType(heapType, _) => heapType
         // TODO(Derppening): Update assertion message
         case ty => throw IllegalArgumentException(
             s"Expected `$instr` to have a `(ref (struct ...))` type, but got `${ty.toWat}`"
           )
-      refType match
-        case structType: StructType => addType(N, structType)
-        case _ => throw IllegalArgumentException(
-            s"Expected `$instr` to have a `(ref (struct ...))` type, but got `${ty.toWat}`"
-          )
+      unwrapStructNewType(refType, N, instr)
 
     def `new`(operands: Seq[ExprProxy], ty: WasmType): ExprProxy =
       val structTy = unwrapStructNewType(ty, "struct.new")
@@ -817,9 +824,13 @@ class WatBackend
               case clsSym: ClassSymbol =>
                 // Return the type of the class by using a dummy `struct.new_default` instruction
                 // TODO(Derppening): Migrate to using fully-qualified name
-                mod.getType(clsSym.nme) match
-                  case Some(value: StructType) =>
-                    mod.struct.new_default(RefType(value, nullable = true))
+                val clsSymNme = clsSym.nme
+                mod.getType(clsSymNme) match
+                  case S(_: StructType) =>
+                    mod.struct.new_default(RefType(
+                      TypeRef(clsSymNme),
+                      nullable = true
+                    ))
                   case _ =>
                     raise(
                       InternalError(
