@@ -217,6 +217,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   type FuncInfo = FunctionInfo
   type Glob = GlobalRef
 
+  // TODO(Derppening): Add overload for naming params/vars
   def addFunction(
       name: Str,
       params: WasmType,
@@ -873,7 +874,7 @@ class WatBackend
 
         mod.call(
           s"${clazzStructTy.id}::<constructor>",
-          Seq(clazz) ++ as.map(result),
+          as.map(result),
           clazzRefTy,
         )
       case r =>
@@ -1005,14 +1006,23 @@ class WatBackend
               )
             )
 
-            val ctorCode = block(ctor)
-
             // If there are no ctor params, pop one param list off the aux params
             val (newCtorAuxParams, initialCtorParams) = paramsOpt match
               case None => ctorAuxParams match
                   case head :: next => (next, head)
                   case Nil => (ctorAuxParams, Nil)
               case Some(_) => (ctorAuxParams, ctorParams)
+
+            val thisLocalIdx = initialCtorParams.size
+            val ctorCode = mod.block(
+              label = N,
+              Seq(
+                mod.local.set(thisLocalIdx, mod.struct.new_default(RefType(typeref, nullable = false))),
+                block(ctor),
+                mod.`return`(S(mod.local.get(thisLocalIdx, RefType(typeref, nullable = false)))),
+              ),
+              resultType = S(RefType(typeref, nullable = false)),
+            )
 
             val ctorAux = if newCtorAuxParams.isEmpty then
               ctorCode
@@ -1038,10 +1048,9 @@ class WatBackend
 
             mod.addFunction(
               s"${isym.nme}::<constructor>",
-              params =
-                createType(Seq(RefType(typeref, nullable = false)) ++ Seq.fill(initialCtorParams.size)(this.anyref)),
+              params = createType(Seq.fill(initialCtorParams.size)(this.anyref)),
               results = RefType(typeref, nullable = false),
-              vars = Seq(),
+              vars = Seq(RefType(typeref, nullable = false)),
               body = ctorBod
             )
 
