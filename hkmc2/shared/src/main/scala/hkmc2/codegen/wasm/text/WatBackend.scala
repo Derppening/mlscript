@@ -597,6 +597,16 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         )
       )
   end struct
+  
+  def local = new Local:
+    def get(index: Int, ty: WasmType): ExprProxy = 
+      // TODO(Derppening): Implement `local.get`
+      unreachable()
+
+    def set(index: Int, value: ExprProxy): ExprProxy = 
+      // TODO(Derppening): Implement `local.set`
+      unreachable()
+  end local
 
   def toWat: Document = mod.toWat
 end ModuleProxy

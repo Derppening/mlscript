@@ -118,6 +118,15 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     def new_default(ty: Type): Expr
   end Struct
 
+  /** Abstract handle for `local`-related instructions. */
+  abstract class Local:
+    /** Creates a `local.get` instruction. */
+    def get(index: Int, ty: Type): Expr
+    
+    /** Creates a `local.set` instruction. */
+    def set(index: Int, value: Expr): Expr
+  end Local
+
   /** Concrete type representing an `export` section. */
   type Exprt <: Export[Exprt]
 
@@ -302,6 +311,9 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Returns a handle to create `struct` instructions. */
   def struct: Struct
+  
+  /** Returns a handle to create `local` instructions. */
+  def local: Local
 
 end Module
 

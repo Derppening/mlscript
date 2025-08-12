@@ -284,6 +284,18 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
         new ExprRef(freshId)
   end struct
 
+  def local: Local = new Local:
+    def get(index: Int, ty: TypeRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.local.get(${index.toString}, ${ty.toJSRepr});"
+        new ExprRef(freshId)
+
+    def set(index: Int, value: ExprRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.local.set(${index.toString}, ${value.toJSRepr});"
+        new ExprRef(freshId)
+  end local
+
   def toJSRepr: Document = varId.toJSRepr
 end ModRef
 
