@@ -394,7 +394,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         FoldedInstr(
           "block",
           label.map(label => s"$$$label").toSeq ++ resultType.map(
-            _.toSeq.map(SignatureType(NoneType, _).signatureToWat)
+            _.toSeq.map(SignatureType(NoneType, _).signatureToWat).mkDocument(doc" # ")
           ),
           children.map(_.inner),
           resultType.getOrElse(NoneType)
