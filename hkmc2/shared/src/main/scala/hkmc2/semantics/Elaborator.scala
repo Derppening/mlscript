@@ -11,6 +11,7 @@ import utils.TraceLogger
 
 import syntax.*
 import Tree.*
+import BracketKind.*
 import Term.{ Blk, Rcd }
 import hkmc2.Message.MessageContext
 
@@ -346,8 +347,8 @@ extends Importer:
     case unt @ Unt() => unit.withLocOf(unt)
     case Bra(k, e) =>
       k match
-      case BracketKind.Round =>
-      case BracketKind.Curly =>
+      case Round =>
+      case Curly =>
       case _ =>
         raise(ErrorReport(msg"Unsupported ${k.name} in this position" -> tree.toLoc :: Nil))
       term(e) // * not `subterm` as `e` could be a lambda shorthand
@@ -488,6 +489,9 @@ extends Importer:
       Term.Asc(subterm(lhs), subterm(rhs))
     case InfixApp(lhs, Keyword.`:`, rhs) =>
       block(tree :: Nil, hasResult = false)._1
+    case PrefixApp(Keyword.`not`, kwLoc, rhs) =>
+      Term.App(State.builtinOpsMap("!").ref(new Ident("not").withLoc(kwLoc)), Term.Tup(
+        PlainFld(subterm(rhs, inAppPrefix = true)) :: Nil)(DummyTup))(DummyApp, N, FlowSymbol("not-app"))
     case tree @ InfixApp(lhs, Keyword.`is` | Keyword.`and` | Keyword.`or`, rhs) =>
       val des = new ucs.Desugarer(this)(tree)
       scoped("ucs:desugared"):
@@ -601,6 +605,11 @@ extends Importer:
       Term.Mut(Term.Tup(fields.map(fld(_)))(tree))
     case tree @ Tup(fields) =>
       Term.Tup(fields.map(fld(_)))(tree)
+      
+    case DynamicNew(Apps(c, argss)) =>
+      Term.New(subterm(c, inAppPrefix = inAppPrefix), argss.map{
+        case Tup(args) =>
+          args.map(subterm(_))}, N).withLocOf(tree)
     // case New(c, rfto) =>
     //   assert(rfto.isEmpty)
     //   Term.New(cls(subterm(c), inAppPrefix = inAppPrefix), params.map(subterm(_)), bodo).withLocOf(tree)
@@ -631,6 +640,7 @@ extends Importer:
           Nil, bodo).withLocOf(tree)
       // case _ =>
       //   raise(ErrorReport(msg"Illegal new expression." -> tree.toLoc :: Nil))
+      
     case tree @ IfLike(kw, _, split) =>
       val desugared = new ucs.Desugarer(this)(tree)
       scoped("ucs:desugared"):
@@ -646,7 +656,7 @@ extends Importer:
       Term.Lam(PlainParamList(
           Param(FldFlags.empty, scrut, N, Modulefulness.none) :: Nil
         ), Term.IfLike(Keyword.`if`, des))
-    case Modified(Keyword.`return`, kwLoc, body) =>
+    case PrefixApp(Keyword.`return`, kwLoc, body) =>
       ctx.getRetHandler match
       case ReturnHandler.Required(sym) =>
         tl.log(s"Non-local return: $sym")
@@ -668,9 +678,9 @@ extends Importer:
         raise:
           ErrorReport(msg"Return statements are not allowed in this context." -> tree.toLoc :: Nil)
         Term.Error
-    case Modified(Keyword.`throw`, kwLoc, body) =>
+    case PrefixApp(Keyword.`throw`, kwLoc, body) =>
       Term.Throw(subterm(body))
-    case Modified(Keyword.`do`, kwLoc, body) =>
+    case PrefixApp(Keyword.`do`, kwLoc, body) =>
       Blk(subterm(body) :: Nil, unit)
     case TypeDef(Mod, head, N) =>
       subterm(head)
@@ -709,6 +719,9 @@ extends Importer:
     case Modified(kw, kwLoc, body) =>
       raise(ErrorReport(msg"Illegal position for '${kw.name}' modifier." -> kwLoc :: Nil))
       subterm(body)
+    case PrefixApp(kw, kwLoc, body) =>
+      raise(ErrorReport(msg"Illegal position for prefix keyword '${kw.name}'." -> kwLoc :: Nil))
+      subterm(body)
     case Jux(lhs, rhs) =>
       def go(acc: Term, trees: Ls[Tree]): Term =
         trees match
@@ -740,8 +753,14 @@ extends Importer:
       Term.Error
     case OpenIn(op, body) =>
       subterm(Block(Open(op) :: body :: Nil), inAppPrefix)
-    case DynAccess(obj, fld, ai) =>
-      Term.DynSel(subterm(obj), subterm(fld), ai)
+    case DynAccess(obj, rhs) =>
+      rhs match
+      case Bra(bk @ (Round | Square), fld) => Term.DynSel(subterm(obj), subterm(fld), bk is Square)
+      case id: Ident =>
+        Term.DynSel(subterm(obj), Term.Lit(StrLit(id.name)).withLocOf(id), false)
+      case _ =>
+        raise(ErrorReport(msg"Illegal dynamic field access selector (${rhs.describe})." -> tree.toLoc :: Nil))
+        Term.Error
     case Spread(kw, kwLoc, body) =>
       raise(ErrorReport(msg"Illegal position for '${kw.name}' spread operator." -> kwLoc :: Nil))
       Term.Error
@@ -899,7 +918,7 @@ extends Importer:
           case _ =>
             raise(ErrorReport(msg"Illegal 'open' statement base." -> base.toLoc :: Nil))
             go(sts, Nil, acc)
-      case (m @ Modified(Keyword.`import`, absLoc, arg)) :: sts =>
+      case (m @ PrefixApp(Keyword.`import`, absLoc, arg)) :: sts =>
         reportUnusedAnnotations
         val (newCtx, newAcc) = arg match
           case StrLit(path) =>
@@ -933,7 +952,7 @@ extends Importer:
           case lit: Literal =>
             reportUnusedAnnotations
             RcdField(Term.Lit(lit).withLocOf(lit), rhs_t) :: acc
-          case Bra(BracketKind.Round, inner) =>
+          case Bra(Round, inner) =>
             reportUnusedAnnotations
             RcdField(term(inner), rhs_t) :: acc
           case _ =>
@@ -1285,27 +1304,16 @@ extends Importer:
     if ctx.outer.inner.isDefined then TermSymbol(k, ctx.outer.inner, id)
     else VarSymbol(id)
   
-  def param(t: Tree, inUsing: Bool, inDataClass: Bool): Ctxl[Diagnostic \/ (Opt[Bool] -> Param)] =
-    // mm: `module`-modified
-    def go(t: Tree, inUsing: Bool, flags: FldFlags, mm: Bool): Ctxl[Diagnostic \/ (Opt[Bool] -> Param)] = t match
-    case TypeDef(Mod, inner, N) =>
-      go(inner, inUsing, flags, true)
-    case TypeDef(Pat, inner, N) =>
-      go(inner, inUsing, flags.copy(pat = true), mm)
-    case TermDef(ImmutVal, inner, _) =>
-      go(inner, inUsing, flags.copy(isVal = true), mm)
-    case TermDef(MutVal, inner, _) =>
-      go(inner, inUsing, flags.copy(isVal = true, mut = true), mm)
-    case TermDef(Ins, inner, N) =>
-      go(inner, inUsing, flags, mm)
-    case _ =>
-      t.asParam(inUsing).map: (isSpd, p, t) =>
-        val sym = VarSymbol(p)
-        val sign = t.map(term(_))
-        val param = Param(flags, sym, sign, Modulefulness.ofSign(sign)(mm))
-        sym.decl = S(param)
-        isSpd -> param
-    go(t.desugared, inUsing, if inDataClass then FldFlags.empty.copy(isVal = true) else FldFlags.empty, false)
+  def param(t: Tree, inUsing: Bool, inDataClass: Bool): Ctxl[Diagnostic \/ (Param, Opt[SpreadKind])] =
+    t.desugared.asParam(inUsing).map:
+      case pt @ ParamTree(flags, id, sign, spd, modifiers) =>
+        log(s"Elaborating ParamTree: ${pt}")
+        val flg = flags.copy(isVal = flags.isVal || inDataClass)
+        val sym = VarSymbol(id)
+        val sig = sign.map(term(_))
+        val p = Param(flg, sym, sig, Modulefulness.ofSign(sig)(Mod in modifiers))
+        sym.decl = S(p)
+        (p, spd)
   
   def funParams(t: Tree): Ctxl[(ParamList, Ctx)] =
     val ps_ctx = params(t, inDataClass = false, inPattern = false)
@@ -1328,19 +1336,20 @@ extends Importer:
         ps match
         case Nil => (ParamList(flags, acc.reverse, N), ctx)
         case hd :: tl =>
-          val isCtxParam = hd match
-            case TermDef(k = Ins, rhs = N) => true
-            case _ => false
-          param(hd, flags.ctx || isCtxParam, inDataClass)(using ctx) match
-          case R((isSpd, p)) =>
-            val newCtx = if !inPattern || p.flags.pat then ctx + (p.sym.name -> p.sym) else ctx
-            val newFlags = if isCtxParam then flags.copy(ctx = true) else flags
+          val isCtxParam = hd.isModified(Ins)
+          val inUsing = flags.ctx || isCtxParam
+          param(hd, inUsing, inDataClass)(using ctx) match
+          case R((p, spd)) =>
             if isCtxParam && acc.nonEmpty then
               raise(ErrorReport(msg"Keyword `using` must occur before all parameters." -> hd.toLoc :: Nil))
-            isSpd match
-            case S(eagerSpd) =>
-              if !eagerSpd then raise(ErrorReport(msg"Lazy spread parameters not allowed." -> hd.toLoc :: Nil))
-              if tl.isEmpty then (ParamList(flags, acc.reverse, S(p)), newCtx)
+            val newCtx = if !inPattern || p.flags.pat then ctx + (p.sym.name -> p.sym) else ctx
+            val newFlags = flags.copy(ctx = inUsing)
+            spd match
+            case S(spd) =>
+              if spd is SpreadKind.Lazy then
+                raise(ErrorReport(msg"Lazy spread parameters not allowed." -> hd.toLoc :: Nil))
+              if tl.isEmpty then 
+                (ParamList(flags, acc.reverse, S(p)), newCtx)
               else
                 raise(ErrorReport(msg"Spread parameters must be the last in the parameter list." -> hd.toLoc :: Nil))
                 go(tl, p :: acc, newCtx, newFlags)
@@ -1562,7 +1571,8 @@ extends Importer:
           // case S(sym) => ???
           case N =>
             log(s"No symbol found $lhs ${lhs.symbol}")
-            ???
+            // ???
+            () // TODO
       case Term.Ref(sym: VarSymbol) =>
         sym.decl match
           case S(ty: TyParam) =>
