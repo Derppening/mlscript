@@ -113,7 +113,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   abstract class Struct:
     /** Creates a `struct.new` instruction. */
     def `new`(operands: Seq[Expr], ty: Type): Expr
-    
+
     /** Creates a `struct.new_default` instruction. */
     def new_default(ty: Type): Expr
   end Struct
@@ -122,7 +122,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   abstract class Local:
     /** Creates a `local.get` instruction. */
     def get(index: Int, ty: Type): Expr
-    
+
     /** Creates a `local.set` instruction. */
     def set(index: Int, value: Expr): Expr
   end Local
@@ -311,7 +311,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Returns a handle to create `struct` instructions. */
   def struct: Struct
-  
+
   /** Returns a handle to create `local` instructions. */
   def local: Local
 

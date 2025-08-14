@@ -395,7 +395,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         FoldedInstr(
           "block",
           label.map(label => s"$$$label").toSeq ++ resultType.map(
-            _.toSeq.map(SignatureType(NoneType, _).signatureToWat).mkDocument(doc" # ")
+            _.toSeq.map(SignatureType(
+              NoneType,
+              _
+            ).signatureToWat).mkDocument(doc" # ")
           ),
           children.map(_.inner),
           resultType.getOrElse(NoneType)
@@ -598,13 +601,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         )
       )
   end struct
-  
+
   def local = new Local:
-    def get(index: Int, ty: WasmType): ExprProxy = 
+    def get(index: Int, ty: WasmType): ExprProxy =
       // TODO(Derppening): Implement `local.get`
       unreachable()
 
-    def set(index: Int, value: ExprProxy): ExprProxy = 
+    def set(index: Int, value: ExprProxy): ExprProxy =
       // TODO(Derppening): Implement `local.set`
       unreachable()
   end local
@@ -875,7 +878,7 @@ class WatBackend
         mod.call(
           s"${clazzStructTy.id}::<constructor>",
           as.map(result),
-          clazzRefTy,
+          clazzRefTy
         )
       case r =>
         raise(
@@ -1017,11 +1020,17 @@ class WatBackend
             val ctorCode = mod.block(
               label = N,
               Seq(
-                mod.local.set(thisLocalIdx, mod.struct.new_default(RefType(typeref, nullable = false))),
+                mod.local.set(
+                  thisLocalIdx,
+                  mod.struct.new_default(RefType(typeref, nullable = false))
+                ),
                 block(ctor),
-                mod.`return`(S(mod.local.get(thisLocalIdx, RefType(typeref, nullable = false)))),
+                mod.`return`(S(mod.local.get(
+                  thisLocalIdx,
+                  RefType(typeref, nullable = false)
+                )))
               ),
-              resultType = S(RefType(typeref, nullable = false)),
+              resultType = S(RefType(typeref, nullable = false))
             )
 
             val ctorAux = if newCtorAuxParams.isEmpty then
@@ -1048,7 +1057,8 @@ class WatBackend
 
             mod.addFunction(
               s"${isym.nme}::<constructor>",
-              params = createType(Seq.fill(initialCtorParams.size)(this.anyref)),
+              params =
+                createType(Seq.fill(initialCtorParams.size)(this.anyref)),
               results = RefType(typeref, nullable = false),
               vars = Seq(RefType(typeref, nullable = false)),
               body = ctorBod
