@@ -604,12 +604,28 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   def local = new Local:
     def get(index: Int, ty: WasmType): ExprProxy =
-      // TODO(Derppening): Implement `local.get`
-      unreachable()
+      ExprProxy(
+        S(
+          FoldedInstr(
+            "local.get",
+            Seq(s"$index"),
+            Seq(),
+            ty
+          )
+        )
+      )
 
     def set(index: Int, value: ExprProxy): ExprProxy =
-      // TODO(Derppening): Implement `local.set`
-      unreachable()
+      ExprProxy(
+        S(
+          FoldedInstr(
+            "local.set",
+            Seq(s"$index"),
+            Seq(value.inner),
+            NoneType
+          )
+        )
+      )
   end local
 
   def toWat: Document = mod.toWat
