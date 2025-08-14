@@ -877,7 +877,9 @@ class WatBackend
 
         mod.call(
           s"${clazzStructTy.id}::<constructor>",
-          as.map(result),
+          // TODO(Derppening): Add i31ref <-> i32 conversion functions when crossing function boundaries
+          as.map(result).map: p =>
+            if p.getType is i32 then mod.ref.i31(p) else p,
           clazzRefTy
         )
       case r =>
