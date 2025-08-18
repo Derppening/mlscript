@@ -285,8 +285,8 @@ class Elaborator(val tl: TraceLogger, val wd: os.Path, val prelude: Ctx)
 extends Importer:
   import tl.*
   
-  def mkLetBinding(sym: LocalSymbol, rhs: Term, annotations: Ls[Annot]): Ls[Statement] =
-    LetDecl(sym, annotations) :: DefineVar(sym, rhs) :: Nil
+  def mkLetBinding(kw: Tree.Keywrd[?], sym: LocalSymbol, rhs: Term, annotations: Ls[Annot]): Ls[Statement] =
+    LetDecl(sym, annotations).mkLocWith(kw, sym) :: DefineVar(sym, rhs) :: Nil
   
   def resolveField(srcTree: Tree, base: Opt[Symbol], nme: Ident): Opt[FieldSymbol] =
     base match
@@ -361,16 +361,16 @@ extends Importer:
       Term.Lit(lit)
     case d: Def =>
       subterm(Block(d :: Unt() :: Nil))
-    case LetLike(`let`, lhs, rhso, S(bod)) =>
-      subterm(Block(LetLike(`let`, lhs, rhso, N) :: bod :: Nil))
-    case LetLike(`let`, lhs, rhso, N) =>
+    case LetLike(kw @ Keywrd(`let`), lhs, rhso, S(bod)) =>
+      subterm(Block(LetLike(kw, lhs, rhso, N) :: bod :: Nil))
+    case LetLike(kw @ Keywrd(`let`), lhs, rhso, N) =>
       raise(ErrorReport(
         msg"Expected a body for let bindings in expression position" ->
           tree.toLoc :: Nil))
-      block(LetLike(`let`, lhs, rhso, N) :: Nil, hasResult = true)._1
-    case LetLike(`set`, lhs, S(rhs), N) =>
+      block(LetLike(kw, lhs, rhso, N) :: Nil, hasResult = true)._1
+    case LetLike(Keywrd(`set`), lhs, S(rhs), N) =>
       Term.Assgn(subterm(lhs), subterm(rhs))
-    case LetLike(`set`, lhs, S(rhs), S(bod)) =>
+    case LetLike(Keywrd(`set`), lhs, S(rhs), S(bod)) =>
       // * Backtracking assignment
       lhs match
       case id: Ident =>
@@ -439,9 +439,9 @@ extends Importer:
       Term.Error
     case TyApp(lhs, targs) =>
       Term.TyApp(subterm(lhs, inTyAppPrefix = true), targs.map {
-        case Modified(Keyword.`in`, inLoc, arg) => Term.WildcardTy(S(subterm(arg)), N)
-        case Modified(Keyword.`out`, outLoc, arg) => Term.WildcardTy(N, S(subterm(arg)))
-        case Tup(Modified(Keyword.`in`, inLoc, arg1) :: Modified(Keyword.`out`, outLoc, arg2) :: Nil) =>
+        case Modified(Keywrd(Keyword.`in`), arg) => Term.WildcardTy(S(subterm(arg)), N)
+        case Modified(Keywrd(Keyword.`out`), arg) => Term.WildcardTy(N, S(subterm(arg)))
+        case Tup(Modified(Keywrd(Keyword.`in`), arg1) :: Modified(Keywrd(Keyword.`out`), arg2) :: Nil) =>
           Term.WildcardTy(S(subterm(arg1)), S(subterm(arg2)))
         case arg => subterm(arg)
       })(N)
@@ -489,15 +489,15 @@ extends Importer:
       Term.Asc(subterm(lhs), subterm(rhs))
     case InfixApp(lhs, Keyword.`:`, rhs) =>
       block(tree :: Nil, hasResult = false)._1
-    case PrefixApp(Keyword.`not`, kwLoc, rhs) =>
-      Term.App(State.builtinOpsMap("!").ref(new Ident("not").withLoc(kwLoc)), Term.Tup(
+    case PrefixApp(kw @ Keywrd(Keyword.`not`), rhs) =>
+      Term.App(State.builtinOpsMap("!").ref(new Ident("not").withLocOf(kw)), Term.Tup(
         PlainFld(subterm(rhs, inAppPrefix = true)) :: Nil)(DummyTup))(DummyApp, N, FlowSymbol("not-app"))
     case tree @ InfixApp(lhs, Keyword.`is` | Keyword.`and` | Keyword.`or`, rhs) =>
       val des = new ucs.Desugarer(this)(tree)
       scoped("ucs:desugared"):
         log(s"Desugared:\n${des.prettyPrint}")
       Term.IfLike(Keyword.`if`, des)
-    case InfixApp(lhs, kw @ (Keyword.`then` | Keyword.`with`), rhs) =>
+    case InfixApp(lhs, kw, rhs) =>
       raise:
         ErrorReport(msg"Unexpected infix use of keyword '${kw.name}' here" -> tree.toLoc :: Nil)
       Term.Error
@@ -601,15 +601,13 @@ extends Importer:
       )
     case tree @ Tup(TermDef(Ins, f, N) :: fs) =>
       Term.CtxTup((f :: fs).map(fld(_)))(tree)
-    case Modified(Keyword.`mut`, kwLoc, tree @ Tup(fields)) =>
-      Term.Mut(Term.Tup(fields.map(fld(_)))(tree))
+    case Modified(kw @ Keywrd(Keyword.`mut`), tree @ Tup(fields)) =>
+      Term.Mut(Term.Tup(fields.map(fld(_)))(tree)).mkLocWith(kw)
     case tree @ Tup(fields) =>
       Term.Tup(fields.map(fld(_)))(tree)
       
-    case DynamicNew(Apps(c, argss)) =>
-      Term.New(subterm(c, inAppPrefix = inAppPrefix), argss.map{
-        case Tup(args) =>
-          args.map(subterm(_))}, N).withLocOf(tree)
+    case DynamicNew(Apps(c, args)) =>
+      Term.New(subterm(c, inAppPrefix = inAppPrefix), args.map(subterm(_)), N).withLocOf(tree)
     // case New(c, rfto) =>
     //   assert(rfto.isEmpty)
     //   Term.New(cls(subterm(c), inAppPrefix = inAppPrefix), params.map(subterm(_)), bodo).withLocOf(tree)
@@ -622,16 +620,14 @@ extends Importer:
             // TODO make context with var symbols for class parameters
             ObjBody(block(rft, hasResult = false)._1)
       body match
-      case S(Apps(c, argss)) =>
+      case S(Apps(c, args)) =>
         val (mut, c2) = c match
-          case Modified(Keyword.`mut`, kwLoc, c) => (true, c)
+          case Modified(Keywrd(Keyword.`mut`), c) => (true, c)
           case c => (false, c)
         val inner = new Term.New(
           cls(subterm(c2), // * Note: we'll catch bad `new` targets during type checking
             inAppPrefix = true), 
-          argss.map{
-            case Tup(args) =>
-              args.map(subterm(_))},
+          args.map(subterm(_)),
           bodo
         ).withLocOf(tree)
         if mut then Term.Mut(inner) else inner
@@ -641,11 +637,11 @@ extends Importer:
       // case _ =>
       //   raise(ErrorReport(msg"Illegal new expression." -> tree.toLoc :: Nil))
       
-    case tree @ IfLike(kw, _, split) =>
+    case tree @ IfLike(kw, split) =>
       val desugared = new ucs.Desugarer(this)(tree)
       scoped("ucs:desugared"):
         log(s"Desugared:\n${desugared.prettyPrint}")
-      Term.IfLike(kw, desugared)
+      Term.IfLike(kw.kw, desugared)
     case Quoted(body) => Term.Quoted(subterm(body))
     case Unquoted(body) => Term.Unquoted(subterm(body))
     case tree @ Case(_, branches) =>
@@ -656,14 +652,14 @@ extends Importer:
       Term.Lam(PlainParamList(
           Param(FldFlags.empty, scrut, N, Modulefulness.none) :: Nil
         ), Term.IfLike(Keyword.`if`, des))
-    case PrefixApp(Keyword.`return`, kwLoc, body) =>
+    case PrefixApp(kw @ Keywrd(Keyword.`return`), body) =>
       ctx.getRetHandler match
       case ReturnHandler.Required(sym) =>
         tl.log(s"Non-local return: $sym")
         val rs = FlowSymbol("‹app-res›")
         val retMtdTree = new Ident("ret")
         val argTree = new Tup(body :: Nil)
-        val dummyIdent = new Ident("return").withLoc(kwLoc)
+        val dummyIdent = new Ident("return").withLocOf(kw)
         Term.App(
           Term.Sel(sym.ref(dummyIdent), retMtdTree)(S(state.nonLocalRet)),
           Term.Tup(PlainFld(subterm(body)) :: Nil)(argTree)
@@ -678,12 +674,12 @@ extends Importer:
         raise:
           ErrorReport(msg"Return statements are not allowed in this context." -> tree.toLoc :: Nil)
         Term.Error
-    case PrefixApp(Keyword.`throw`, kwLoc, body) =>
-      Term.Throw(subterm(body))
-    case PrefixApp(Keyword.`do`, kwLoc, body) =>
-      Blk(subterm(body) :: Nil, unit)
-    case TypeDef(Mod, head, N) =>
-      subterm(head)
+    case PrefixApp(kw @ Keywrd(Keyword.`throw`), body) =>
+      Term.Throw(subterm(body)).mkLocWith(kw)
+    case PrefixApp(kw @ Keywrd(Keyword.`do`), body) =>
+      Blk(subterm(body) :: Nil, unit).mkLocWith(kw)
+    case PrefixApp(kw @ Keywrd(Keyword.`drop`), body) =>
+      Term.Drop(subterm(body)).mkLocWith(kw)
     case Region(id: Ident, body) =>
       val sym = VarSymbol(id)
       given Ctx = ctx + (id.name -> sym)
@@ -708,7 +704,7 @@ extends Importer:
     case TypeDef(k, head, rhs) =>
       raise(ErrorReport(msg"Illegal type declaration in term position." -> tree.toLoc :: Nil))
       Term.Error
-    case Modified(Keyword.`mut`, kwLoc, body: Block) =>
+    case Modified(Keywrd(Keyword.`mut`), body: Block) =>
       blockOrRcd(body, hasResult = true) match
       case (Blk(Nil, Term.UnitVal()), ctx) =>
         Rcd(mut = true, Nil).withLocOf(body)
@@ -716,11 +712,11 @@ extends Importer:
         raise(ErrorReport(msg"Expected a record after 'mut' keyword; found a block" -> blk.toLoc :: Nil))
         blk
       case (rcd: Rcd, ctx) => rcd.copy(mut = true).withLocOf(rcd)
-    case Modified(kw, kwLoc, body) =>
-      raise(ErrorReport(msg"Illegal position for '${kw.name}' modifier." -> kwLoc :: Nil))
+    case Modified(kw, body) =>
+      raise(ErrorReport(msg"Illegal position for '${kw.name}' modifier." -> kw.toLoc :: Nil))
       subterm(body)
-    case PrefixApp(kw, kwLoc, body) =>
-      raise(ErrorReport(msg"Illegal position for prefix keyword '${kw.name}'." -> kwLoc :: Nil))
+    case PrefixApp(kw, body) =>
+      raise(ErrorReport(msg"Illegal position for prefix keyword '${kw.name}'." -> kw.toLoc :: Nil))
       subterm(body)
     case Jux(lhs, rhs) =>
       def go(acc: Term, trees: Ls[Tree]): Term =
@@ -761,8 +757,8 @@ extends Importer:
       case _ =>
         raise(ErrorReport(msg"Illegal dynamic field access selector (${rhs.describe})." -> tree.toLoc :: Nil))
         Term.Error
-    case Spread(kw, kwLoc, body) =>
-      raise(ErrorReport(msg"Illegal position for '${kw.name}' spread operator." -> kwLoc :: Nil))
+    case Spread(kw, body) =>
+      raise(ErrorReport(msg"Illegal position for '${kw.name}' spread operator." -> kw.toLoc :: Nil))
       Term.Error
     case und: Under =>
       summon[UnderCtx].unders match
@@ -793,9 +789,9 @@ extends Importer:
       Fld(FldFlags.empty, Term.Lit(StrLit(id.name).withLocOf(id)), S(arg(rhs)))
     case InfixApp(lhs, Keyword.`:`, rhs) =>
       Fld(FldFlags.empty, term(lhs), S(arg(rhs)))
-    case Spread(Keyword.`..`, _, S(trm)) =>
+    case Spread(Keywrd(Keyword.`..`), S(trm)) =>
       Spd(false, arg(trm))
-    case Spread(Keyword.`...`, _, S(trm)) =>
+    case Spread(Keywrd(Keyword.`...`), S(trm)) =>
       Spd(true, arg(trm))
     case _ =>
       val t = arg(tree)
@@ -918,13 +914,13 @@ extends Importer:
           case _ =>
             raise(ErrorReport(msg"Illegal 'open' statement base." -> base.toLoc :: Nil))
             go(sts, Nil, acc)
-      case (m @ PrefixApp(Keyword.`import`, absLoc, arg)) :: sts =>
+      case (m @ PrefixApp(Keywrd(Keyword.`import`), arg)) :: sts =>
         reportUnusedAnnotations
         val (newCtx, newAcc) = arg match
           case StrLit(path) =>
-            val stmt = importPath(path)
+            val stmt = importPath(path).withLocOf(m)
             (ctx + (stmt.sym.nme -> stmt.sym),
-            stmt.withLocOf(m) :: acc)
+            stmt :: acc)
           case _ =>
             raise(ErrorReport(
               msg"Expected string literal after 'import' keyword" ->
@@ -933,7 +929,7 @@ extends Importer:
         newCtx.givenIn:
           go(sts, Nil, newAcc)
       
-      case Spread(Keyword.`...`, kwLoc, S(body)) :: sts =>
+      case Spread(Keywrd(Keyword.`...`), S(body)) :: sts =>
         reportUnusedAnnotations
         go(sts, Nil, RcdSpread(term(body)) :: acc)
       case InfixApp(lhs, Keyword.`:`, rhs) :: sts =>
@@ -960,7 +956,7 @@ extends Importer:
             RcdField(Term.Error, rhs_t) :: acc
         newCtx.givenIn:
           go(sts, Nil, newAcc)
-      case (hd @ LetLike(`let`, Apps(id: Ident, tups), rhso, N)) :: sts
+      case (hd @ LetLike(kw @ Keywrd(`let`), Apps(id: Ident, tups), rhso, N)) :: sts
       if tups.isEmpty || id.name.headOption.exists(_.isLower) =>
         reportUnusedAnnotations
         val sym =
@@ -973,14 +969,14 @@ extends Importer:
           case S(rhs) =>
             val rrhs = tups.foldRight(rhs):
               InfixApp(_, Keyword.`=>`, _)
-            mkLetBinding(sym, term(rrhs), annotations) reverse_::: acc
+            mkLetBinding(kw, sym, term(rrhs), annotations) reverse_::: acc
           case N =>
             if tups.nonEmpty then
               raise(ErrorReport(msg"Expected a right-hand side for let bindings with parameters" -> hd.toLoc :: Nil))
-            LetDecl(sym, annotations) :: acc
+            LetDecl(sym, annotations).mkLocWith(kw) :: acc
         (ctx + (id.name -> sym)) givenIn:
           go(sts, Nil, newAcc)
-      case (tree @ LetLike(`let`, lhs, _, N)) :: sts =>
+      case (tree @ LetLike(Keywrd(`let`), lhs, _, N)) :: sts =>
         raise(ErrorReport(msg"Unsupported let binding shape" -> tree.toLoc :: Nil))
         go(sts, Nil, Term.Error :: acc)
       case Def(lhs, rhs) :: sts =>
@@ -1028,7 +1024,12 @@ extends Importer:
                 res
               // * Elaborate signature
               val st = td.annotatedResultType.orElse(newSignatureTrees.get(id.name))
-              val s = st.map(term(_)(using newCtx))
+              val s = st.map:
+                // unwrap possible module modifier
+                // e.g, `fun f: module M`
+                //              ^^^^^^
+                case TypeDef(Mod, st, N) => term(st)(using newCtx)
+                case st => term(st)(using newCtx)
               val b = if ctx.mode != Mode.Light
                 then rhs.map(term(_)(using newCtx))
                 else S(Term.Missing)
@@ -1046,10 +1047,10 @@ extends Importer:
               val r = FlowSymbol(s"‹result of ${sym}›")
               
               val mfn = st match
-                // TypeDef(Mod, _, N, N) indicates if the function marks
+                // st.isModified(Mod) indicates if the function marks
                 // its result as "module". e.g, `fun f: module M`
                 //                                      ^^^^^^
-                case S(TypeDef(Mod, _, N)) => 
+                case S(st) if st.isModified(Mod) => 
                   Modulefulness.ofSign(s)(true)
                 case _ =>
                   Modulefulness.none
@@ -1090,9 +1091,9 @@ extends Importer:
               val (id, vce) = targ match
                 case id: Ident =>
                   (id, N)
-                case Modified(Keyword.`in`, inLoc, id: Ident) =>
+                case Modified(Keywrd(Keyword.`in`), id: Ident) =>
                   (id, S(false))
-                case Modified(Keyword.`out`, outLoc, id: Ident) =>
+                case Modified(Keywrd(Keyword.`out`), id: Ident) =>
                   (id, S(true))
               val vs = VarSymbol(id)
               val res = TyParam(FldFlags.empty, vce, vs)
@@ -1381,14 +1382,14 @@ extends Importer:
       // pattern, and the trailing patterns.
       val z = (Ls[Pattern](), N: Opt[Pattern], Ls[Pattern]())
       val (leading, spread, trailing) = ts.foldLeft(z):
-        case (acc @ (_, S(_), _), Spread(`...`, _, _)) =>
+        case (acc @ (_, S(_), _), Spread(Keywrd(`...`), _)) =>
           // Found two `...p` in the same tuple pattern. Report an error.
           raise(ErrorReport(msg"Multiple spread patterns are not supported." -> t.toLoc :: Nil))
           acc // Do not modify the accumulator and skip this `Spread`.
-        case ((leading, N, trailing), Spread(`...`, _, S(t))) =>
+        case ((leading, N, trailing), Spread(Keywrd(`...`), S(t))) =>
           // Found `...p`, elaborate `p` and assign it to the spread pattern.
           (leading, S(go(t)), trailing)
-        case ((leading, N, trailing), Spread(`...`, _, N)) =>
+        case ((leading, N, trailing), Spread(Keywrd(`...`), N)) =>
           // Found `...` (no following patterns), which means the spread part
           // will not be further matched. Set the spread pattern to `Wildcard`.
           (leading, S(Wildcard()), trailing)

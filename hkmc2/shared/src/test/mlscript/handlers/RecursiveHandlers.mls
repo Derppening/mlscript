@@ -73,7 +73,9 @@ handle h2 = Effect with
 //│ ╔══[ERROR] Name not found: h2
 //│ ║  l.65: 	      then h2.perform(arg - 1) + " " + arg
 //│ ╙──      	           ^^
-//│ ═══[ERROR] Illegal position for prefix keyword 'else'.
+//│ ╔══[ERROR] Illegal position for prefix keyword 'else'.
+//│ ║  l.66: 	      else "0"
+//│ ╙──      	      ^^^^
 //│ > –––
 //│ > performing 2
 //│ > –––
@@ -367,9 +369,7 @@ str
 //│     tmp9 = runtime.topLevelEffect(tmp9, false);
 //│   }
 //│   tmp10 = tmp9;
-//│ } else {
-//│   tmp10 = runtime.Unit;
-//│ }
+//│ } else { tmp10 = runtime.Unit; }
 //│ str
 //│ = "BABABA"
 //│ str = "BABABA"
