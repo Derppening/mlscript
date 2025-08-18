@@ -122,24 +122,24 @@ end SignatureType
 
 object Field:
   /** Creates a field from a [[WasmType]]. */
-  def apply(ty: WasmType, mutable: Bool) =
-    new Field(ty, WasmPackedType.NotPacked, mutable)
+  def apply(ty: WasmType, mutable: Bool, id: Opt[Str]) =
+    new Field(ty, WasmPackedType.NotPacked, mutable, id)
 
   /** Creates a field from a [[WasmPackedType]]. */
-  def apply(packedType: WasmPackedType, mutable: Bool) =
+  def apply(packedType: WasmPackedType, mutable: Bool, id: Opt[Str]) =
     assert(
       packedType != WasmPackedType.NotPacked,
       "Packed type must not be 'notPacked'"
     )
-    new Field(I32Type, packedType, mutable)
+    new Field(I32Type, packedType, mutable, id)
 
 /** A type represening a struct field. */
-case class Field(ty: WasmType, packedType: WasmPackedType, mutable: Bool)
+case class Field(ty: WasmType, packedType: WasmPackedType, mutable: Bool, id: Opt[Str])
     extends ToWat:
   def toWat: Document =
     val tyWat = if packedType != WasmPackedType.NotPacked then packedType.toWat
     else ty.toWat
-    doc"(field ${if mutable then doc"(mut ${tyWat})" else tyWat})"
+    doc"(field ${id.dlof(id => doc"$$$id ")(doc"")}${if mutable then doc"(mut ${tyWat})" else tyWat})"
 end Field
 
 /** A type representing a structure type. */

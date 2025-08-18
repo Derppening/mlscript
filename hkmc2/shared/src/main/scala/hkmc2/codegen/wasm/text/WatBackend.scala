@@ -147,8 +147,20 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
     entries(index) = StructType(
       fields.map: (ty, mut) =>
         ty match
-          case packedTy: WasmPackedType => Field(packedTy, mut)
-          case ty: WasmType => Field(ty, mut)
+          case packedTy: WasmPackedType => Field(packedTy, mut, N)
+          case ty: WasmType => Field(ty, mut, N)
+    )
+
+  def setStructTypeNamed(
+      index: Int,
+      fields: Seq[(WasmType | WasmPackedType, Bool, Str)]
+  ): Unit =
+    ensureFieldSize(index)
+    entries(index) = StructType(
+      fields.map: (ty, mut, id) =>
+        ty match
+          case packedTy: WasmPackedType => Field(packedTy, mut, S(id))
+          case ty: WasmType => Field(ty, mut, S(id))
     )
 
   def build(): WasmType =
@@ -1013,10 +1025,7 @@ class WatBackend
             val typeref = mod.addType(
               S(isym.nme),
               StructType(
-                Seq.fill(pubFlds.size + privFlds.size)(Field(
-                  this.anyref,
-                  mutable = true
-                ))
+                pubFlds.map(f => Field(this.anyref, mutable = true, id = S(f._2.nme))) ++ privFlds.map(f => Field(this.anyref, mutable = true, id = S(f.nme)))
               )
             )
 
