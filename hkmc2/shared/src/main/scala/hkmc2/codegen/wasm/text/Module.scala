@@ -256,6 +256,7 @@ type Expr = Opt[FoldedInstr] | Ls[StackInstr]
 
 /**
  * A module type.
+ *
  * @param defn
  *   The definition of the `type` declaration.
  * @param doc
