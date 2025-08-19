@@ -7,6 +7,7 @@ import mlscript.utils.*, shorthands.*
 
 import document.*
 import semantics.*
+import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
 import Message.MessageContext
@@ -118,6 +119,13 @@ class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef], ToWat:
   def toWat: Document = doc"$$$name"
 end GlobalRef
 
+/**
+ * An index representing a local variable in a function.
+ */
+case class LocalIdx(idx: Int) extends ToWat:
+  def toWat: Document = doc"$idx"
+end LocalIdx
+
 /** A builder for creating heap types. */
 class TypeBuilder(private val gen: WatBackend, size: Int)
     extends wasm.TypeBuilder[WasmType, WasmPackedType]:
@@ -166,6 +174,116 @@ class TypeBuilder(private val gen: WatBackend, size: Int)
   def build(): WasmType =
     gen.createType(entries.map(entry => RefType(entry, false)).toSeq)
 end TypeBuilder
+
+object Locals:
+  enum Scope:
+    case Global
+    case Local
+  end Scope
+
+  def empty: Locals = Locals(N, N, Seq.empty)
+
+/**
+ * A scope for tracking local variables within a function.
+ *
+ * This implementation is loosely based on [[hkmc2.utils.Scope]], using numeric
+ * identifiers to adhere to WebAssembly requirements.
+ *
+ * @param parent
+ *   The parent scope, or [[None]] if this is the global scope.
+ * @param curThis
+ *   The current `this` symbol. See [[hkmc2.utils.Scope]] for an explanation of
+ *   the nested use of [Opt].
+ * @param params
+ *   The parameters of the function, if any.
+ */
+class Locals(
+    val parent: Opt[Locals],
+    val curThis: Opt[Opt[(InnerSymbol, WasmType)]],
+    params: Seq[(Local, WasmType)]
+):
+  parent match
+    case S(p) =>
+      require(p.parent.isEmpty, "Nested local scopes are not supported")
+    case N =>
+      require(params.isEmpty, "Global scope should not contain parameters")
+
+  private val bindings = mutable.Map[Local, Int]()
+  private val localTypes = mutable.ArrayBuffer[WasmType]()
+
+  // Insert all parameters into scope
+  params.foreach: (l, ty) =>
+    allocateName(l, ty)
+
+  val nParams = params.size
+
+  // Insert the type of `this` into the local types
+  curThis.flatten.foreach:
+    localTypes += _._2
+
+  private def inferScope: Locals.Scope =
+    parent.dlof(_ => Locals.Scope.Local)(Locals.Scope.Global)
+
+    /**
+     * Finds and returns the appropriate global/local index for the given
+     * `thisSym` symbol.
+     */
+  def findThis_!(thisSym: InnerSymbol)(using Raise): (Locals.Scope, Int) =
+    curThis match
+      case S(S(`thisSym`)) =>
+        // `this` is bound to the first local variable
+        (inferScope, nParams)
+      case _ =>
+        raise(
+          ErrorReport(
+            msg"Resolution of `thisSym` (${thisSym.toString}) not yet supported" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        (inferScope, -1)
+
+  def lookup(l: Local): Opt[(Locals.Scope, Int)] =
+    bindings.get(l).map:
+      (inferScope, _)
+    .orElse:
+      parent.flatMap(_.lookup(l))
+
+  def lookup_!(l: Local)(using Raise): (Locals.Scope, Int) =
+    lookup(l).getOrElse:
+      // Prevent long-winded error messages which quote the entire definition.
+      val loc = l match
+        case sym: semantics.BlockMemberSymbol =>
+          sym.trees.collectFirst:
+            case t: syntax.Tree.TypeDef => t.head.toLoc
+          .flatten.orElse(l.toLoc)
+        case other => other.toLoc
+      raise(ErrorReport(
+        msg"No definition found in scope for '${l.nme}'" -> loc :: Nil,
+        extraInfo = Some(l -> l.getClass),
+        source = Diagnostic.Source.Compilation
+      ))
+      (inferScope, -1)
+
+  def allocateName(l: Local, ty: WasmType): (Locals.Scope, Int) =
+    val index = localTypes.size
+    localTypes += ty
+    bindings += l -> index
+    (inferScope, index)
+
+    /**
+     * Returns a [Seq] representing the types of all local variables declared
+     * with `(local ...)`.
+     */
+  def getLocalsTypes: Seq[WasmType] =
+    localTypes.slice(nParams, localTypes.size).toSeq
+
+    /**
+     * Returns a [Seq] representing the types of all local variables, including
+     * parameters.
+     */
+  def getTypes: Seq[WasmType] = localTypes.toSeq
+
+end Locals
 
 /**
  * A reference to a WebAssembly module.
@@ -730,7 +848,7 @@ class WatBackend
         )
         summon[ModuleProxy].unreachable()
 
-  def argument(a: Arg)(using ModuleProxy, Raise): ExprProxy =
+  def argument(a: Arg)(using ModuleProxy, Locals, Raise): ExprProxy =
     if a.spread.nonEmpty then
       raise(
         WarningReport(
@@ -743,18 +861,34 @@ class WatBackend
 
   def operand(
       a: Arg
-  )(using ModuleProxy, Raise): ExprProxy =
+  )(using ModuleProxy, Locals, Raise): ExprProxy =
     if a.spread.nonEmpty then die else subexpression(a.value)
 
   def subexpression(
       r: Result
-  )(using ModuleProxy, Raise): ExprProxy = result(r)
+  )(using ModuleProxy, Locals, Raise): ExprProxy = result(r)
+
+  def fieldSelect(`this`: ExprProxy, s: Str): Int =
+    `this`.getType match
+      case RefType(StructType(fields), _) =>
+        fields.indexWhere(_.id.exists(_ == s))
+      case _ =>
+        throw IllegalArgumentException(
+          s"Expected `this` to be a `(ref (struct ...))` type, but got `${`this`.getWasmType(true).toWat}`"
+        )
 
   def result(
       r: Result
-  )(using ModuleProxy, Raise): ExprProxy =
+  )(using ModuleProxy, Locals, Raise): ExprProxy =
     val mod = summon[ModuleProxy]
     r match
+      case Value.This(sym) =>
+        val (thisScope, thisLocal) = summon[Locals].findThis_!(sym)
+        assert(
+          thisScope == Locals.Scope.Local,
+          "`this` should always be resolved locally"
+        )
+        mod.local.get(thisLocal, summon[Locals].getTypes(thisLocal))
       case Value.Lit(BoolLit(value)) =>
         mod.i32.const(if value then 1 else 0)
       case Value.Lit(IntLit(value)) =>
@@ -921,11 +1055,42 @@ class WatBackend
 
   def returningTerm(
       t: Block
-  )(using ModuleProxy, Raise): ExprProxy =
+  )(using ModuleProxy, Locals, Raise): ExprProxy =
     val mod = summon[ModuleProxy]
     t match
       case Define(defn, rst) =>
+        def mkThis(sym: InnerSymbol): ExprProxy =
+          result(Value.This(sym))
         defn match
+          case ValDefn(tsym, sym, p) =>
+            tsym.owner match
+              case N =>
+                raise(
+                  WarningReport(
+                    msg"WatBackend::returningTerm for ${defn.toString} (`tsym.owner is N`) not implemented yet" -> N :: Nil,
+                    source = Diagnostic.Source.Compilation
+                  )
+                )
+                mod.unreachable()
+              case S(owner) =>
+                raise(
+                  WarningReport(
+                    msg"WatBackend::returningTerm for ${defn.toString} (`tsym.owner = S(${owner.toString})`) not implemented yet" -> N :: Nil,
+                    source = Diagnostic.Source.Compilation
+                  )
+                )
+                val thisWat = mkThis(owner)
+                val fieldWat = fieldSelect(thisWat, sym.nme)
+                val pWat = result(p)
+                val rstWat = returningTerm(rst)
+                mod.block(
+                  label = N,
+                  children = Seq(
+                    mod.unreachable(),
+                    rstWat
+                  ),
+                  resultType = S(rstWat.getType)
+                )
           case FunDefn(owner, sym, Nil, body) =>
             lastWords("cannot generate function with no parameter list")
           case FunDefn(owner, sym, params, body) =>
@@ -1025,7 +1190,11 @@ class WatBackend
             val typeref = mod.addType(
               S(isym.nme),
               StructType(
-                pubFlds.map(f => Field(this.anyref, mutable = true, id = S(f._2.nme))) ++ privFlds.map(f => Field(this.anyref, mutable = true, id = S(f.nme)))
+                pubFlds.map(f =>
+                  Field(this.anyref, mutable = true, id = S(f._2.nme))
+                ) ++ privFlds.map(f =>
+                  Field(this.anyref, mutable = true, id = S(f.nme))
+                )
               )
             )
 
@@ -1044,6 +1213,16 @@ class WatBackend
               case Some(_) => (ctorAuxParams, ctorParams)
 
             val thisLocalIdx = initialCtorParams.size
+            val ctorLocals = Locals(
+              S(summon[Locals]),
+              S(S((isym, RefType(typeref, nullable = false)))),
+              initialCtorParams.map: param =>
+                val paramSym = param match
+                  case Param(_, sym, _, _) => sym
+                  case v: VarSymbol => v
+                (paramSym, this.anyref)
+            )
+
             val ctorCode = mod.block(
               label = N,
               Seq(
@@ -1051,7 +1230,7 @@ class WatBackend
                   thisLocalIdx,
                   mod.struct.new_default(RefType(typeref, nullable = false))
                 ),
-                block(ctor),
+                block(ctor)(using mod, ctorLocals, summon[Raise]),
                 mod.`return`(S(mod.local.get(
                   thisLocalIdx,
                   RefType(typeref, nullable = false)
@@ -1134,7 +1313,7 @@ class WatBackend
         )
       )
     val module = newModule
-    val mainFnExpr = block(p.main)(using module)
+    val mainFnExpr = block(p.main)(using module, Locals.empty)
     if exprt.isDefined then
       raise(
         WarningReport(
@@ -1159,7 +1338,7 @@ class WatBackend
   //                   returning multiple values
   def block(
       t: Block
-  )(using ModuleProxy, Raise): ExprProxy =
+  )(using ModuleProxy, Locals, Raise): ExprProxy =
     returningTerm(t)
 end WatBackend
 
