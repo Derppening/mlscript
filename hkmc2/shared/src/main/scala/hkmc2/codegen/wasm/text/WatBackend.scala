@@ -10,10 +10,12 @@ import semantics.*
 import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
+import Locals.locals
 import Message.MessageContext
 
 import java.util.concurrent.atomic.AtomicLong
 import scala.collection.mutable
+import scala.util.boundary, boundary.break
 
 /**
  * A reference to an `export` field in a module.
@@ -181,6 +183,8 @@ object Locals:
     case Local
   end Scope
 
+  def locals(using locals: Locals): Locals = locals
+
   def empty: Locals = Locals(N, N, Seq.empty)
 
 /**
@@ -209,17 +213,14 @@ class Locals(
       require(params.isEmpty, "Global scope should not contain parameters")
 
   private val bindings = mutable.Map[Local, Int]()
+  private val paramTypes = mutable.ArrayBuffer[WasmType]()
   private val localTypes = mutable.ArrayBuffer[WasmType]()
 
   // Insert all parameters into scope
   params.foreach: (l, ty) =>
     allocateName(l, ty)
 
-  val nParams = params.size
-
-  // Insert the type of `this` into the local types
-  curThis.flatten.foreach:
-    localTypes += _._2
+  def nParams: Int = paramTypes.size
 
   private def inferScope: Locals.Scope =
     parent.dlof(_ => Locals.Scope.Local)(Locals.Scope.Global)
@@ -229,7 +230,8 @@ class Locals(
      * `thisSym` symbol.
      */
   def findThis_!(thisSym: InnerSymbol)(using Raise): (Locals.Scope, Int) =
-    curThis match
+    println(s"findThis_! on ${thisSym.toLoc} with curThis=`$curThis`")
+    curThis.map(_.map(_._1)) match
       case S(S(`thisSym`)) =>
         // `this` is bound to the first local variable
         (inferScope, nParams)
@@ -264,24 +266,51 @@ class Locals(
       ))
       (inferScope, -1)
 
-  def allocateName(l: Local, ty: WasmType): (Locals.Scope, Int) =
-    val index = localTypes.size
-    localTypes += ty
-    bindings += l -> index
+  def allocateName(l: Local, ty: WasmType, isParam: Bool = false): (Locals.Scope, Int) =
+    val index = if isParam then
+      require(localTypes.isEmpty, "Cannot allocate name for parameter after local v")
+      val index = paramTypes.size
+      paramTypes += ty
+      bindings += l -> index
+      index
+    else
+      val index = paramTypes.size + curThis.flatten.dlof(_ => 1)(0) + localTypes.size
+      localTypes += ty
+      bindings += l -> index
+      index
     (inferScope, index)
 
-    /**
-     * Returns a [Seq] representing the types of all local variables declared
-     * with `(local ...)`.
-     */
-  def getLocalsTypes: Seq[WasmType] =
-    localTypes.slice(nParams, localTypes.size).toSeq
+  def getThisScope: Opt[Locals] =
+    curThis.fold(parent.flatMap(_.getThisScope))(_ => S(this))
+
+  def getOuterThisScope: Opt[Locals] = parent.flatMap(_.getThisScope)
+
+  def nestRebindThis[R](thisSym: Opt[(
+      InnerSymbol,
+      WasmType
+  )])(k: Locals ?=> R)(using Raise): (Opt[?], R) =
+    val nested = Locals(S(this), S(thisSym), Seq.empty)
+    val res = k(using nested)
+    getOuterThisScope match
+      case N => (N, res)
+      case S(outer) =>
+        raise(ErrorReport(
+          msg"Locals::nestRebindThis: Getting outer scope (`getOuterThisScope.isDefined`) not supported" -> N :: Nil,
+          source = Diagnostic.Source.Compilation
+        ))
+        (N, res)
+
+  /**
+   * Returns a [Seq] representing the types of all local variables declared with
+   * `(local ...)`.
+   */
+  def getLocalsTypes: Seq[WasmType] = localTypes.toSeq
 
     /**
      * Returns a [Seq] representing the types of all local variables, including
      * parameters.
      */
-  def getTypes: Seq[WasmType] = localTypes.toSeq
+  def getTypes: Seq[WasmType] = (paramTypes.toSeq ++ curThis.flatten.map(_._2).toSeq ++ getLocalsTypes)
 
 end Locals
 
@@ -1061,7 +1090,7 @@ class WatBackend
       case Define(defn, rst) =>
         def mkThis(sym: InnerSymbol): ExprProxy =
           result(Value.This(sym))
-        defn match
+        val resWat = defn match
           case ValDefn(tsym, sym, p) =>
             tsym.owner match
               case N =>
@@ -1091,186 +1120,226 @@ class WatBackend
                   ),
                   resultType = S(rstWat.getType)
                 )
-          case FunDefn(owner, sym, Nil, body) =>
-            lastWords("cannot generate function with no parameter list")
-          case FunDefn(owner, sym, params, body) =>
-            if owner.nonEmpty then
-              raise(
-                WarningReport(
-                  msg"WatBackend::returningTerm for ${defn.toString} (owner.nonEmpty == true) not implemented yet" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
+          case defn: (FunDefn | ClsLikeDefn) =>
+            val outerLocals = locals
+            val (thisProxy, res) = locals.nestRebindThis(
+              // * Either this is an InnerSymbol or this is a Fun,
+              // * and we need to rebind `this` to None to shadow it.
+              defn.innerSym.collectFirst:
+                case s: InnerSymbol =>
+                  val ty = defn match
+                    case ClsLikeDefn(
+                          _,
+                          isym,
+                          _,
+                          _,
+                          _,
+                          _,
+                          _,
+                          _,
+                          privFlds,
+                          pubFlds,
+                          _,
+                          _
+                        ) => mod.addType(
+                        S(isym.nme),
+                        StructType(
+                          pubFlds.map(f =>
+                            Field(this.anyref, mutable = true, id = S(f._2.nme))
+                          ) ++ privFlds.map(f =>
+                            Field(this.anyref, mutable = true, id = S(f.nme))
+                          )
+                        )
+                      )
+                    case _ => TODO(s"innerSym for $defn not implemented")
+                  (s, RefType(ty, nullable = false))
+            ):
+              boundary:
+                defn match
+                  case FunDefn(owner, sym, Nil, body) =>
+                    lastWords("cannot generate function with no parameter list")
+                  case FunDefn(owner, sym, params, body) =>
+                    if owner.nonEmpty then
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (owner.nonEmpty == true) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                      break(mod.unreachable())
+                    val bodyExpr = block(body)
+                    mod.addFunction(
+                      sym.nme,
+                      params = this.createType(
+                        params.flatMap(_.params).map(_ => this.anyref).toSeq
+                      ),
+                      results = bodyExpr.getWasmType(false),
+                      vars = Seq(),
+                      body = bodyExpr
+                    )
+                    returningTerm(rst)
+                  case ClsLikeDefn(
+                        ownr,
+                        isym,
+                        sym,
+                        kind,
+                        paramsOpt,
+                        auxParams,
+                        par,
+                        mtds,
+                        privFlds,
+                        pubFlds,
+                        preCtor,
+                        ctor
+                      ) =>
+                    // Guard against unsupported features for now
+                    if ownr.nonEmpty then
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (`owner.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                      break(mod.unreachable())
+                    if !(kind is syntax.Cls) then
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (`!(kind is syntax.Cls)`) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                      break(mod.unreachable())
+                    if auxParams.nonEmpty then
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (`auxParams.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                      break(mod.unreachable())
+                    if par.nonEmpty then
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (`parentPath.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                      break(mod.unreachable())
+                    if mtds.nonEmpty then
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (`methods.nonEmpty == true`) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                    preCtor match
+                      case End(_) => ()
+                      case _ => raise(
+                          WarningReport(
+                            msg"WatBackend::returningTerm for ${defn.toString} (`preCtor != End`) not implemented yet" -> N :: Nil,
+                            source = Diagnostic.Source.Compilation
+                          )
+                        )
+
+                    val clsParams = paramsOpt.fold(Nil)(_.paramSyms)
+                    val ctorParams = clsParams.map: p =>
+                      p -> locals.allocateName(p, this.anyref, true)
+                    val ctorFields = ctorParams.filter: p =>
+                      p._1.decl match
+                        case S(Param(flags = FldFlags(isVal = true))) => true
+                        case _ => false
+                    val ctorAuxParams = auxParams.map: ps =>
+                      ps.params.map: p =>
+                        p.sym -> locals.allocateName(p.sym, this.anyref)
+
+                    val isModule = kind is syntax.Mod
+
+                    // TODO(Derppening): Prepend s"$fileName/${isym.nme}$$${counter++}"
+                    val typeref = mod.getType(isym.nme).getOrElse:
+                      lastWords("Expected type to be present in WAT during codegen for class definition")
+
+                    raise(
+                      WarningReport(
+                        msg"WatBackend::returningTerm for ${defn.toString} (constructor/method generation) not implemented yet" -> N :: Nil,
+                        source = Diagnostic.Source.Compilation
+                      )
+                    )
+
+                    // If there are no ctor params, pop one param list off the aux params
+                    val (newCtorAuxParams, initialCtorParams) = paramsOpt match
+                      case None => ctorAuxParams match
+                          case head :: next => (next, head)
+                          case Nil => (ctorAuxParams, Nil)
+                      case Some(_) => (ctorAuxParams, ctorParams)
+
+                    val thisLocalIdx = initialCtorParams.size
+                    val ctorCode = mod.block(
+                      label = N,
+                      Seq(
+                        mod.local.set(
+                          thisLocalIdx,
+                          mod.struct.new_default(RefType(
+                            typeref,
+                            nullable = false
+                          ))
+                        ),
+                        block(ctor),
+                        mod.`return`(S(mod.local.get(
+                          thisLocalIdx,
+                          RefType(typeref, nullable = false)
+                        )))
+                      ),
+                      resultType = S(RefType(typeref, nullable = false))
+                    )
+
+                    val ctorAux = if newCtorAuxParams.isEmpty then
+                      ctorCode
+                    else
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (auxiliary constructor generation) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                      mod.unreachable()
+
+                    val ctorBod = if isModule then
+                      raise(
+                        InternalError(
+                          msg"WatBackend::returningTerm: `isModule` should be guarded and should not reach here!" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
+                      mod.unreachable()
+                    else
+                      ctorAux
+
+                    mod.addFunction(
+                      s"${isym.nme}::<constructor>",
+                      params =
+                        createType(
+                          Seq.fill(initialCtorParams.size)(this.anyref)
+                        ),
+                      results = RefType(typeref, nullable = false),
+                      vars = Seq(RefType(typeref, nullable = false)),
+                      body = ctorBod
+                    )
+
+                    mod.nop()
+                end match
+            end val
+
+            thisProxy match
+              case S(proxy) => ???
+              case N =>
+                val retWat = returningTerm(rst)
+                mod.block(
+                  N,
+                  Seq(res, retWat),
+                  retWat.getType.optionUnless(_ is this.none)
                 )
-              )
-              return mod.unreachable()
-            val bodyExpr = block(body)
-            mod.addFunction(
-              sym.nme,
-              params = this.createType(
-                params.flatMap(_.params).map(_ => this.anyref).toSeq
-              ),
-              results = bodyExpr.getWasmType(false),
-              vars = Seq(),
-              body = bodyExpr
-            )
-            returningTerm(rst)
-          case ClsLikeDefn(
-                ownr,
-                isym,
-                sym,
-                kind,
-                paramsOpt,
-                auxParams,
-                par,
-                mtds,
-                privFlds,
-                pubFlds,
-                preCtor,
-                ctor
-              ) =>
-            // Guard against unsupported features for now
-            if ownr.nonEmpty then
-              raise(
-                WarningReport(
-                  msg"WatBackend::returningTerm for ${defn.toString} (`owner.nonEmpty == true`) not implemented yet" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
-                )
-              )
-              return mod.unreachable()
-            if !(kind is syntax.Cls) then
-              raise(
-                WarningReport(
-                  msg"WatBackend::returningTerm for ${defn.toString} (`!(kind is syntax.Cls)`) not implemented yet" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
-                )
-              )
-              return mod.unreachable()
-            if auxParams.nonEmpty then
-              raise(
-                WarningReport(
-                  msg"WatBackend::returningTerm for ${defn.toString} (`auxParams.nonEmpty == true`) not implemented yet" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
-                )
-              )
-              return mod.unreachable()
-            if par.nonEmpty then
-              raise(
-                WarningReport(
-                  msg"WatBackend::returningTerm for ${defn.toString} (`parentPath.nonEmpty == true`) not implemented yet" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
-                )
-              )
-              return mod.unreachable()
-            if mtds.nonEmpty then
-              raise(
-                WarningReport(
-                  msg"WatBackend::returningTerm for ${defn.toString} (`methods.nonEmpty == true`) not implemented yet" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
-                )
-              )
-            preCtor match
-              case End(_) => ()
-              case _ => raise(
-                  WarningReport(
-                    msg"WatBackend::returningTerm for ${defn.toString} (`preCtor != End`) not implemented yet" -> N :: Nil,
-                    source = Diagnostic.Source.Compilation
-                  )
-                )
 
-            val clsParams = paramsOpt.fold(Nil)(_.paramSyms)
-            val ctorParams = clsParams
-            val ctorFields = ctorParams.filter: p =>
-              p.decl match
-                case S(Param(flags = FldFlags(isVal = true))) => true
-                case _ => false
-            val ctorAuxParams = auxParams.map(_.params)
-
-            val isModule = kind is syntax.Mod
-
-            // TODO(Derppening): Prepend s"$fileName/${isym.nme}$$${counter++}"
-            val typeref = mod.addType(
-              S(isym.nme),
-              StructType(
-                pubFlds.map(f =>
-                  Field(this.anyref, mutable = true, id = S(f._2.nme))
-                ) ++ privFlds.map(f =>
-                  Field(this.anyref, mutable = true, id = S(f.nme))
-                )
-              )
-            )
-
-            raise(
-              WarningReport(
-                msg"WatBackend::returningTerm for ${defn.toString} (constructor/method generation) not implemented yet" -> N :: Nil,
-                source = Diagnostic.Source.Compilation
-              )
-            )
-
-            // If there are no ctor params, pop one param list off the aux params
-            val (newCtorAuxParams, initialCtorParams) = paramsOpt match
-              case None => ctorAuxParams match
-                  case head :: next => (next, head)
-                  case Nil => (ctorAuxParams, Nil)
-              case Some(_) => (ctorAuxParams, ctorParams)
-
-            val thisLocalIdx = initialCtorParams.size
-            val ctorLocals = Locals(
-              S(summon[Locals]),
-              S(S((isym, RefType(typeref, nullable = false)))),
-              initialCtorParams.map: param =>
-                val paramSym = param match
-                  case Param(_, sym, _, _) => sym
-                  case v: VarSymbol => v
-                (paramSym, this.anyref)
-            )
-
-            val ctorCode = mod.block(
-              label = N,
-              Seq(
-                mod.local.set(
-                  thisLocalIdx,
-                  mod.struct.new_default(RefType(typeref, nullable = false))
-                ),
-                block(ctor)(using mod, ctorLocals, summon[Raise]),
-                mod.`return`(S(mod.local.get(
-                  thisLocalIdx,
-                  RefType(typeref, nullable = false)
-                )))
-              ),
-              resultType = S(RefType(typeref, nullable = false))
-            )
-
-            val ctorAux = if newCtorAuxParams.isEmpty then
-              ctorCode
-            else
-              raise(
-                WarningReport(
-                  msg"WatBackend::returningTerm for ${defn.toString} (auxiliary constructor generation) not implemented yet" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
-                )
-              )
-              mod.unreachable()
-
-            val ctorBod = if isModule then
-              raise(
-                InternalError(
-                  msg"WatBackend::returningTerm: `isModule` should be guarded and should not reach here!" -> N :: Nil,
-                  source = Diagnostic.Source.Compilation
-                )
-              )
-              mod.unreachable()
-            else
-              ctorAux
-
-            mod.addFunction(
-              s"${isym.nme}::<constructor>",
-              params =
-                createType(Seq.fill(initialCtorParams.size)(this.anyref)),
-              results = RefType(typeref, nullable = false),
-              vars = Seq(RefType(typeref, nullable = false)),
-              body = ctorBod
-            )
-
-            returningTerm(rst)
+        resWat
       case Return(Value.Lit(UnitLit(false)), false) => mod.`return`(N)
       case Return(res, true) =>
         val resValue = result(res)
