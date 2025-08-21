@@ -1271,14 +1271,6 @@ class WatBackend
             )
 
             returningTerm(rst)
-          case _ =>
-            raise(
-              WarningReport(
-                msg"WatBackend::returningTerm for ${defn.toString} not implemented yet" -> N :: Nil,
-                source = Diagnostic.Source.Compilation
-              )
-            )
-            mod.unreachable()
       case Return(Value.Lit(UnitLit(false)), false) => mod.`return`(N)
       case Return(res, true) =>
         val resValue = result(res)
