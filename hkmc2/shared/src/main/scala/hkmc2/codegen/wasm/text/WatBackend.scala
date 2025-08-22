@@ -798,6 +798,32 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
   end local
 
+  def global = new Global:
+    def get(index: Int, ty: WasmType): ExprProxy =
+      ExprProxy(
+        S(
+          FoldedInstr(
+            "global.get",
+            Seq(s"$index"),
+            Seq(),
+            ty
+          )
+        )
+      )
+
+    def set(index: Int, value: ExprProxy): ExprProxy =
+      ExprProxy(
+        S(
+          FoldedInstr(
+            "global.set",
+            Seq(s"$index"),
+            Seq(value.inner),
+            NoneType
+          )
+        )
+      )
+  end global
+
   def toWat: Document = mod.toWat
 end ModuleProxy
 

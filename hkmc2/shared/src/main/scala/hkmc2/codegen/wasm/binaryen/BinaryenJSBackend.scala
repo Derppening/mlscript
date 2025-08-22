@@ -296,6 +296,18 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
         new ExprRef(freshId)
   end local
 
+  def global: Global = new Global:
+    def get(index: Int, ty: TypeRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.global.get(${index.toString}, ${ty.toJSRepr});"
+        new ExprRef(freshId)
+
+    def set(index: Int, value: ExprRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.global.set(${index.toString}, ${value.toJSRepr});"
+        new ExprRef(freshId)
+  end global
+
   def toJSRepr: Document = varId.toJSRepr
 end ModRef
 

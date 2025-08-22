@@ -126,6 +126,15 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     /** Creates a `local.set` instruction. */
     def set(index: Int, value: Expr): Expr
   end Local
+  
+  /** Abstract handle for `global`-related instructions. */
+  abstract class Global:
+    /** Creates a `local.get` instruction. */
+    def get(index: Int, ty: Type): Expr
+
+    /** Creates a `local.set` instruction. */
+    def set(index: Int, value: Expr): Expr
+  end Global
 
   /** Concrete type representing an `export` section. */
   type Exprt <: Export[Exprt]
@@ -140,7 +149,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   type FuncInfo <: FunctionInfo[Type]
 
   /** Concrete type representing a `global` section. */
-  type Glob <: Global[Glob]
+  type Glob <: wasm.Global[Glob]
 
   /** Adds a function to this module. */
   def addFunction(
@@ -314,6 +323,9 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Returns a handle to create `local` instructions. */
   def local: Local
+  
+  /** Returns a handle to create `global` instructions. */
+  def global: Global
 
 end Module
 
