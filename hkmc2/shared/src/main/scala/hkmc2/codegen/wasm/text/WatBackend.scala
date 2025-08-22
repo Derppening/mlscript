@@ -230,7 +230,6 @@ class Locals(
      * `thisSym` symbol.
      */
   def findThis_!(thisSym: InnerSymbol)(using Raise): (Locals.Scope, Int) =
-    println(s"findThis_! on ${thisSym.toLoc} with curThis=`$curThis`")
     curThis.map(_.map(_._1)) match
       case S(S(`thisSym`)) =>
         // `this` is bound to the first local variable
