@@ -1256,7 +1256,7 @@ class WatBackend
                     val isModule = kind is syntax.Mod
 
                     // TODO(Derppening): Prepend s"$fileName/${isym.nme}$$${counter++}"
-                    val typeref = mod.getType(isym.nme).getOrElse:
+                    val typeref = mod.getType(isym.nme).dlof(_ => TypeRef(isym.nme)):
                       lastWords("Expected type to be present in WAT during codegen for class definition")
 
                     raise(
