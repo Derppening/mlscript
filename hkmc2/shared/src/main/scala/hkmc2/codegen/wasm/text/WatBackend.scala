@@ -323,6 +323,9 @@ class Locals(
   def getTypes: Seq[WasmType] =
     paramTypes.toSeq ++ curThis.flatten.map(_._2).toSeq ++ getLocalsTypes
 
+  /** Returns a [Seq] representing the types of all global variables. */
+  def getGlobalTypes: Seq[WasmType] = parent.dlof(_.getGlobalTypes)(getTypes)
+
 end Locals
 
 /**
@@ -880,7 +883,7 @@ class WatBackend
     )
     summon[ModuleProxy].unreachable()
 
-  def getVar(l: Local)(using ModuleProxy, Raise): ExprProxy =
+  def getVar(l: Local)(using ModuleProxy, Locals, Raise): ExprProxy =
     l match
       case ts: semantics.TermSymbol =>
         raise(
@@ -905,14 +908,13 @@ class WatBackend
         val sigType = newTypeBuilder(1)
         sigType.setSignatureType(0, funcInfo.params, funcInfo.results)
         mod.ref.func(ts.nme, sigType.build())
-      case l =>
-        raise(
-          WarningReport(
-            msg"WatBackend::getVar for ${l.toString} (${l.getClass().getName()}) not implemented yet" -> N :: Nil,
-            source = Diagnostic.Source.Compilation
-          )
-        )
-        summon[ModuleProxy].unreachable()
+      case _ =>
+        val mod = summon[ModuleProxy]
+        locals.lookup_!(l) match
+          case (Locals.Scope.Global, idx) => 
+            mod.global.get(idx, locals.getGlobalTypes(idx))
+          case (Locals.Scope.Local, idx) =>
+            mod.local.get(idx, locals.getLocalsTypes(idx))
 
   def argument(a: Arg)(using ModuleProxy, Locals, Raise): ExprProxy =
     if a.spread.nonEmpty then
