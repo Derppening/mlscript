@@ -310,8 +310,11 @@ class Locals(
   /**
    * Returns a [Seq] representing the types of all local variables declared with
    * `(local ...)`.
+   *
+   * This includes the implicit `this` in the first position, if present in the function.
    */
-  def getLocalsTypes: Seq[WasmType] = localTypes.toSeq
+  def getLocalsTypes: Seq[WasmType] =
+    curThis.flatten.map(_._2).toSeq ++ localTypes.toSeq
 
   /**
    * Returns a [Seq] representing the types of all local variables, including
