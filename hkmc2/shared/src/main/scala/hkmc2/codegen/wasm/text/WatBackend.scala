@@ -265,15 +265,23 @@ class Locals(
       ))
       (inferScope, -1)
 
-  def allocateName(l: Local, ty: WasmType, isParam: Bool = false): (Locals.Scope, Int) =
+  def allocateName(
+      l: Local,
+      ty: WasmType,
+      isParam: Bool = false
+  ): (Locals.Scope, Int) =
     val index = if isParam then
-      require(localTypes.isEmpty, "Cannot allocate name for parameter after local v")
+      require(
+        localTypes.isEmpty,
+        "Cannot allocate name for parameter after local v"
+      )
       val index = paramTypes.size
       paramTypes += ty
       bindings += l -> index
       index
     else
-      val index = paramTypes.size + curThis.flatten.dlof(_ => 1)(0) + localTypes.size
+      val index =
+        paramTypes.size + curThis.flatten.dlof(_ => 1)(0) + localTypes.size
       localTypes += ty
       bindings += l -> index
       index
@@ -305,11 +313,12 @@ class Locals(
    */
   def getLocalsTypes: Seq[WasmType] = localTypes.toSeq
 
-    /**
-     * Returns a [Seq] representing the types of all local variables, including
-     * parameters.
-     */
-  def getTypes: Seq[WasmType] = (paramTypes.toSeq ++ curThis.flatten.map(_._2).toSeq ++ getLocalsTypes)
+  /**
+   * Returns a [Seq] representing the types of all local variables, including
+   * parameters.
+   */
+  def getTypes: Seq[WasmType] =
+    paramTypes.toSeq ++ curThis.flatten.map(_._2).toSeq ++ getLocalsTypes
 
 end Locals
 
@@ -899,7 +908,9 @@ class WatBackend
   def fieldSelect(`this`: ExprProxy, s: Str)(using mod: ModuleProxy): Int =
     `this`.getType match
       case RefType(TypeRef(id), _) =>
-        mod.getType(id).get.asInstanceOf[StructType].fields.indexWhere(_.id.exists(_ == s))
+        mod.getType(
+          id
+        ).get.asInstanceOf[StructType].fields.indexWhere(_.id.exists(_ == s))
       case RefType(StructType(fields), _) =>
         fields.indexWhere(_.id.exists(_ == s))
       case _ =>
@@ -1256,8 +1267,11 @@ class WatBackend
                     val isModule = kind is syntax.Mod
 
                     // TODO(Derppening): Prepend s"$fileName/${isym.nme}$$${counter++}"
-                    val typeref = mod.getType(isym.nme).dlof(_ => TypeRef(isym.nme)):
-                      lastWords("Expected type to be present in WAT during codegen for class definition")
+                    val typeref =
+                      mod.getType(isym.nme).dlof(_ => TypeRef(isym.nme)):
+                        lastWords(
+                          "Expected type to be present in WAT during codegen for class definition"
+                        )
 
                     raise(
                       WarningReport(
