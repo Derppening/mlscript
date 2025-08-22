@@ -896,8 +896,10 @@ class WatBackend
       r: Result
   )(using ModuleProxy, Locals, Raise): ExprProxy = result(r)
 
-  def fieldSelect(`this`: ExprProxy, s: Str): Int =
+  def fieldSelect(`this`: ExprProxy, s: Str)(using mod: ModuleProxy): Int =
     `this`.getType match
+      case RefType(TypeRef(id), _) =>
+        mod.getType(id).get.asInstanceOf[StructType].fields.indexWhere(_.id.exists(_ == s))
       case RefType(StructType(fields), _) =>
         fields.indexWhere(_.id.exists(_ == s))
       case _ =>
