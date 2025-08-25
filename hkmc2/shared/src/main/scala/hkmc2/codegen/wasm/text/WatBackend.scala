@@ -1131,6 +1131,10 @@ class WatBackend
   )(using ModuleProxy, Locals, Raise): ExprProxy =
     val mod = summon[ModuleProxy]
     t match
+      case _: HandleBlock =>
+        errExpr(
+          msg"This code requires effect handler instrumentation but was compiled without it."
+        )
       case Define(defn, rst) =>
         def mkThis(sym: InnerSymbol): ExprProxy =
           result(Value.This(sym))
