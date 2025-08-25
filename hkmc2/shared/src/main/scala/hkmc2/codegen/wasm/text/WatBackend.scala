@@ -311,7 +311,8 @@ class Locals(
    * Returns a [Seq] representing the types of all local variables declared with
    * `(local ...)`.
    *
-   * This includes the implicit `this` in the first position, if present in the function.
+   * This includes the implicit `this` in the first position, if present in the
+   * function.
    */
   def getLocalsTypes: Seq[WasmType] =
     curThis.flatten.map(_._2).toSeq ++ localTypes.toSeq
@@ -911,7 +912,7 @@ class WatBackend
       case _ =>
         val mod = summon[ModuleProxy]
         locals.lookup_!(l) match
-          case (Locals.Scope.Global, idx) => 
+          case (Locals.Scope.Global, idx) =>
             mod.global.get(idx, locals.getGlobalTypes(idx))
           case (Locals.Scope.Local, idx) =>
             mod.local.get(idx, locals.getLocalsTypes(idx))
