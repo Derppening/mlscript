@@ -69,20 +69,17 @@ foo()
 //│   (type $_0 (func (result (ref null i31))))
 //│   (type $_1 (func (result (ref null i31))))
 //│   (type $_2 (func (result (ref null i31))))
-//│   (type $_3 (func (result (ref null i31))))
 //│   (func $foo (result (ref null i31)) 
 //│     (return
 //│       (ref.i31
 //│         (i32.const 42))))
 //│   (func $main (result (ref null i31)) 
 //│     (block (result (ref null i31))
+//│       (nop)
 //│       (call_ref $_1
-//│         (ref.func $foo))
-//│       (call_ref $_2
 //│         (ref.func $foo))))
 //│   (export "main" (func $main))
 //│   (elem declare func $foo)
 //│   (elem declare func $main))
 //│ rwasm: Running
-//│ Uncaught:
-//│ CompileError: WebAssembly.instantiate(): Compiling function #1 failed: expected 1 elements on the stack for fallthru, found 2 @+58
+//│ 42

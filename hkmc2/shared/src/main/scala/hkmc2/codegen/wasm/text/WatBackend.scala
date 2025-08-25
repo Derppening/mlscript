@@ -1208,7 +1208,7 @@ class WatBackend
                       vars = Seq(),
                       body = bodyExpr
                     )
-                    returningTerm(rst)
+                    mod.nop()
                   case ClsLikeDefn(
                         ownr,
                         isym,
