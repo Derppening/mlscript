@@ -73,10 +73,10 @@ object Elaborator:
         // * but they should be allowed to shadow previous imports.
         env.get(kv._1).forall(_.isImport))
     
-    def withMembers(members: Iterable[Str -> MemberSymbol[?]], out: Opt[Symbol] = N): Ctx =
+    def withMembers(members: Iterable[Str -> MemberSymbol[?]]): Ctx =
       copy(env = env ++ members.map:
         case (nme, sym) =>
-          val elem = out orElse outer.inner match
+          val elem = outer.inner match
             case S(outer) => Ctx.SelElem(outer, sym.nme, S(sym), isImport = false)
             case N => Ctx.RefElem(sym)
           nme -> elem
@@ -468,7 +468,7 @@ extends Importer:
           N
         case Nil => N
       
-      if syms.length + outer.count(_ => true) != tvs.length then
+      if syms.length + outer.count(_ => true) =/= tvs.length then
         raise(ErrorReport(msg"Illegal forall annotation." -> tree.toLoc :: Nil))
         Term.Error
       else
@@ -666,7 +666,7 @@ extends Importer:
         )(App(Sel(dummyIdent, retMtdTree), argTree), N, rs)
       case ReturnHandler.NotInFunction =>
         raise:
-          ErrorReport(msg"Return statements are not allowed outside of a function." -> tree.toLoc :: Nil)
+          ErrorReport(msg"Return statements are not allowed outside of functions." -> tree.toLoc :: Nil)
         Term.Error
       case ReturnHandler.Direct =>
         Term.Ret(subterm(body))
@@ -1008,8 +1008,7 @@ extends Importer:
             val sym = members.getOrElse(id.name, die)
             val owner = ctx.outer.inner
             val isMethod = owner.exists(_.isInstanceOf[ClassSymbol])
-            val nonLocalRetHandler = TempSymbol(N, s"nonLocalRetHandler$$${id.name}")
-            val tdf = ctx.nest(OuterCtx.Function(nonLocalRetHandler)).givenIn:
+            val tdf = ctx.nest(OuterCtx.NonReturnContext).givenIn: newCtx ?=>
               // * Add type parameters to context
               val (tps, newCtx1) = td.typeParams match
                 case S(t) => 
@@ -1030,20 +1029,24 @@ extends Importer:
                 //              ^^^^^^
                 case TypeDef(Mod, st, N) => term(st)(using newCtx)
                 case st => term(st)(using newCtx)
-              val b = if ctx.mode != Mode.Light
-                then rhs.map(term(_)(using newCtx))
-                else S(Term.Missing)
-              val nb: Opt[Term] = if nonLocalRetHandler.directRefs.isEmpty then b else b.map: inner =>
-                val clsSym = ClassSymbol(DummyTypeDef(Cls), Ident("‹non-local return effect›"))
-                val valueSym = VarSymbol(Ident("value"))
-                val resumeSym = VarSymbol(Ident("resume"))
-                val mtdSym = BlockMemberSymbol("ret", Nil, true)
-                val tsym = TermSymbol(Fun, N, Ident("ret"))
-                val td = TermDefinition(
-                  Fun, mtdSym, tsym, PlainParamList(Param(FldFlags.empty, valueSym, N, Modulefulness.none) :: Nil) :: Nil,
-                  N, N, S(valueSym.ref(Ident("value"))), FlowSymbol(s"‹result of non-local return›"), TermDefFlags.empty, Modulefulness.none, Nil)
-                val htd = HandlerTermDefinition(resumeSym, td)
-                Term.Handle(nonLocalRetHandler, state.nonLocalRetHandlerTrm, Nil, clsSym, htd :: Nil, inner)
+              val body: Opt[Term] = rhs match
+                case N => N
+                case _ if ctx.mode is Mode.Light => S(Term.Missing)
+                case S(rhs) => S:
+                  val nonLocalRetHandler = TempSymbol(N, s"nonLocalRetHandler$$${id.name}")
+                  newCtx.nest(OuterCtx.Function(nonLocalRetHandler)).givenIn: newCtx ?=>
+                    val b = term(rhs)(using newCtx)
+                    if nonLocalRetHandler.directRefs.isEmpty then b else
+                      val clsSym = ClassSymbol(DummyTypeDef(Cls), Ident("‹non-local return effect›"))
+                      val valueSym = VarSymbol(Ident("value"))
+                      val resumeSym = VarSymbol(Ident("resume"))
+                      val mtdSym = BlockMemberSymbol("ret", Nil, true)
+                      val tsym = TermSymbol(Fun, N, Ident("ret"))
+                      val td = TermDefinition(
+                        Fun, mtdSym, tsym, PlainParamList(Param(FldFlags.empty, valueSym, N, Modulefulness.none) :: Nil) :: Nil,
+                        N, N, S(valueSym.ref(Ident("value"))), FlowSymbol(s"‹result of non-local return›"), TermDefFlags.empty, Modulefulness.none, Nil)
+                      val htd = HandlerTermDefinition(resumeSym, td)
+                      Term.Handle(nonLocalRetHandler, state.nonLocalRetHandlerTrm, Nil, clsSym, htd :: Nil, b)
               val r = FlowSymbol(s"‹result of ${sym}›")
               
               val mfn = st match
@@ -1056,7 +1059,7 @@ extends Importer:
                   Modulefulness.none
               
               val tsym = TermSymbol(k, owner, id) // TODO?
-              val tdf = TermDefinition(k, sym, tsym, pss, tps, s, nb, r, 
+              val tdf = TermDefinition(k, sym, tsym, pss, tps, s, body, r, 
                 TermDefFlags.empty.copy(isMethod = isMethod), mfn, annotations)
               sym.defn = S(tdf)
               
@@ -1160,7 +1163,7 @@ extends Importer:
             val params = fields.collect:
               case (f: LetDecl) =>
                 f.sym.nme -> f.sym
-            ctx.withMembers(valParams, ctx.outer.inner) ++ params
+            ctx.withMembers(valParams) ++ params
           
           val (blk, c) = fn(using ctxWithFields)
           val blkWithFields: Blk = blk.copy(stats = fields ::: blk.stats)
@@ -1271,7 +1274,7 @@ extends Importer:
         case _ => go(sts, Nil, res :: acc)
     end go
     
-    c.withMembers(members, c.outer.inner).givenIn:
+    c.withMembers(members).givenIn:
       go(blk.desugStmts, Nil, Nil)
   
   

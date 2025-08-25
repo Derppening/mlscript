@@ -349,15 +349,25 @@ class ParseRules(using State):
       case (kw, body) => Tree.Modified(kw, body)
     },
     Kw(`do`)(
-      ParseRule(s"`do` keyword")(
-        exprOrBlk(ParseRule(s"`do` body")(end(()))):
+      ParseRule(s"'do' keyword")(
+        exprOrBlk(ParseRule(s"'do' body")(end(()))):
+          discard
+        *)
+    ) { case (kw, body) => Tree.PrefixApp(kw, body) },
+    Kw(`return`)(
+      ParseRule(s"'return' keyword")(
+        // * The Block alternative is important, otherwise
+        // *   > return
+        // *   >   print("returning...")
+        // *   >   x
+        // * is terated as a keyword stutter: { return print("returning..."); return x }
+        exprOrBlk(ParseRule(s"'return' body")(end(()))):
           discard
         *)
     ) { case (kw, body) => Tree.PrefixApp(kw, body) },
     prefixed(`drop`),
     prefixed(`not`),
     prefixed(`new!`),
-    prefixed(`return`),
     prefixed(`throw`),
     prefixed(`import`), // TODO improve – only allow strings
     modified(`virtual`),
