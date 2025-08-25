@@ -208,7 +208,7 @@ object Elaborator:
     case Full
     case Light
   
-  type Ctxl[A] = Ctx ?=> A
+  type Ctxl[A] = Ctx ?=> Cfg[A]
   
   transparent inline def ctx(using Ctx): Ctx = summon
   
@@ -340,7 +340,7 @@ extends Importer:
     if params.isEmpty then st
     else Term.Lam(PlainParamList(params), st)
   
-  def subterm(tree: Tree, inAppPrefix: Bool = false, inTyAppPrefix: Bool = false)(using Ctx)(using UnderCtx): Term =
+  def subterm(tree: Tree, inAppPrefix: Bool = false, inTyAppPrefix: Bool = false): Ctxl[UnderCtx ?=> Term] =
   trace[Term](s"Elab subterm ${tree.showDbg}", r => s"~> $r"):
     tree.desugared match
     case Trm(term) => term
@@ -655,15 +655,20 @@ extends Importer:
     case PrefixApp(kw @ Keywrd(Keyword.`return`), body) =>
       ctx.getRetHandler match
       case ReturnHandler.Required(sym) =>
-        tl.log(s"Non-local return: $sym")
-        val rs = FlowSymbol("‹app-res›")
-        val retMtdTree = new Ident("ret")
-        val argTree = new Tup(body :: Nil)
-        val dummyIdent = new Ident("return").withLocOf(kw)
-        Term.App(
-          Term.Sel(sym.ref(dummyIdent), retMtdTree)(S(state.nonLocalRet)),
-          Term.Tup(PlainFld(subterm(body)) :: Nil)(argTree)
-        )(App(Sel(dummyIdent, retMtdTree), argTree), N, rs)
+        log(s"Non-local return: $sym")
+        if config.effectHandlers.isEmpty then
+          raise:
+            ErrorReport(msg"Non-local return statements are only supported with effect handlers enabled." -> tree.toLoc :: Nil)
+          Term.Error
+        else
+          val rs = FlowSymbol("‹app-res›")
+          val retMtdTree = new Ident("ret")
+          val argTree = new Tup(body :: Nil)
+          val dummyIdent = new Ident("return").withLocOf(kw)
+          Term.App(
+            Term.Sel(sym.ref(dummyIdent), retMtdTree)(S(state.nonLocalRet)),
+            Term.Tup(PlainFld(subterm(body)) :: Nil)(argTree)
+          )(App(Sel(dummyIdent, retMtdTree), argTree), N, rs)
       case ReturnHandler.NotInFunction =>
         raise:
           ErrorReport(msg"Return statements are not allowed outside of functions." -> tree.toLoc :: Nil)
@@ -802,10 +807,10 @@ extends Importer:
   
   
   
-  def block(sts: Ls[Tree], hasResult: Bool)(using c: Ctx)(using UnderCtx): (Blk, Ctx) =
+  def block(sts: Ls[Tree], hasResult: Bool)(using UnderCtx): Ctxl[(Blk, Ctx)] =
     block(new Block(sts), hasResult)
   
-  def block(blk: Block, hasResult: Bool)(using c: Ctx)(using UnderCtx): (Blk, Ctx) =
+  def block(blk: Block, hasResult: Bool)(using UnderCtx): Ctxl[(Blk, Ctx)] =
     blockOrRcd(blk, hasResult) match
     case (blk: Blk, ctx) => (blk, ctx)
     case (rcd: Rcd, ctx) => (Blk(Nil, rcd), ctx)
@@ -815,8 +820,8 @@ extends Importer:
   // * for these, elaborate with `hasResult = false`, which uses `undefined` as the result
   // * when there is no other result available. This is fine since the value is never used.
   // * These useless trailing `undefined`s are then removed by `Lowering`.
-  def blockOrRcd(blk: Block, hasResult: Bool)(using c: Ctx)(using UnderCtx)
-    : (Blk | Rcd, Ctx)
+  def blockOrRcd(blk: Block, hasResult: Bool)(using UnderCtx)
+    : Ctxl[(Blk | Rcd, Ctx)]
     = trace[(Blk | Rcd, Ctx)](
         pre = s"Elab block ${blk.desugStmts.toString.truncate(100, "[...]")} ${ctx.outer}", r => s"~> ${r._1}"
       ):
@@ -1274,7 +1279,7 @@ extends Importer:
         case _ => go(sts, Nil, res :: acc)
     end go
     
-    c.withMembers(members).givenIn:
+    ctx.withMembers(members).givenIn:
       go(blk.desugStmts, Nil, Nil)
   
   
@@ -1290,7 +1295,7 @@ extends Importer:
         else Term.Lit(UnitLit(false))
     )
   
-  def newOf(td: TypeDef)(using Ctx): Opt[Term.New] =
+  def newOf(td: TypeDef): Ctxl[Opt[Term.New]] =
     td.extension
     match
     case S(ext) => S(term(ProperNew(S(ext), N)))
@@ -1500,13 +1505,13 @@ extends Importer:
           Param(FldFlags.empty, sym, N, Modulefulness.none)
       (vs, ctx ++ vs.map(p => p.sym.name -> p.sym))
   
-  def importFrom(sts: Block)(using c: Ctx): (Blk, Ctx) =
+  def importFrom(sts: Block): Ctxl[(Blk, Ctx)] =
     given UnderCtx = new UnderCtx(N)
     val (res, newCtx) = block(sts, hasResult = false)
     // TODO handle name clashes
     (res, newCtx)
-  
-  def topLevel(sts: Block)(using c: Ctx): (Blk, Ctx) =
+
+  def topLevel(sts: Block): Ctxl[(Blk, Ctx)] =
     given UnderCtx = new UnderCtx(N)
     val (res, ctx) = block(sts, hasResult = false)
     computeVariances(res)

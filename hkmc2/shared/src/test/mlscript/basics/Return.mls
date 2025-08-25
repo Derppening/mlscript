@@ -40,12 +40,12 @@ x => return "whoops"
 //│ ╙──      	     ^^^^^^^^^^^^^^^
 //│ = fun
 
-:ge
+:e
 fun foo() =
   x => return "whoops"
-//│ ╔══[COMPILATION ERROR] Effect handlers are not enabled
+//│ ╔══[ERROR] Non-local return statements are only supported with effect handlers enabled.
 //│ ║  l.45: 	  x => return "whoops"
-//│ ╙──      	  ^^^^^^^^^^^^^^^^^^^^
+//│ ╙──      	       ^^^^^^^^^^^^^^^
 
 :e
 fun foo(x: return "whoops") = 1

@@ -27,7 +27,7 @@ object Desugarer:
     val tupleLast: HashMap[Int, BlockLocalSymbol] = HashMap.empty
 end Desugarer
 
-class Desugarer(elaborator: Elaborator)(using Ctx, Raise, State, UnderCtx):
+class Desugarer(elaborator: Elaborator)(using Ctx, Raise, State, Config, UnderCtx):
   import Desugarer.*, elaborator.term, elaborator.subterm, elaborator.tl, tl.*
   
   // A few helper methods to select useful functions from the runtime.
