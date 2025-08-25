@@ -1172,27 +1172,14 @@ class WatBackend
               defn.innerSym.collectFirst:
                 case s: InnerSymbol =>
                   val ty = defn match
-                    case ClsLikeDefn(
-                          _,
-                          isym,
-                          _,
-                          _,
-                          _,
-                          _,
-                          _,
-                          _,
-                          privFlds,
-                          pubFlds,
-                          _,
-                          _
-                        ) => mod.addType(
-                        S(isym.nme),
+                    case clsLikeDefn: ClsLikeDefn =>
+                      mod.addType(
+                        S(clsLikeDefn.isym.nme),
                         StructType(
-                          pubFlds.map(f =>
-                            Field(this.anyref, mutable = true, id = S(f._2.nme))
-                          ) ++ privFlds.map(f =>
+                          (clsLikeDefn.publicFields.map(
+                            _._2
+                          ) ++ clsLikeDefn.privateFields).map: f =>
                             Field(this.anyref, mutable = true, id = S(f.nme))
-                          )
                         )
                       )
                     case _ => TODO(s"innerSym for $defn not implemented")
