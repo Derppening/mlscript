@@ -282,6 +282,16 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.struct.new_default(${ty.toJSRepr});"
         new ExprRef(freshId)
+
+    def get(index: Int, ref: ExprRef, ty: TypeRef, isSigned: Bool): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.struct.get($index, ${ref.toJSRepr}, ${ty.toJSRepr}, ${isSigned.toString});"
+        new ExprRef(freshId)
+
+    def set(index: Int, ref: ExprRef, value: ExprRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.struct.set($index, ${ref.toJSRepr}, ${value.toJSRepr});"
+        new ExprRef(freshId)
   end struct
 
   def local: Local = new Local:

@@ -116,6 +116,12 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
     /** Creates a `struct.new_default` instruction. */
     def new_default(ty: Type): Expr
+
+    /** Creates a `struct.get` instruction. */
+    def get(index: Int, ref: Expr, ty: Type, isSigned: Bool): Expr
+
+    /** Creates a `struct.set` instruction. */
+    def set(index: Int, ref: Expr, value: Expr): Expr
   end Struct
 
   /** Abstract handle for `local`-related instructions. */
@@ -126,7 +132,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     /** Creates a `local.set` instruction. */
     def set(index: Int, value: Expr): Expr
   end Local
-  
+
   /** Abstract handle for `global`-related instructions. */
   abstract class Global:
     /** Creates a `local.get` instruction. */
@@ -323,7 +329,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Returns a handle to create `local` instructions. */
   def local: Local
-  
+
   /** Returns a handle to create `global` instructions. */
   def global: Global
 

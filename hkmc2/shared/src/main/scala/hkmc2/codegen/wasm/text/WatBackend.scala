@@ -774,6 +774,35 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           )
         )
       )
+
+    def get(
+        index: Int,
+        ref: ExprProxy,
+        ty: WasmType,
+        isSigned: Bool
+    ): ExprProxy =
+      ExprProxy(
+        S(
+          FoldedInstr(
+            "struct.get",
+            Seq(ref.getWasmType(true).toWat, index),
+            Seq(ref.inner),
+            ty
+          )
+        )
+      )
+
+    def set(index: Int, ref: ExprProxy, value: ExprProxy): ExprProxy =
+      ExprProxy(
+        S(
+          FoldedInstr(
+            "struct.set",
+            Seq(ref.getWasmType(true).toWat, index),
+            Seq(ref.inner, value.inner),
+            gen.none
+          )
+        )
+      )
   end struct
 
   def local = new Local:
