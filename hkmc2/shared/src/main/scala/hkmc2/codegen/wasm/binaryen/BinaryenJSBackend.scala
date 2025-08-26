@@ -245,6 +245,11 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   end i32
 
   def ref: Ref = new Ref:
+    def `null`(ty: TypeRef): ExprRef =
+      gen.withFreshVarId: freshId =>
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.null(${ty.toJSRepr});"
+        new ExprRef(freshId)
+
     def func(name: Str, ty: TypeRef): ExprRef =
       gen.withFreshVarId: freshId =>
         gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.ref.func($name, ${ty.toJSRepr});"

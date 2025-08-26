@@ -670,6 +670,21 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   end i32
 
   def ref = new Ref:
+    def `null`(ty: WasmType): ExprProxy =
+      val refType = ty.asInstanceOf[RefType]
+      require(
+        refType.nullable,
+        "`ref.null` requires its reference type to be nullable"
+      )
+      new ExprProxy(
+        S(FoldedInstr(
+          "ref.null",
+          Seq(refType.heapType.toWat),
+          Seq(),
+          ty
+        ))
+      )
+
     def func(name: Str, ty: WasmType): ExprProxy =
       // TODO(Derppening): See if need to convert `ty` into an exact type,
       //                   since the instruction's return type in Binaryen is

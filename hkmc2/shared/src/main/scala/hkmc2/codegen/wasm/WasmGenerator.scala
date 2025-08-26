@@ -88,6 +88,9 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
 
   /** Abstract handle for `ref`-related instructions. */
   abstract class Ref:
+    /** Creates a `ref.null` instruction. */
+    def `null`(ty: Type): Expr
+
     /**
      * Creates a `ref.func` instruction to a function with the given `name` and
      * return type `ty`.
