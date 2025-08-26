@@ -785,7 +785,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         S(
           FoldedInstr(
             "struct.get",
-            Seq(ref.getWasmType(true).toWat, index),
+            Seq(
+              ref.getWasmType(true).asInstanceOf[RefType].heapType.toWat,
+              index
+            ),
             Seq(ref.inner),
             ty
           )
@@ -797,7 +800,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         S(
           FoldedInstr(
             "struct.set",
-            Seq(ref.getWasmType(true).toWat, index),
+            Seq(
+              ref.getWasmType(true).asInstanceOf[RefType].heapType.toWat,
+              index
+            ),
             Seq(ref.inner, value.inner),
             gen.none
           )
@@ -1179,12 +1185,6 @@ class WatBackend
                 )
                 mod.unreachable()
               case S(owner) =>
-                raise(
-                  WarningReport(
-                    msg"WatBackend::returningTerm for ${defn.toString} (`tsym.owner = S(${owner.toString})`) not implemented yet" -> N :: Nil,
-                    source = Diagnostic.Source.Compilation
-                  )
-                )
                 val thisWat = mkThis(owner)
                 val fieldWat = fieldSelect(thisWat, sym.nme)
                 val pWat = result(p)
@@ -1192,7 +1192,7 @@ class WatBackend
                 mod.block(
                   label = N,
                   children = Seq(
-                    mod.unreachable(),
+                    mod.struct.set(fieldWat, thisWat, pWat),
                     rstWat
                   ),
                   resultType = S(rstWat.getType)
@@ -1324,13 +1324,6 @@ class WatBackend
                         lastWords(
                           "Expected type to be present in WAT during codegen for class definition"
                         )
-
-                    raise(
-                      WarningReport(
-                        msg"WatBackend::returningTerm for ${defn.toString} (constructor/method generation) not implemented yet" -> N :: Nil,
-                        source = Diagnostic.Source.Compilation
-                      )
-                    )
 
                     // If there are no ctor params, pop one param list off the aux params
                     val (newCtorAuxParams, initialCtorParams) = paramsOpt match
