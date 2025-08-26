@@ -1470,12 +1470,32 @@ class WatBackend
     // module.setStart(mainFn)
     module
 
+  def blockPreamble(ss: Iterable[Symbol])(using
+      ModuleProxy,
+      Raise,
+      Locals
+  ): ModuleProxy =
+    val mod = summon[ModuleProxy]
+    val vars =
+      ss.filter(locals.lookup(_).isEmpty).toArray.sortBy(_.uid).iterator.map:
+        l =>
+          l -> locals.allocateName(l, this.anyref, false)
+    for (_, (_, (nme))) <- vars do
+      mod.addGlobal(
+        nme.toString,
+        ty = this.anyref,
+        mutable = true,
+        value = mod.ref.`null`(this.anyref)
+      )
+    mod
+
   // TODO(Derppening): Make this return Seq[ExprProxy], since Wasm allows
   //                   returning multiple values
   def block(
       t: Block
   )(using ModuleProxy, Locals, Raise): ExprProxy =
-    returningTerm(t)
+    val modWithPreamble = blockPreamble(t.definedVars)
+    returningTerm(t)(using modWithPreamble, summon[Locals], summon[Raise])
 end WatBackend
 
 @main
