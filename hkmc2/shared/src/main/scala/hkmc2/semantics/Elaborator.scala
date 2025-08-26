@@ -444,7 +444,7 @@ extends Importer:
         case Tup(Modified(Keywrd(Keyword.`in`), arg1) :: Modified(Keywrd(Keyword.`out`), arg2) :: Nil) =>
           Term.WildcardTy(S(subterm(arg1)), S(subterm(arg2)))
         case arg => subterm(arg)
-      })(N)
+      })(N).withLocOf(tree)
     case InfixApp(TyTup(tvs), Keyword.`->`, body) =>
       val boundVars = mutable.HashMap.empty[Str, VarSymbol]
       def genSym(id: Tree.Ident) =

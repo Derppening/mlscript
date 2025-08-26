@@ -17,7 +17,7 @@ use[Str]
 use[Num]
 //│ ╔══[ERROR] Cannot query instance of type Num (type parameter T) for call: 
 //│ ║  l.17: 	use[Num]
-//│ ║        	^^^^^^^
+//│ ║        	^^^^^^^^
 //│ ╟── Required by contextual parameter declaration: 
 //│ ║  l.92: 	fun use[T](using instance: T) = instance
 //│ ║        	                 ^^^^^^^^^^^
@@ -36,7 +36,7 @@ using Int -> Int = id
 use[Int -> Int](123)
 //│ ╔══[ERROR] Cannot query instance of type ‹unspecified› (type parameter T) for call: 
 //│ ║  l.36: 	use[Int -> Int](123)
-//│ ║        	^^^^^^^^^^^^^^
+//│ ║        	^^^^^^^^^^^^^^^
 //│ ╟── Required by contextual parameter declaration: 
 //│ ║  l.92: 	fun use[T](using instance: T) = instance
 //│ ║        	                 ^^^^^^^^^^^
@@ -60,7 +60,7 @@ f
 fun f(using Int) = use[Num]
 //│ ╔══[ERROR] Cannot query instance of type Num (type parameter T) for call: 
 //│ ║  l.60: 	fun f(using Int) = use[Num]
-//│ ║        	                   ^^^^^^^
+//│ ║        	                   ^^^^^^^^
 //│ ╟── Required by contextual parameter declaration: 
 //│ ║  l.92: 	fun use[T](using instance: T) = instance
 //│ ║        	                 ^^^^^^^^^^^

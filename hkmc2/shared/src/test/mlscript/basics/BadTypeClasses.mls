@@ -46,13 +46,13 @@ module M with
 M.bar[](1, 2)
 //│ ╔══[ERROR] Expected 2 type arguments, got 0
 //│ ║  l.46: 	M.bar[](1, 2)
-//│ ╙──      	^^^^^
+//│ ╙──      	^^^^^^^
 
 :e
 M.bar[Int](1, 2)
 //│ ╔══[ERROR] Expected 2 type arguments, got 1
 //│ ║  l.52: 	M.bar[Int](1, 2)
-//│ ╙──      	^^^^^^^^^
+//│ ╙──      	^^^^^^^^^^
 
 using Int = 42
 
