@@ -77,17 +77,12 @@ foo()
 //│       (nop)
 //│       (call_ref $_1
 //│         (ref.func $foo))))
-//│   (global 0 (mut (ref null any)) ((ref.null any)))
+//│   (global $0 (mut (ref null any)) (ref.null any))
 //│   (export "main" (func $main))
 //│   (elem declare func $foo)
 //│   (elem declare func $main))
 //│ rwasm: Running
-//│ Uncaught:
-//│ tA {
-//│   name: 'ExitStatus',
-//│   message: 'Program terminated with exit(1)',
-//│   status: 1
-//│ }
+//│ 42
 
 
 :wasm
@@ -116,14 +111,9 @@ new Foo(0)
 //│       (call $Foo::<constructor>
 //│         (ref.i31
 //│           (i32.const 0)))))
-//│   (global 0 (mut (ref null any)) ((ref.null any)))
+//│   (global $0 (mut (ref null any)) (ref.null any))
 //│   (export "main" (func $main))
 //│   (elem declare func $Foo::<constructor>)
 //│   (elem declare func $main))
 //│ rwasm: Running
-//│ Uncaught:
-//│ tA {
-//│   name: 'ExitStatus',
-//│   message: 'Program terminated with exit(1)',
-//│   status: 1
-//│ }
+//│ [Object: null prototype] {}

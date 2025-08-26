@@ -516,9 +516,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       mutable: Bool,
       value: ExprProxy
   ): Glob =
-    val globalDecl = doc"(global $name ${
+    val globalDecl = doc"(global $$$name ${
         if mutable then doc"(mut ${ty.toWat})" else ty.toWat
-      } (${value.toWat}))"
+      } ${value.toWat})"
 
     mod = mod.copy(gl = mod.gl :+ name -> globalDecl)
     new Glob(this, name)
