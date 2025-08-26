@@ -1185,6 +1185,26 @@ class WatBackend
         errExpr(
           msg"This code requires effect handler instrumentation but was compiled without it."
         )
+      case Assign(l, r, rst) =>
+        val lExpr = getVar(l).inner match
+          case stackInstrs @ _ :: _ => stackInstrs.last
+          case S(foldedInstr) => foldedInstr
+          case _ =>
+            lastWords(s"getVar($l) should always return a non-empty expression")
+        val lScope = lExpr.mnemonic match
+          case "global.get" => Locals.Scope.Global
+          case "local.get" => Locals.Scope.Local
+          case _ => lastWords(
+              s"Expected `global.get` or `local.get` when compiling instruction for `$l`, but got ${lExpr.mnemonic}"
+            )
+        val lIdx = lExpr.instrargs(0)
+        raise(
+          WarningReport(
+            msg"WatBackend::returningTerm for ${t.toString} (assigning to ${l.toString} -> ${lScope.toString}:${lIdx.toString}) not implemented yet" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          )
+        )
+        mod.unreachable()
       case Define(defn, rst) =>
         def mkThis(sym: InnerSymbol): ExprProxy =
           result(Value.This(sym))
