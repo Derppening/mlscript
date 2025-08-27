@@ -117,3 +117,43 @@ new Foo(0)
 //│   (elem declare func $main))
 //│ rwasm: Running
 //│ [Object: null prototype] {}
+
+
+:wasm
+class Foo(val a)
+(new Foo(42)).Foo#a
+//│ Wat:
+//│ (module
+//│   (type $Foo (struct (field $a (mut (ref null any)))))
+//│   (type $_0 (func (param (ref null any)) (result (ref $Foo))))
+//│   (type $_1 (func (result (ref null any))))
+//│   (func $Foo::<constructor> (param (ref null any)) (result (ref $Foo)) 
+//│     (local (ref $Foo))
+//│     (block (result (ref $Foo))
+//│       (local.set 1
+//│         (struct.new_default $Foo))
+//│       (block 
+//│         (struct.set $Foo 0
+//│           (local.get 1)
+//│           (local.get 0))
+//│         (nop))
+//│       (return
+//│         (local.get 1))))
+//│   (func $main (result (ref null any)) 
+//│     (block (result (ref null any))
+//│       (nop)
+//│       (block (result (ref null any))
+//│         (global.set 1
+//│           (call $Foo::<constructor>
+//│             (ref.i31
+//│               (i32.const 42))))
+//│         (struct.get $Foo 0
+//│           (ref.cast (ref $Foo)
+//│             (global.get 1))))))
+//│   (global $0 (mut (ref null any)) (ref.null any))
+//│   (global $1 (mut (ref null any)) (ref.null any))
+//│   (export "main" (func $main))
+//│   (elem declare func $Foo::<constructor>)
+//│   (elem declare func $main))
+//│ rwasm: Running
+//│ 42

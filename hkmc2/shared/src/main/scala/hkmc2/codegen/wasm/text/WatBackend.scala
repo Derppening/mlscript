@@ -1226,14 +1226,22 @@ class WatBackend
           case _ => lastWords(
               s"Expected `global.get` or `local.get` when compiling instruction for `$l`, but got ${lExpr.mnemonic}"
             )
-        val lIdx = lExpr.instrargs(0)
-        raise(
-          WarningReport(
-            msg"WatBackend::returningTerm for ${t.toString} (assigning to ${l.toString} -> ${lScope.toString}:${lIdx.toString}) not implemented yet" -> N :: Nil,
-            source = Diagnostic.Source.Compilation
-          )
+        val lIdx = lExpr.instrargs(0).toString.toInt
+
+        val rExpr = result(r)
+        val assignExpr = lScope match
+          case Locals.Scope.Global => mod.global.set(lIdx, rExpr)
+          case Locals.Scope.Local => mod.local.set(lIdx, rExpr)
+        val rstBlk = returningTerm(rst)
+
+        mod.block(
+          label = N,
+          Seq(
+            assignExpr,
+            rstBlk
+          ),
+          resultType = rstBlk.getType.optionUnless(_ is this.none)
         )
-        mod.unreachable()
       case Define(defn, rst) =>
         def mkThis(sym: InnerSymbol): ExprProxy =
           result(Value.This(sym))
