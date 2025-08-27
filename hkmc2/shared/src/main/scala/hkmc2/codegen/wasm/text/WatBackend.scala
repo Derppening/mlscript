@@ -1138,7 +1138,36 @@ class WatBackend
                       )
                     )
                     mod.unreachable()
-              case _ =>
+              case termSym: TermSymbol =>
+                val qualExpr = result(qual)
+                val termOwner = termSym.owner.get
+                val termOwnerNme = termOwner.nme
+                val termOwnerFields = mod.getType(termOwnerNme) match
+                  case S(termOwnerType: StructType) => termOwnerType.fields
+                  case S(_) =>
+                    raise(
+                      WarningReport(
+                        msg"WatBackend::result for ${sel.toString} (`sel.symbol.asInstanceOf[TermSymbol].owner == ${termOwner.toString}`) not implemented yet" -> N :: Nil,
+                        source = Diagnostic.Source.Compilation
+                      )
+                    )
+                    return mod.unreachable()
+                  case N => lastWords(
+                      s"Expected type definition of $termOwner to be registered in the Wasm module"
+                    )
+                val fieldIdx =
+                  termOwnerFields.indexWhere(_.id.exists(_ == id.name))
+
+                mod.struct.get(
+                  fieldIdx,
+                  mod.ref.cast(
+                    qualExpr,
+                    RefType(TypeRef(termOwnerNme), nullable = false)
+                  ),
+                  ty = termOwnerFields(fieldIdx).ty,
+                  isSigned = false
+                )
+              case sym =>
                 raise(
                   WarningReport(
                     msg"WatBackend::result for ${sel.toString} (`sel.symbol == ${sym.toString}`) not implemented yet" -> N :: Nil,
