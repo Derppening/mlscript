@@ -354,8 +354,8 @@ let Runtime1;
       static [definitionMetadata] = ["object", "StackDelayHandler"]; 
     };
     this.StackDelayHandler = globalThis.Object.freeze(new StackDelayHandler$class);
-    this.Int31 = function Int31(v1) {
-      return globalThis.Object.freeze(new Int31.class(v1));
+    this.Int31 = function Int31(v) {
+      return globalThis.Object.freeze(new Int31.class(v));
     };
     Object.defineProperty(this.Int31, "class", {
       enumerable: true,
