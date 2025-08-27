@@ -926,6 +926,15 @@ class WatBackend
 
   def newTypeBuilder(size: Int): TypeBuilder = TypeBuilder(this, size)
 
+  /**
+   * Returns an expression equivalent to `expr` but returning a reference value
+   * instead, by inserting instructions as necessary.
+   */
+  private def toRefExpr(expr: ExprProxy)(using mod: ModuleProxy): ExprProxy =
+    expr.getType match
+      case I32Type => mod.ref.i31(expr)
+      case _ => expr
+
   /* Functions taken from JSBuilder */
 
   def errExpr(errMsg: Message)(using ModuleProxy, Raise): ExprProxy =
@@ -1191,9 +1200,7 @@ class WatBackend
 
         mod.call(
           s"${clazzStructTy.id}::<constructor>",
-          // TODO(Derppening): Add i31ref <-> i32 conversion functions when crossing function boundaries
-          as.map(argument).map: p =>
-            if p.getType is i32 then mod.ref.i31(p) else p,
+          as.map(argument).map(toRefExpr(_)),
           clazzRefTy
         )
       case r =>
@@ -1230,8 +1237,8 @@ class WatBackend
 
         val rExpr = result(r)
         val assignExpr = lScope match
-          case Locals.Scope.Global => mod.global.set(lIdx, rExpr)
-          case Locals.Scope.Local => mod.local.set(lIdx, rExpr)
+          case Locals.Scope.Global => mod.global.set(lIdx, toRefExpr(rExpr))
+          case Locals.Scope.Local => mod.local.set(lIdx, toRefExpr(rExpr))
         val rstBlk = returningTerm(rst)
 
         mod.block(
