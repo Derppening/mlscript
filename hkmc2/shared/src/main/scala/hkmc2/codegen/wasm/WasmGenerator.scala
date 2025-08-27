@@ -101,7 +101,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     def i31(value: Expr): Expr
 
     /**
-     * Creates a `ref.null` instruction, downcasting the value to `castType`.
+     * Creates a `ref.cast` instruction, downcasting the value to `castType`.
      */
     def cast(value: Expr, castType: Type): Expr
   end Ref
