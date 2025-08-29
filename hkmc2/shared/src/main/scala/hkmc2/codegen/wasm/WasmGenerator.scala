@@ -101,6 +101,12 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     def i31(value: Expr): Expr
 
     /**
+     * Creates a `ref.test` instruction, testing if the value has the type of
+     * `castType`.
+     */
+    def test(value: Expr, castType: Type): Expr
+
+    /**
      * Creates a `ref.cast` instruction, downcasting the value to `castType`.
      */
     def cast(value: Expr, castType: Type): Expr

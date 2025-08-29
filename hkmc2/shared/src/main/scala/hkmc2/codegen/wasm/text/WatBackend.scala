@@ -701,6 +701,18 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), gen.i31ref))
       )
 
+    def test(value: ExprProxy, castType: WasmType): ExprProxy =
+      new ExprProxy(
+        S(
+          FoldedInstr(
+            "ref.test",
+            Seq(castType.toWat),
+            Seq(value.inner),
+            gen.i32
+          )
+        )
+      )
+
     def cast(value: ExprProxy, castType: WasmType): ExprProxy =
       new ExprProxy(
         S(
