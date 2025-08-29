@@ -105,6 +105,60 @@ foo()
 
 
 :wasm
+fun foo() = 42
+foo() + foo()
+//│ Wat:
+//│ (module
+//│   (type $_0 (func (result (ref null i31))))
+//│   (type $_1 (func (result (ref null i31))))
+//│   (type $_2 (func (result (ref null i31))))
+//│   (type $_3 (func (result (ref null i31))))
+//│   (func $foo (result (ref null i31)) 
+//│     (return
+//│       (ref.i31
+//│         (i32.const 42))))
+//│   (func $main (result (ref null i31)) 
+//│     (block (result (ref null i31))
+//│       (nop)
+//│       (block (result (ref null i31))
+//│         (global.set 1
+//│           (call_ref $_1
+//│             (ref.func $foo)))
+//│         (block (result (ref null i31))
+//│           (global.set 2
+//│             (call_ref $_2
+//│               (ref.func $foo)))
+//│           (ref.i31
+//│             (i32.add
+//│               (if (result i32)
+//│                 (ref.test (ref null i31)
+//│                   (global.get 1))
+//│                 (then
+//│                   (i31.get_s
+//│                     (ref.cast (ref null i31)
+//│                       (global.get 1))))
+//│                 (else
+//│                   (unreachable)))
+//│               (if (result i32)
+//│                 (ref.test (ref null i31)
+//│                   (global.get 2))
+//│                 (then
+//│                   (i31.get_s
+//│                     (ref.cast (ref null i31)
+//│                       (global.get 2))))
+//│                 (else
+//│                   (unreachable)))))))))
+//│   (global $0 (mut (ref null any)) (ref.null any))
+//│   (global $1 (mut (ref null any)) (ref.null any))
+//│   (global $2 (mut (ref null any)) (ref.null any))
+//│   (export "main" (func $main))
+//│   (elem declare func $foo)
+//│   (elem declare func $main))
+//│ rwasm: Running
+//│ 84
+
+
+:wasm
 class Foo(val x)
 new Foo(0)
 //│ Wat:

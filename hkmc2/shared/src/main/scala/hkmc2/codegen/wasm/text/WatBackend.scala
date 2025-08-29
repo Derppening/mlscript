@@ -1055,40 +1055,41 @@ class WatBackend
           l.nme match
             case "+" =>
               // TODO(Derppening): Refactor to call `plus_impl`
-              // TODO(Derppening): Omit emitting sanity checks
-              val lhsOpRaw = operand(lhs)
-              val lhsOp = lhsOpRaw.getType match
-                case RefType(HeapType.I31, _) =>
-                  mod.i31ref.get(
-                    mod.ref.cast(lhsOpRaw, i31ref),
-                    true
-                  )
-                case I32Type => lhsOpRaw
-                case ty =>
+              def castOperand(expr: ExprProxy, opSide: Str): ExprProxy =
+                expr.getType match
+                  case RefType(HeapType.Any, _) =>
+                    // TOOD(Derppening): Refactor to use `br_on_cast`/`br_on_cast_fail`
+                    mod.`if`(
+                      mod.ref.test(expr, this.i31ref),
+                      ifTrue = castOperand(mod.ref.cast(expr, this.i31ref), opSide),
+                      ifFalse = S(mod.unreachable())
+                    )
+                  case RefType(HeapType.I31, _) =>
+                    mod.i31ref.get(expr, true)
+                  case I32Type => expr
+                  case ty =>
+                    raise(
+                      WarningReport(
+                        msg"WatBackend::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.toString}) not implemented yet" -> N :: Nil,
+                        source = Diagnostic.Source.Compilation
+                      )
+                    )
+                    mod.unreachable()
+
+              val lhsOp = castOperand(operand(lhs), "lhs")
+              val rhsOp = castOperand(operand(rhs), "rhs")
+
+              (lhsOp.getType, rhsOp.getType) match
+                case (I32Type, I32Type) =>
+                  mod.ref.i31(mod.i32.add(lhsOp, rhsOp))
+                case (lhsType, rhsType) =>
                   raise(
                     WarningReport(
-                      msg"WatBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
+                      msg"WatBackend::result for binary builtin symbol '${l.nme.toString}' (${lhsType.toString}, ${rhsType.toString}) not implemented yet" -> N :: Nil,
                       source = Diagnostic.Source.Compilation
                     )
                   )
                   mod.unreachable()
-              val rhsOpRaw = operand(rhs)
-              val rhsOp = rhsOpRaw.getType match
-                case RefType(HeapType.I31, _) =>
-                  mod.i31ref.get(
-                    mod.ref.cast(rhsOpRaw, i31ref),
-                    true
-                  )
-                case I32Type => rhsOpRaw
-                case ty =>
-                  raise(
-                    WarningReport(
-                      msg"WatBackend::result for binary builtin symbol '${l.nme.toString}' (lhs.type=${ty.toString}) not implemented yet" -> N :: Nil,
-                      source = Diagnostic.Source.Compilation
-                    )
-                  )
-                  mod.unreachable()
-              mod.i32.add(lhsOp, rhsOp)
             case lNme =>
               raise(
                 WarningReport(
