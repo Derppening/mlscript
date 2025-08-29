@@ -518,11 +518,11 @@ trait TypeDefImpl(using State) extends TypeOrTermDef:
   this: TypeDef =>
   
   lazy val symbol = k match
-    case Cls => semantics.ClassSymbol(this, name.getOrElse(Ident("<error>")))
-    case Mod | Obj => semantics.ModuleSymbol(this, name.getOrElse(Ident("<error>")))
-    case Als => semantics.TypeAliasSymbol(name.getOrElse(Ident("<error>")))
+    case Cls => semantics.ClassSymbol(this, name.getOrElse(Ident("‹error›")))
+    case Mod | Obj => semantics.ModuleSymbol(this, name.getOrElse(Ident("‹error›")))
+    case Als => semantics.TypeAliasSymbol(name.getOrElse(Ident("‹error›")))
     case Pat => semantics.PatternSymbol(
-      name.getOrElse(Ident("<error>")),
+      name.getOrElse(Ident("‹error›")),
       paramLists.headOption,
       rhs.getOrElse(die))
     case Trt | Mxn => ???

@@ -284,6 +284,11 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
           ErrorReport(
             msg"Module '${sym.nme}' is virtual (i.e., \"compiler fiction\"); cannot be used directly" -> t.toLoc ::
             Nil, S(t), source = Diagnostic.Source.Compilation)
+      case sym if sym.asCls.exists(ctx.builtins.virtualClasses) =>
+        return fail:
+          ErrorReport(
+            msg"Symbol '${sym.nme}' is virtual (i.e., \"compiler fiction\"); cannot be used as a term" -> t.toLoc ::
+            Nil, S(t), source = Diagnostic.Source.Compilation)
       case sym: BuiltinSymbol =>
         warnStmt
         if sym.binary then
