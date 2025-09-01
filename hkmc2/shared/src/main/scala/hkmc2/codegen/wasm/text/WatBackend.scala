@@ -10,6 +10,7 @@ import semantics.*
 import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
+import text.{Instructions => WasmInstr}
 import Locals.locals
 import Message.MessageContext
 
@@ -626,8 +627,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       )
     )
 
-  def unreachable(): ExprProxy =
-    new ExprProxy(S(FoldedInstr("unreachable", Seq(), Seq(), UnreachableType)))
+  def unreachable(): ExprProxy = new ExprProxy(S(WasmInstr.unreachable))
 
   def drop(value: ExprProxy): ExprProxy =
     new ExprProxy(S(FoldedInstr("drop", Seq(), Seq(value.inner), NoneType)))
@@ -912,7 +912,7 @@ class WatBackend
   lazy val v128: WasmType = V128Type
   lazy val funcref: WasmType = RefType(HeapType.Func, nullable = true)
   lazy val externref: WasmType = RefType(HeapType.Ext, nullable = true)
-  lazy val anyref: WasmType = RefType(HeapType.Any, nullable = true)
+  lazy val anyref: WasmType = RefType.anyref
   lazy val eqref: WasmType = RefType(HeapType.Eq, nullable = true)
   lazy val i31ref: WasmType = RefType(HeapType.I31, nullable = true)
   lazy val structref: WasmType = RefType(HeapType.Struct, nullable = true)

@@ -67,6 +67,9 @@ enum WasmPackedType extends PackedType, ToWat:
   end toWat
 end WasmPackedType
 
+object RefType:
+  def anyref: RefType = RefType(HeapType.Any, nullable = true)
+
 /** Wasm type representing a reference to a [[HeapType]]. */
 case class RefType(heapType: HeapType, nullable: Bool) extends WasmType:
   def toWat: Document =

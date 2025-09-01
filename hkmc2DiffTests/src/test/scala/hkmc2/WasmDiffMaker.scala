@@ -8,7 +8,8 @@ import Diagnostic.Source
 import codegen.wasm._
 import semantics.Elaborator
 import semantics.Term.Blk
-import text.WatBackend
+import text.{WatBackend, WatBuilder}
+import hkmc2.syntax.Keyword.`then`
 
 abstract class WasmDiffMaker extends LlirDiffMaker:
   /** Enables Wasm support. All subsequent options are no-op if this option is
@@ -20,6 +21,9 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
     * text.
     */
   val wat = NullaryCommand("wat")
+  
+  /** Overrides and uses the WIP [[WatBuilder]] backend for WAT generation instead. */
+  val ewat = NullaryCommand("ewat")
 
   /** Outputs the compiled module as stack-based text. */
   val swat = NullaryCommand("swat")
@@ -73,9 +77,13 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       val low = ltl.givenIn:
         codegen.Lowering()
       val le = low.program(trm)
-      val watb = ltl.givenIn:
-        WatBackend()
-      val mod = watb.program(le, N)
+      val (mod, mainFnNme) = ltl.givenIn:
+        if ewat.isSet then
+          baseScp.nest.givenIn:
+            val progCtx = WatBuilder().program(le, N, wd)
+            (progCtx, progCtx.main.get._1.nme)
+        else
+          (WatBackend().program(le, N), "main")
 
       if wat.isSet then
         output("Wat:")
@@ -103,7 +111,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       if rwasm.isSet then
         output("rwasm: Running")
 
-        s"await wasm.binaryenRunFunc(`${mod.toWat.toString}`, exports => exports.main())"
+        s"await wasm.binaryenRunFunc(`${mod.toWat.toString}`, exports => exports.${mainFnNme}())"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
             output(content)
