@@ -83,9 +83,18 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   type Context = Unit
   type Expr = Opt[FoldedInstr]
 
-  def errExpr(errMsg: Message)(using Ctx, Raise): Expr =
+  def warnExpr(warnMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
+    warnExpr(warnMsg :: Nil)
+
+  def warnExpr(warnMsgs: Ls[Message -> Opt[Loc]])(using Ctx, Raise): Expr =
     raise(
-      ErrorReport(errMsg -> N :: Nil, source = Diagnostic.Source.Compilation)
+      WarningReport(warnMsgs, source = Diagnostic.Source.Compilation)
+    )
+    S(unreachable)
+
+  def errExpr(errMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
+    raise(
+      ErrorReport(errMsg :: Nil, source = Diagnostic.Source.Compilation)
     )
     S(unreachable)
 
@@ -94,46 +103,53 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       S(ref.i31(i32.const(if value then 1 else 0)))
     case Value.Lit(IntLit(value)) =>
       S(ref.i31(i32.const(value.toInt)))
-    case r =>
-      raise(
-        WarningReport(
-          msg"WatBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
-          source = Diagnostic.Source.Compilation
+    case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
+        if !l.functionLike =>
+      if l.binary then
+        l.nme match
+          case lNme =>
+            warnExpr(Ls(
+              msg"WatBuilder::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> r.toLoc,
+              msg"Note: Block IR of expression is `${r.toString}`" -> N
+            ))
+      else
+        errExpr(
+          msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
         )
-      )
-      S(unreachable)
+    case r =>
+      warnExpr(Ls(
+        msg"WatBackend::result for expression not implemented yet" -> r.toLoc,
+        msg"Note: Block IR of expression is `${r.toString}`" -> N
+      ))
 
   def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr = t match
     case _: HandleBlock =>
       errExpr(
-        msg"This code requires effect handler instrumentation but was compiled without it."
+        msg"This code requires effect handler instrumentation but was compiled without it." -> t.toLoc
       )
     case Return(res, true) =>
       result(res)
     case t =>
-      raise(
-        WarningReport(
-          msg"WatBuilder::returningTerm for ${t.toString} not implemented yet" -> N :: Nil,
-          source = Diagnostic.Source.Compilation
-        )
-      )
-      S(unreachable)
+      warnExpr(Ls(
+        msg"WatBuilder::returningTerm for expression not implemented yet" -> t.toLoc,
+        msg"Note: Block IR of expression is `${t.toString}`" -> N
+      ))
 
   def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: os.Path)(using
       Raise,
       Scope
   ): Ctx =
-    if p.imports.nonEmpty then
+    for imprt <- p.imports do
       raise(
         WarningReport(
-          msg"Imports of external symbols ${p.imports.mkString("[", ", ", "]")} not implemented yet" -> N :: Nil,
+          msg"Import of symbol `${imprt._2}` not implemented yet" -> imprt._1.toLoc :: Nil,
           source = Diagnostic.Source.Compilation
         )
       )
-    if exprt.isDefined then
+    exprt.foreach: exprt =>
       raise(
         WarningReport(
-          msg"Exports of symbols not implemented yet" -> N :: Nil,
+          msg"Export of symbol `${exprt.nme}` not implemented yet" -> exprt.toLoc :: Nil,
           source = Diagnostic.Source.Compilation
         )
       )
