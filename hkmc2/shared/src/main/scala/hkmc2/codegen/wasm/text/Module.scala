@@ -69,6 +69,7 @@ end WasmPackedType
 
 object RefType:
   def anyref: RefType = RefType(HeapType.Any, nullable = true)
+  def i31ref: RefType = RefType(HeapType.I31, nullable = true)
 
 /** Wasm type representing a reference to a [[HeapType]]. */
 case class RefType(heapType: HeapType, nullable: Bool) extends WasmType:

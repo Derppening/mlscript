@@ -4,28 +4,26 @@
 :rwasm
 
 :wasm
+:ewat
 false
 //│ Wat:
 //│ (module
-//│   (type $_0 (func (result (ref null i31))))
-//│   (func $main (result (ref null i31)) 
-//│     (ref.i31
-//│       (i32.const 0)))
-//│   (export "main" (func $main))
-//│   (elem declare func $main))
+//│   
+//│   (func $entry  (result (ref null any))  (ref.i31
+//│     (i32.const 0)))
+//│   (export "entry" (func $entry)))
 //│ rwasm: Running
 //│ 0
 
 :wasm
+:ewat
 true
 //│ Wat:
 //│ (module
-//│   (type $_0 (func (result (ref null i31))))
-//│   (func $main (result (ref null i31)) 
-//│     (ref.i31
-//│       (i32.const 1)))
-//│   (export "main" (func $main))
-//│   (elem declare func $main))
+//│   
+//│   (func $entry  (result (ref null any))  (ref.i31
+//│     (i32.const 1)))
+//│   (export "entry" (func $entry)))
 //│ rwasm: Running
 //│ 1
 

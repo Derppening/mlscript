@@ -10,7 +10,7 @@ import semantics.*
 import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
-import text.{Instructions => WasmInstr}
+import text.Instructions as WasmInstr
 import Locals.locals
 import Message.MessageContext
 
@@ -661,7 +661,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   def i32 = new I32:
     def const(value: Int): ExprProxy =
-      new ExprProxy(S(FoldedInstr("i32.const", Seq(s"$value"), Seq(), I32Type)))
+      new ExprProxy(S(WasmInstr.i32.const(value)))
 
     def add(left: ExprProxy, right: ExprProxy): ExprProxy =
       new ExprProxy(
@@ -1061,7 +1061,8 @@ class WatBackend
                     // TOOD(Derppening): Refactor to use `br_on_cast`/`br_on_cast_fail`
                     mod.`if`(
                       mod.ref.test(expr, this.i31ref),
-                      ifTrue = castOperand(mod.ref.cast(expr, this.i31ref), opSide),
+                      ifTrue =
+                        castOperand(mod.ref.cast(expr, this.i31ref), opSide),
                       ifFalse = S(mod.unreachable())
                     )
                   case RefType(HeapType.I31, _) =>

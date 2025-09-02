@@ -10,6 +10,7 @@ import document.*
 import document.Document
 import js.CodeBuilder
 import semantics.*, Elaborator.State
+import syntax.Tree.BoolLit
 import Message.MessageContext
 import Scope.scope
 
@@ -80,20 +81,33 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     )
     S(unreachable)
 
-  def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr =
-    t match
-      case _: HandleBlock =>
-        errExpr(
-          msg"This code requires effect handler instrumentation but was compiled without it."
+  def result(r: Result)(using Ctx, Raise, Scope): Expr = r match
+    case Value.Lit(BoolLit(value)) =>
+      S(ref.i31(i32.const(if value then 1 else 0)))
+    case r =>
+      raise(
+        WarningReport(
+          msg"WatBackend::result for ${r.toString} not implemented yet" -> N :: Nil,
+          source = Diagnostic.Source.Compilation
         )
-      case t =>
-        raise(
-          WarningReport(
-            msg"WatBuilder::returningTerm for ${t.toString} not implemented yet" -> N :: Nil,
-            source = Diagnostic.Source.Compilation
-          )
+      )
+      S(unreachable)
+
+  def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr = t match
+    case _: HandleBlock =>
+      errExpr(
+        msg"This code requires effect handler instrumentation but was compiled without it."
+      )
+    case Return(res, true) =>
+      result(res)
+    case t =>
+      raise(
+        WarningReport(
+          msg"WatBuilder::returningTerm for ${t.toString} not implemented yet" -> N :: Nil,
+          source = Diagnostic.Source.Compilation
         )
-        S(unreachable)
+      )
+      S(unreachable)
 
   def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: os.Path)(using
       Raise,
