@@ -29,9 +29,13 @@ private final case class FuncInfo(
           doc"(param ${p.nme} ${RefType.anyref.toWat})"
         ).toSeq.mkDocument(" ")
       } ${
-        Seq.fill(nResults)(doc"(result ${RefType.anyref.toWat})").mkDocument(" ")
+        Seq.fill(nResults)(
+          doc"(result ${RefType.anyref.toWat})"
+        ).mkDocument(" ")
       } ${
-        locals.map(p => doc"(local ${RefType.anyref.toWat})").toSeq.mkDocument(" ")
+        locals.map(p => doc"(local ${RefType.anyref.toWat})").toSeq.mkDocument(
+          " "
+        )
       } ${body.toWat})\n(export "${name.nme}" (func $$${name.nme}))${
         if emitElem then doc"\n(elem declare func $$${name.nme})" else doc""
       }"""
@@ -58,9 +62,9 @@ private final case class Ctx(
 ) extends ToWat:
 
   def toWat: Document =
-    doc"""(module 
-      ${funcs.values.toSeq.map(_.toWat).mkDocument("\n")}
-      ${main.dlof(_._2.toWat(emitElem = false))(doc"")})"""
+    doc"""(module #  #{ ${funcs.values.toSeq.map(_.toWat).mkDocument(
+        doc" # "
+      )} # ${main.dlof(_._2.toWat(emitElem = false))(doc"")}) #} """
 
 end Ctx
 
