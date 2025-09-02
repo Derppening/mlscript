@@ -8,9 +8,9 @@
 false
 //│ Wat:
 //│ (module
-//│   
-//│   (func $entry  (result (ref null any))  (ref.i31
-//│     (i32.const 0)))
+//│   (func $entry (result (ref null any))
+//│     (ref.i31
+//│       (i32.const 0)))
 //│   (export "entry" (func $entry)))
 //│ rwasm: Running
 //│ 0
@@ -20,9 +20,9 @@ false
 true
 //│ Wat:
 //│ (module
-//│   
-//│   (func $entry  (result (ref null any))  (ref.i31
-//│     (i32.const 1)))
+//│   (func $entry (result (ref null any))
+//│     (ref.i31
+//│       (i32.const 1)))
 //│   (export "entry" (func $entry)))
 //│ rwasm: Running
 //│ 1

@@ -16,6 +16,14 @@ import Scope.scope
 
 import scala.collection.mutable.Map as MutMap
 
+extension (doc: Document)
+  private def surroundUnlessEmpty(
+      prefix: Document = Document.empty,
+      postfix: Document = Document.empty
+  ): Document =
+    doc.optionUnless(_.isEmpty).fold(doc):
+      prefix :: _ :: postfix
+
 private final case class FuncInfo(
     val name: BlockMemberSymbol,
     val params: Seq[Local],
@@ -25,19 +33,19 @@ private final case class FuncInfo(
 ) extends ToWat:
   def toWat: Document = toWat()
   def toWat(emitElem: Bool = true): Document =
-    doc"""(func $$${name.nme} ${
+    doc"""(func $$${name.nme}${
         params.map(p =>
           doc"(param ${p.nme} ${RefType.anyref.toWat})"
-        ).toSeq.mkDocument(" ")
-      } ${
+        ).toSeq.mkDocument(doc" ").surroundUnlessEmpty(doc" ")
+      }${
         Seq.fill(nResults)(
           doc"(result ${RefType.anyref.toWat})"
-        ).mkDocument(" ")
-      } ${
+        ).mkDocument(doc" ").surroundUnlessEmpty(doc" ")
+      } #{ ${
         locals.map(p => doc"(local ${RefType.anyref.toWat})").toSeq.mkDocument(
-          " "
+          doc" # "
         )
-      } ${body.toWat})\n(export "${name.nme}" (func $$${name.nme}))${
+      } # ${body.toWat} #} )\n(export "${name.nme}" (func $$${name.nme}))${
         if emitElem then doc"\n(elem declare func $$${name.nme})" else doc""
       }"""
 end FuncInfo
@@ -63,9 +71,9 @@ private final case class Ctx(
 ) extends ToWat:
 
   def toWat: Document =
-    doc"""(module #  #{ ${funcs.values.toSeq.map(_.toWat).mkDocument(
+    doc"""(module #{ ${funcs.values.toSeq.map(_.toWat).mkDocument(
         doc" # "
-      )} # ${main.dlof(_._2.toWat(emitElem = false))(doc"")}) #} """
+      )} # ${main.fold(doc"")(_._2.toWat(emitElem = false))}) #} """
 
 end Ctx
 
