@@ -10,7 +10,7 @@ import document.*
 import document.Document
 import js.CodeBuilder
 import semantics.*, Elaborator.State
-import syntax.Tree.BoolLit
+import syntax.Tree.{BoolLit, IntLit}
 import Message.MessageContext
 import Scope.scope
 
@@ -92,6 +92,8 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def result(r: Result)(using Ctx, Raise, Scope): Expr = r match
     case Value.Lit(BoolLit(value)) =>
       S(ref.i31(i32.const(if value then 1 else 0)))
+    case Value.Lit(IntLit(value)) =>
+      S(ref.i31(i32.const(value.toInt)))
     case r =>
       raise(
         WarningReport(

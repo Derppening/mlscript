@@ -29,15 +29,14 @@ true
 
 
 :wasm
+:ewat
 2
 //│ Wat:
 //│ (module
-//│   (type $_0 (func (result (ref null i31))))
-//│   (func $main (result (ref null i31)) 
+//│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 2)))
-//│   (export "main" (func $main))
-//│   (elem declare func $main))
+//│   (export "entry" (func $entry)))
 //│ rwasm: Running
 //│ 2
 
