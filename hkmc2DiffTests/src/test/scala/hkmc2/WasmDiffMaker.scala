@@ -9,6 +9,7 @@ import codegen.wasm._
 import semantics.Elaborator
 import semantics.Term.Blk
 import text.{WatBackend, WatBuilder}
+import hkmc2.codegen.CompilationTarget
 import hkmc2.syntax.Keyword.`then`
 
 abstract class WasmDiffMaker extends LlirDiffMaker:
@@ -76,7 +77,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
         case d => outerRaise(d)
       val low = ltl.givenIn:
         codegen.Lowering()
-      val le = low.program(trm)
+      val le = low.program(trm, CompilationTarget.Wasm)
       val (mod, mainFnNme) = ltl.givenIn:
         if ewat.isSet then
           baseScp.nest.givenIn:

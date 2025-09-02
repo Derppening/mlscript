@@ -946,8 +946,11 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
         val l = new TempSymbol(N)
         Assign(l, r, k(l |> Value.Ref.apply))
   
+  @deprecated(message = "Explicitly pass the compilation target of the program.")
+  def program(main: st.Blk): Program = 
+    program(main, CompilationTarget.JS)
   
-  def program(main: st.Blk): Program =
+  def program(main: st.Blk, target: CompilationTarget): Program =
     
     val (imps, funs, rest) = splitBlock(main.stats, Nil, Nil, Nil)
     
@@ -973,7 +976,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
     Program(
       imps.map(imp => imp.sym -> imp.file),
       res,
-      CompilationTarget.JS
+      target
     )
   
   

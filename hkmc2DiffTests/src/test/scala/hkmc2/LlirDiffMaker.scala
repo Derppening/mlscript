@@ -10,7 +10,7 @@ import codegen.Block
 import codegen.llir.*
 import codegen.cpp.*
 import hkmc2.syntax.Tree.Ident
-import hkmc2.codegen.Path
+import hkmc2.codegen.{CompilationTarget, Path}
 import hkmc2.semantics.Term.Blk
 import hkmc2.utils.Scope
 import hkmc2.codegen.llir._
@@ -64,7 +64,8 @@ abstract class LlirDiffMaker extends BbmlDiffMaker:
     if llir.isSet then
       val low = ltl.givenIn:
         codegen.Lowering()
-      var le = low.program(trm)
+      // TODO: There should be a third compilation target of CPP?
+      var le = low.program(trm, CompilationTarget.JS)
       given Scope = scope
       given Ctx = ctx
       val llb = LlirBuilder(tl, freshId)
