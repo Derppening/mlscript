@@ -47,7 +47,7 @@ class Normalization(using tl: TL)(using Raise, Ctx, State) extends TermSynthesiz
         case S(mem: BlockMemberSymbol) =>
           // If the class is declaration-only, we do not need to select the
           // class.
-          if !mem.hasLiftedClass || mem.defn.exists(_.isDeclare.isDefined) then
+          if !mem.hasLiftedClass || mem.defn.exists(_.hasDeclareModifier.isDefined) then
             lhs.constructor
           else
             Term.SynthSel(lhs.constructor, Tree.Ident("class"))(mem.clsTree.orElse(mem.modOrObjTree).map(_.symbol)).resolve
@@ -164,7 +164,7 @@ class Normalization(using tl: TL)(using Raise, Ctx, State) extends TermSynthesiz
               case S(_) | N =>
                 error(msg"Cannot use this ${ctor.describe} as a pattern" -> ctor.toLoc)
                 normalizeImpl(alternative)
-          case S(S(cls: (ClassSymbol | ModuleSymbol))) if mode.isInstanceOf[MatchMode.StringPrefix] =>
+          case S(S(cls: (ClassSymbol | ModuleOrObjectSymbol))) if mode.isInstanceOf[MatchMode.StringPrefix] =>
             // Match classes and modules are disallowed in the string mode.
             normalizeImpl(alternative)
           case S(S(cls: ClassSymbol)) =>
@@ -176,7 +176,7 @@ class Normalization(using tl: TL)(using Raise, Ctx, State) extends TermSynthesiz
               Branch(scrutinee, pattern.selectClass, whenTrue) ~: whenFalse
             else // If any errors were raised, we skip the branch.
               log("BROKEN"); normalizeImpl(alternative)
-          case S(S(mod: ModuleSymbol)) =>
+          case S(S(mod: ModuleOrObjectSymbol)) =>
             validateMatchMode(ctor, mod, mode)
             if validateObjectPattern(pattern, mod, argsOpt) then // TODO(ucs): deduplicate [1]
               val whenTrue = aliasOutputSymbols(scrutinee, pattern.output,
@@ -227,7 +227,8 @@ class Normalization(using tl: TL)(using Raise, Ctx, State) extends TermSynthesiz
     // from the class definitions.
     val (classHead, paramsOpt) = ctorSymbol.defn match
       case N => lastWords(s"Class ${ctorSymbol.name} does not have a definition")
-      case S(cd) => ctorSymbol.id -> cd.paramsOpt
+      // Use the constructor pattern's location for error reporting.
+      case S(cd) => new Tree.Ident(ctorSymbol.name).withLoc(ctorTerm.toLoc) -> cd.paramsOpt
     paramsOpt match
       case S(paramList) => argsOpt match
         case S(args) =>
@@ -274,7 +275,7 @@ class Normalization(using tl: TL)(using Raise, Ctx, State) extends TermSynthesiz
           case N => true
   
   /** Check whether the object pattern has an argument list. */
-  private def validateObjectPattern(pattern: FlatPattern.ClassLike, mod: ModuleSymbol, argsOpt: Opt[Ls[FlatPattern.Argument]]): Bool = argsOpt match
+  private def validateObjectPattern(pattern: FlatPattern.ClassLike, mod: ModuleOrObjectSymbol, argsOpt: Opt[Ls[FlatPattern.Argument]]): Bool = argsOpt match
     case S(Nil) =>
       // This means the pattern has an unnecessary parameter list.
       error(msg"`${mod.name}` is an object." -> mod.id.toLoc,
@@ -299,7 +300,7 @@ class Normalization(using tl: TL)(using Raise, Ctx, State) extends TermSynthesiz
   /** Warn about inappropriate annotations used on class or object patterns. */
   private def validateMatchMode(
       ctorTerm: Term,
-      ctorSymbol: ClassSymbol | ModuleSymbol,
+      ctorSymbol: ClassSymbol | ModuleOrObjectSymbol,
       mode: MatchMode
   ): Unit = mode match
     case MatchMode.Default | _: MatchMode.StringPrefix => ()

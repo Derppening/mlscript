@@ -65,15 +65,15 @@ data class Foo(x: Int)
 //│ Foo1 = function Foo(x1) {
 //│   return globalThis.Object.freeze(new Foo.class(x1));
 //│ };
-//│ Object.defineProperty(Foo1, "class", {
-//│   enumerable: true,
-//│   value: class Foo {
-//│     constructor(x1) {
-//│       this.x = x1;
-//│     }
-//│     toString() { return runtime.render(this); }
-//│     static [definitionMetadata] = ["class", "Foo", ["x"]]; 
+//│ globalThis.Object.freeze(class Foo {
+//│   static {
+//│     Foo1.class = this
 //│   }
+//│   constructor(x1) {
+//│     this.x = x1;
+//│   }
+//│   toString() { return runtime.render(this); }
+//│   static [definitionMetadata] = ["class", "Foo", ["x"]]; 
 //│ });
 //│ Type: ⊤
 

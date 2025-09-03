@@ -7,25 +7,33 @@ import Rendering from "./Rendering.mjs";
 import LazyArray from "./LazyArray.mjs";
 import Iter from "./Iter.mjs";
 let Runtime1;
-(class Runtime {
+globalThis.Object.freeze(class Runtime {
+  static {
+    Runtime1 = this
+  }
+  constructor() {
+    runtime.Unit;
+  }
   static #stackLimit;
   static #stackDepth;
   static #stackOffset;
   static #stackHandler;
   static #stackResume;
-  get stackLimit() { return Runtime.#stackLimit; }
-  set stackLimit(value) { Runtime.#stackLimit = value; }
-  get stackDepth() { return Runtime.#stackDepth; }
-  set stackDepth(value) { Runtime.#stackDepth = value; }
-  get stackOffset() { return Runtime.#stackOffset; }
-  set stackOffset(value) { Runtime.#stackOffset = value; }
-  get stackHandler() { return Runtime.#stackHandler; }
-  set stackHandler(value) { Runtime.#stackHandler = value; }
-  get stackResume() { return Runtime.#stackResume; }
-  set stackResume(value) { Runtime.#stackResume = value; }
+  static get stackLimit() { return Runtime.#stackLimit; }
+  static set stackLimit(value) { Runtime.#stackLimit = value; }
+  static get stackDepth() { return Runtime.#stackDepth; }
+  static set stackDepth(value) { Runtime.#stackDepth = value; }
+  static get stackOffset() { return Runtime.#stackOffset; }
+  static set stackOffset(value) { Runtime.#stackOffset = value; }
+  static get stackHandler() { return Runtime.#stackHandler; }
+  static set stackHandler(value) { Runtime.#stackHandler = value; }
+  static get stackResume() { return Runtime.#stackResume; }
+  static set stackResume(value) { Runtime.#stackResume = value; }
   static {
-    Runtime1 = Runtime;
-    const Unit$class = class Unit {
+    globalThis.Object.freeze(class Unit {
+      static {
+        Runtime.Unit = globalThis.Object.freeze(new this)
+      }
       constructor() {
         Object.defineProperty(this, "class", {
           value: Unit
@@ -36,8 +44,7 @@ let Runtime1;
       }
       [prettyPrint]() { return this.toString(); }
       static [definitionMetadata] = ["object", "Unit"]; 
-    };
-    this.Unit = globalThis.Object.freeze(new Unit$class);
+    });
     this.short_and = RuntimeJS.short_and;
     this.short_or = RuntimeJS.short_or;
     this.bitand = RuntimeJS.bitand;
@@ -48,61 +55,66 @@ let Runtime1;
     this.EffectHandle = function EffectHandle(_reified) {
       return globalThis.Object.freeze(new EffectHandle.class(_reified));
     };
-    Object.defineProperty(this.EffectHandle, "class", {
-      enumerable: true,
-      value: class EffectHandle {
-        #_reified;
-        constructor(_reified) {
-          this.#_reified = _reified;
-          this.reified = this.#_reified;
-        }
-        resumeWith(value) {
-          let lambda;
-          const this$EffectHandle = this;
-          lambda = (undefined, function () {
-            let tmp;
-            tmp = Runtime.resume(this$EffectHandle.reified.contTrace);
-            return runtime.safeCall(tmp(value))
-          });
-          return Runtime1.try(lambda)
-        } 
-        raise() {
-          return Runtime.topLevelEffect(this.reified, false)
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "EffectHandle", [null]]; 
+    globalThis.Object.freeze(class EffectHandle {
+      static {
+        Runtime.EffectHandle.class = this
       }
+      constructor(_reified) {
+        this.#_reified = _reified;
+        this.reified = this.#_reified;
+      }
+      #_reified;
+      resumeWith(value) {
+        let lambda;
+        const this$EffectHandle = this;
+        lambda = (undefined, function () {
+          let tmp;
+          tmp = Runtime.resume(this$EffectHandle.reified.contTrace);
+          return runtime.safeCall(tmp(value))
+        });
+        return Runtime1.try(lambda)
+      } 
+      raise() {
+        return Runtime.topLevelEffect(this.reified, false)
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "EffectHandle", [null]]; 
     });
     this.MatchResult = function MatchResult(output, bindings) {
       return globalThis.Object.freeze(new MatchResult.class(output, bindings));
     };
-    Object.defineProperty(this.MatchResult, "class", {
-      enumerable: true,
-      value: class MatchResult {
-        constructor(output, bindings) {
-          this.output = output;
-          this.bindings = bindings;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "MatchResult", ["output", "bindings"]]; 
+    globalThis.Object.freeze(class MatchResult {
+      static {
+        Runtime.MatchResult.class = this
       }
+      constructor(output, bindings) {
+        this.output = output;
+        this.bindings = bindings;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "MatchResult", ["output", "bindings"]]; 
     });
     this.MatchFailure = function MatchFailure(errors) {
       return globalThis.Object.freeze(new MatchFailure.class(errors));
     };
-    Object.defineProperty(this.MatchFailure, "class", {
-      enumerable: true,
-      value: class MatchFailure {
-        constructor(errors) {
-          this.errors = errors;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "MatchFailure", ["errors"]]; 
-      }
-    });
-    (class Tuple {
+    globalThis.Object.freeze(class MatchFailure {
       static {
-        Runtime.Tuple = Tuple;
+        Runtime.MatchFailure.class = this
+      }
+      constructor(errors) {
+        this.errors = errors;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "MatchFailure", ["errors"]]; 
+    });
+    globalThis.Object.freeze(class Tuple {
+      static {
+        Runtime.Tuple = this
+      }
+      constructor() {
+        runtime.Unit;
+      }
+      static {
         this.split = LazyArray.__split;
       }
       static slice(xs, i, j) {
@@ -138,12 +150,15 @@ let Runtime1;
       static isArrayLike(xs) {
         return runtime.safeCall(Iter.isArrayLike(xs))
       }
-      static toString() { return runtime.render(this); }
-      static [definitionMetadata] = ["module", "Tuple"]; 
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "Tuple"]; 
     });
-    (class Str {
+    globalThis.Object.freeze(class Str {
       static {
-        Runtime.Str = Str;
+        Runtime.Str = this
+      }
+      constructor() {
+        runtime.Unit;
       }
       static startsWith(string, prefix) {
         return runtime.safeCall(string.startsWith(prefix))
@@ -163,19 +178,24 @@ let Runtime1;
       static leave(string, n) {
         return runtime.safeCall(string.slice(n))
       }
-      static toString() { return runtime.render(this); }
-      static [definitionMetadata] = ["module", "Str"]; 
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "Str"]; 
     });
     this.render = Rendering.render;
-    (class TraceLogger {
+    globalThis.Object.freeze(class TraceLogger {
+      static {
+        Runtime.TraceLogger = this
+      }
+      constructor() {
+        runtime.Unit;
+      }
       static #enabled;
       static #indentLvl;
-      get enabled() { return TraceLogger.#enabled; }
-      set enabled(value) { TraceLogger.#enabled = value; }
-      get indentLvl() { return TraceLogger.#indentLvl; }
-      set indentLvl(value) { TraceLogger.#indentLvl = value; }
+      static get enabled() { return TraceLogger.#enabled; }
+      static set enabled(value) { TraceLogger.#enabled = value; }
+      static get indentLvl() { return TraceLogger.#indentLvl; }
+      static set indentLvl(value) { TraceLogger.#indentLvl = value; }
       static {
-        Runtime.TraceLogger = TraceLogger;
         this.enabled = false;
         this.indentLvl = 0;
       }
@@ -215,10 +235,13 @@ let Runtime1;
           return runtime.Unit
         }
       }
-      static toString() { return runtime.render(this); }
-      static [definitionMetadata] = ["module", "TraceLogger"]; 
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "TraceLogger"]; 
     });
-    const FatalEffect$class = class FatalEffect {
+    globalThis.Object.freeze(class FatalEffect {
+      static {
+        Runtime.FatalEffect = globalThis.Object.freeze(new this)
+      }
       constructor() {
         Object.defineProperty(this, "class", {
           value: FatalEffect
@@ -226,9 +249,11 @@ let Runtime1;
       }
       toString() { return runtime.render(this); }
       static [definitionMetadata] = ["object", "FatalEffect"]; 
-    };
-    this.FatalEffect = globalThis.Object.freeze(new FatalEffect$class);
-    const PrintStackEffect$class = class PrintStackEffect {
+    });
+    globalThis.Object.freeze(class PrintStackEffect {
+      static {
+        Runtime.PrintStackEffect = globalThis.Object.freeze(new this)
+      }
       constructor() {
         Object.defineProperty(this, "class", {
           value: PrintStackEffect
@@ -236,107 +261,112 @@ let Runtime1;
       }
       toString() { return runtime.render(this); }
       static [definitionMetadata] = ["object", "PrintStackEffect"]; 
-    };
-    this.PrintStackEffect = globalThis.Object.freeze(new PrintStackEffect$class);
+    });
     this.FunctionContFrame = function FunctionContFrame(next) {
       return globalThis.Object.freeze(new FunctionContFrame.class(next));
     };
-    Object.defineProperty(this.FunctionContFrame, "class", {
-      enumerable: true,
-      value: class FunctionContFrame {
-        constructor(next) {
-          this.next = next;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "FunctionContFrame", ["next"]]; 
+    globalThis.Object.freeze(class FunctionContFrame {
+      static {
+        Runtime.FunctionContFrame.class = this
       }
+      constructor(next) {
+        this.next = next;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "FunctionContFrame", ["next"]]; 
     });
     this.HandlerContFrame = function HandlerContFrame(next, nextHandler, handler) {
       return globalThis.Object.freeze(new HandlerContFrame.class(next, nextHandler, handler));
     };
-    Object.defineProperty(this.HandlerContFrame, "class", {
-      enumerable: true,
-      value: class HandlerContFrame {
-        constructor(next, nextHandler, handler) {
-          this.next = next;
-          this.nextHandler = nextHandler;
-          this.handler = handler;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "HandlerContFrame", ["next", "nextHandler", "handler"]]; 
+    globalThis.Object.freeze(class HandlerContFrame {
+      static {
+        Runtime.HandlerContFrame.class = this
       }
+      constructor(next, nextHandler, handler) {
+        this.next = next;
+        this.nextHandler = nextHandler;
+        this.handler = handler;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "HandlerContFrame", ["next", "nextHandler", "handler"]]; 
     });
     this.ContTrace = function ContTrace(next, last, nextHandler, lastHandler, resumed) {
       return globalThis.Object.freeze(new ContTrace.class(next, last, nextHandler, lastHandler, resumed));
     };
-    Object.defineProperty(this.ContTrace, "class", {
-      enumerable: true,
-      value: class ContTrace {
-        constructor(next, last, nextHandler, lastHandler, resumed) {
-          this.next = next;
-          this.last = last;
-          this.nextHandler = nextHandler;
-          this.lastHandler = lastHandler;
-          this.resumed = resumed;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "ContTrace", ["next", "last", "nextHandler", "lastHandler", "resumed"]]; 
+    globalThis.Object.freeze(class ContTrace {
+      static {
+        Runtime.ContTrace.class = this
       }
+      constructor(next, last, nextHandler, lastHandler, resumed) {
+        this.next = next;
+        this.last = last;
+        this.nextHandler = nextHandler;
+        this.lastHandler = lastHandler;
+        this.resumed = resumed;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "ContTrace", ["next", "last", "nextHandler", "lastHandler", "resumed"]]; 
     });
     this.EffectSig = function EffectSig(contTrace, handler, handlerFun) {
       return globalThis.Object.freeze(new EffectSig.class(contTrace, handler, handlerFun));
     };
-    Object.defineProperty(this.EffectSig, "class", {
-      enumerable: true,
-      value: class EffectSig {
-        constructor(contTrace, handler, handlerFun) {
-          this.contTrace = contTrace;
-          this.handler = handler;
-          this.handlerFun = handlerFun;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "EffectSig", ["contTrace", "handler", "handlerFun"]]; 
+    globalThis.Object.freeze(class EffectSig {
+      static {
+        Runtime.EffectSig.class = this
       }
+      constructor(contTrace, handler, handlerFun) {
+        this.contTrace = contTrace;
+        this.handler = handler;
+        this.handlerFun = handlerFun;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "EffectSig", ["contTrace", "handler", "handlerFun"]]; 
     });
-    this.NonLocalReturn = class NonLocalReturn {
+    globalThis.Object.freeze(class NonLocalReturn {
+      static {
+        Runtime.NonLocalReturn = this
+      }
       constructor() {}
       toString() { return runtime.render(this); }
       static [definitionMetadata] = ["class", "NonLocalReturn"]; 
-    };
+    });
     this.FnLocalsInfo = function FnLocalsInfo(fnName, locals) {
       return globalThis.Object.freeze(new FnLocalsInfo.class(fnName, locals));
     };
-    Object.defineProperty(this.FnLocalsInfo, "class", {
-      enumerable: true,
-      value: class FnLocalsInfo {
-        constructor(fnName, locals) {
-          this.fnName = fnName;
-          this.locals = locals;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "FnLocalsInfo", ["fnName", "locals"]]; 
+    globalThis.Object.freeze(class FnLocalsInfo {
+      static {
+        Runtime.FnLocalsInfo.class = this
       }
+      constructor(fnName, locals) {
+        this.fnName = fnName;
+        this.locals = locals;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "FnLocalsInfo", ["fnName", "locals"]]; 
     });
     this.LocalVarInfo = function LocalVarInfo(localName, value) {
       return globalThis.Object.freeze(new LocalVarInfo.class(localName, value));
     };
-    Object.defineProperty(this.LocalVarInfo, "class", {
-      enumerable: true,
-      value: class LocalVarInfo {
-        constructor(localName, value) {
-          this.localName = localName;
-          this.value = value;
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "LocalVarInfo", ["localName", "value"]]; 
+    globalThis.Object.freeze(class LocalVarInfo {
+      static {
+        Runtime.LocalVarInfo.class = this
       }
+      constructor(localName, value) {
+        this.localName = localName;
+        this.value = value;
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "LocalVarInfo", ["localName", "value"]]; 
     });
     this.stackLimit = 0;
     this.stackDepth = 0;
     this.stackOffset = 0;
     this.stackHandler = null;
     this.stackResume = null;
-    const StackDelayHandler$class = class StackDelayHandler {
+    globalThis.Object.freeze(class StackDelayHandler {
+      static {
+        Runtime.StackDelayHandler = globalThis.Object.freeze(new this)
+      }
       constructor() {
         Object.defineProperty(this, "class", {
           value: StackDelayHandler
@@ -352,32 +382,31 @@ let Runtime1;
       }
       toString() { return runtime.render(this); }
       static [definitionMetadata] = ["object", "StackDelayHandler"]; 
-    };
-    this.StackDelayHandler = globalThis.Object.freeze(new StackDelayHandler$class);
+    });
     this.Int31 = function Int31(v) {
       return globalThis.Object.freeze(new Int31.class(v));
     };
-    Object.defineProperty(this.Int31, "class", {
-      enumerable: true,
-      value: class Int31 {
-        #v;
-        constructor(v) {
-          this.#v = v;
-        }
-        zext() {
-          let tmp, tmp1;
-          tmp = Runtime.shl(1, 31);
-          tmp1 = runtime.safeCall(Runtime.bitnot(tmp));
-          return Runtime.bitand(this.#v, tmp1)
-        } 
-        sext() {
-          let tmp;
-          tmp = Runtime.shl(1, 31);
-          return Runtime.bitor(this.#v, tmp)
-        }
-        toString() { return runtime.render(this); }
-        static [definitionMetadata] = ["class", "Int31", [null]]; 
+    globalThis.Object.freeze(class Int31 {
+      static {
+        Runtime.Int31.class = this
       }
+      constructor(v) {
+        this.#v = v;
+      }
+      #v;
+      zext() {
+        let tmp, tmp1;
+        tmp = Runtime.shl(1, 31);
+        tmp1 = runtime.safeCall(Runtime.bitnot(tmp));
+        return Runtime.bitand(this.#v, tmp1)
+      } 
+      sext() {
+        let tmp;
+        tmp = Runtime.shl(1, 31);
+        return Runtime.bitor(this.#v, tmp)
+      }
+      toString() { return runtime.render(this); }
+      static [definitionMetadata] = ["class", "Int31", [null]]; 
     });
   }
   static get unreachable() {
@@ -454,7 +483,7 @@ let Runtime1;
     tmp = runtime.safeCall(f());
     res = tmp;
     if (res instanceof Runtime.EffectSig.class) {
-      return runtime.safeCall(Runtime.EffectHandle(res))
+      return Runtime.EffectHandle(res)
     } else {
       return res
     }
@@ -997,7 +1026,7 @@ let Runtime1;
   static test() {
     return 42
   }
-  static toString() { return runtime.render(this); }
-  static [definitionMetadata] = ["module", "Runtime"]; 
+  toString() { return runtime.render(this); }
+  static [definitionMetadata] = ["class", "Runtime"]; 
 });
 let Runtime = Runtime1; export default Runtime;

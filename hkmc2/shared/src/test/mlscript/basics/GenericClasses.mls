@@ -41,7 +41,7 @@ class Bar(x: Foo[Int])
 //│ ╔══[ERROR] Wrong number of type arguments
 //│ ║  l.39: 	class Foo[A](x: Bar[A])
 //│ ╙──      	                ^^^^^^
-//│ ╔══[ERROR] Expected 0 type arguments, got 1
+//│ ╔══[ERROR] Expected no type arguments, got 1
 //│ ║  l.39: 	class Foo[A](x: Bar[A])
 //│ ╙──      	                ^^^^^^
 

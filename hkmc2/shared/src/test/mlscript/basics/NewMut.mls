@@ -63,8 +63,13 @@ let f = mut new Foo
 //│ ╙──      	        ^^^
 //│ f = Foo { x: 0 }
 
+:e
 :re
 new mut Foo.x
+//│ ╔══[ERROR] Expected a statically known class; found selection without resolved definition.
+//│ ║  l.68: 	new mut Foo.x
+//│ ║        	        ^^^^^
+//│ ╙── The 'new' keyword requires a statically known class; use the 'new!' operator for dynamic instantiation.
 //│ ═══[RUNTIME ERROR] Error: Access to required field 'x' yielded 'undefined'
 
 

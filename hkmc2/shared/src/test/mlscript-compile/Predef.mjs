@@ -6,10 +6,18 @@ import RuntimeJS from "./RuntimeJS.mjs";
 import Runtime from "./Runtime.mjs";
 import Rendering from "./Rendering.mjs";
 let Predef1;
-(class Predef {
+globalThis.Object.freeze(class Predef {
   static {
-    Predef1 = Predef;
-    const Symbols$class = class Symbols {
+    Predef1 = this
+  }
+  constructor() {
+    runtime.Unit;
+  }
+  static {
+    globalThis.Object.freeze(class Symbols {
+      static {
+        Predef.Symbols = globalThis.Object.freeze(new this)
+      }
       constructor() {
         this.prettyPrint = RuntimeJS.symbols.prettyPrint;
         Object.defineProperty(this, "class", {
@@ -18,8 +26,7 @@ let Predef1;
       }
       toString() { return runtime.render(this); }
       static [definitionMetadata] = ["object", "Symbols"]; 
-    };
-    this.Symbols = globalThis.Object.freeze(new Symbols$class);
+    });
     this.pass1 = Rendering.pass1;
     this.pass2 = Rendering.pass2;
     this.pass3 = Rendering.pass3;
@@ -172,7 +179,7 @@ let Predef1;
   static raiseUnhandledEffect() {
     return Runtime.mkEffect(Runtime.FatalEffect, null)
   }
-  static toString() { return runtime.render(this); }
-  static [definitionMetadata] = ["module", "Predef"]; 
+  toString() { return runtime.render(this); }
+  static [definitionMetadata] = ["class", "Predef"]; 
 });
 let Predef = Predef1; export default Predef;

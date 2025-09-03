@@ -33,22 +33,34 @@ sealed abstract class Block extends Product with AutoLocated:
   
   def ~(that: Block): Block = Begin(this, that)
   
+  def isEmpty: Bool = this match
+    case _: End => true
+    case _ => false
+  
+  // * Note: this function is used to piece together a location;
+  // * for the location to be valid, we should NOT have it include children whose location
+  // * is from some different place (with a different Origin), such as the location attached to symbols.
+  // * That's whym for example, we're not adding the `lhs` of `Assign` to the children list.
   protected def children: Ls[Located] = this match
     case Match(scrut, arms, dflt, rest) => scrut :: arms.map(_._2) ++ dflt.toList :+ rest
     case Return(res, implct) => res :: Nil
     case Throw(exc) => exc :: Nil
-    case Label(label, body, rest) => label :: body :: rest :: Nil
-    case Break(label) => label :: Nil
-    case Continue(label) => label :: Nil
+    case Label(label, body, rest) => body :: rest :: Nil
+    case Break(label) => Nil
+    case Continue(label) => Nil
     case Begin(sub, rest) => sub :: rest :: Nil
     case TryBlock(sub, finallyDo, rest) => sub :: finallyDo :: rest :: Nil
-    case Assign(lhs, rhs, rest) => lhs :: rhs :: rest :: Nil
-    case AssignField(lhs: Path, nme: Tree.Ident, rhs: Result, rest: Block) => lhs :: nme :: rhs :: rest :: Nil
+    case Assign(lhs, rhs, rest) =>  rhs :: rest :: Nil
+    case AssignField(lhs, nme, rhs, rest) => lhs :: nme :: rhs :: rest :: Nil
     case AssignDynField(lhs, fld, arrayIdx, rhs, rest) => lhs :: fld :: rhs :: rest :: Nil
     case Define(FunDefn(owner, sym, params, body), rest) => sym :: (params :+ body :+ rest)
     case Define(ValDefn(tsym, sym, rhs), rest) => tsym :: sym :: rhs :: rest :: Nil
-    case Define(ClsLikeDefn(owner, isym, sym, k, paramsOpt, aux, parentSym, methods, privFlds, pubFlds, preCtor, ctor), rest) =>
-      isym :: sym :: paramsOpt.toList ++ aux ++ parentSym.toList ++ methods.flatMap(_.subBlocks) ++
+    case Define(ClsLikeDefn(owner, isym, sym, k, paramsOpt, aux, parentSym, methods,
+        privFlds, pubFlds, preCtor, ctor, stat), rest)
+    =>
+      isym :: sym :: paramsOpt.toList ++ aux ++ parentSym.toList ++
+        methods.flatMap(_.subBlocks) ++
+        stat.iterator.flatMap(_.subBlocks) ++
         privFlds ++ pubFlds.flatMap(f => f._1 :: f._2 :: Nil) ++ preCtor.subBlocks ++ ctor.subBlocks :+ rest
     case HandleBlock(lhs, res, par, args, cls, handlers, body, rest) =>
       lhs :: res :: par :: args ++ handlers.flatMap: handler =>
@@ -312,6 +324,7 @@ case class AssignDynField(lhs: Path, fld: Path, arrayIdx: Bool, rhs: Result, res
 
 case class Define(defn: Defn, rest: Block) extends Block with ProductWithTail
 
+
 case class HandleBlock(
     lhs: Local,
     res: Local,
@@ -323,6 +336,7 @@ case class HandleBlock(
     rest: Block
 ) extends Block with ProductWithTail
 
+
 sealed abstract class Defn:
   val innerSym: Opt[MemberSymbol[?]]
   val sym: BlockMemberSymbol
@@ -332,8 +346,8 @@ sealed abstract class Defn:
   def subBlocks: Ls[Block] = this match
     case FunDefn(body = body) => body :: Nil
     case _: ValDefn => Nil
-    case ClsLikeDefn(preCtor = preCtor, ctor = ctor, methods = mtds) =>
-      preCtor :: ctor :: mtds.flatMap(_.subBlocks)
+    case ClsLikeDefn(preCtor = preCtor, ctor = ctor, methods = mtds, companion = comp) =>
+      preCtor :: ctor :: mtds.flatMap(_.subBlocks) ::: comp.toList.flatMap(_.subBlocks)
   
   // * Note that `privateFields` abd `publicFields` can't possibly be free since they are never
   // * referred to directly (they are only accessed through selections).
@@ -343,20 +357,21 @@ sealed abstract class Defn:
     case FunDefn(own, sym, params, body) => body.freeVars -- params.flatMap(_.paramSyms) - sym
     case ValDefn(tsym, sym, rhs) => rhs.freeVars
     case ClsLikeDefn(own, isym, sym, k, paramsOpt, auxParams, parentSym, 
-        methods, privateFields, publicFields, preCtor, ctor) =>
+        methods, privateFields, publicFields, preCtor, ctor, stat) =>
       preCtor.freeVars
-        ++ ctor.freeVars ++ methods.flatMap(_.freeVars)
+        ++ ctor.freeVars ++ methods.flatMap(_.freeVars) ++ stat.iterator.flatMap(_.freeVars)
         -- auxParams.flatMap(_.paramSyms)
   
   lazy val freeVarsLLIR: Set[Local] = this match
     case FunDefn(own, sym, params, body) => body.freeVarsLLIR -- params.flatMap(_.paramSyms) - sym
     case ValDefn(tsym, sym, rhs) => rhs.freeVarsLLIR
     case ClsLikeDefn(own, isym, sym, k, paramsOpt, auxParams, parentSym, 
-        methods, privateFields, publicFields, preCtor, ctor) =>
+        methods, privateFields, publicFields, preCtor, ctor, stat) =>
       preCtor.freeVarsLLIR
-        ++ ctor.freeVarsLLIR ++ methods.flatMap(_.freeVarsLLIR)
+        ++ ctor.freeVarsLLIR ++ methods.flatMap(_.freeVarsLLIR) ++ stat.iterator.flatMap(_.freeVarsLLIR)
         -- auxParams.flatMap(_.paramSyms)
   
+
 final case class FunDefn(
     owner: Opt[InnerSymbol],
     sym: BlockMemberSymbol,
@@ -364,6 +379,7 @@ final case class FunDefn(
     body: Block,
 ) extends Defn:
   val innerSym = N
+
 
 final case class ValDefn(
     tsym: TermSymbol,
@@ -373,6 +389,7 @@ final case class ValDefn(
   val innerSym = S(tsym)
   val k = tsym.k
   val owner: Opt[InnerSymbol] = tsym.owner
+
 
 object ValDefn:
   def mk(
@@ -384,8 +401,9 @@ object ValDefn:
     : ValDefn =
       ValDefn(tsym = TermSymbol(k, owner, Tree.Ident(sym.nme)), sym = sym, rhs = rhs)
 
+
 /*
-  This explains the difference between paramsOpt, auxParams, privateFields and publicFields.
+  The following explains the difference between paramsOpt, auxParams, privateFields and publicFields.
   
   paramsOpt is the main parameter list of a class, i.e. in `class A(plist0)`, `plist0` will be in paramsOpt.
   If there is no such parameter list, for example `class A`, then paramsOpt will be None.
@@ -416,6 +434,8 @@ object ValDefn:
   respectively. The symbols must match what is defined in `privateFields` and `publicFields`. 
   (An assignment to a flow symbol will be treated as a local symbol to the constructor, not a field assignment.)
 */
+// * This is only supposed to be for classes, objects, and patterns;
+// * a lone module is represented as an empty class with a `companion` module.
 final case class ClsLikeDefn(
     owner: Opt[InnerSymbol],
     isym: MemberSymbol[? <: ClassLikeDef] & InnerSymbol,
@@ -429,8 +449,36 @@ final case class ClsLikeDefn(
     publicFields: Ls[BlockMemberSymbol -> TermSymbol],
     preCtor: Block,
     ctor: Block,
+    companion: Opt[ClsLikeBody],
 ) extends Defn:
+  require(k isnt syntax.Mod)
   val innerSym = S(isym)
+
+
+// * This is only supposed to be for companion module definitions (notably, not for `object`)
+final case class ClsLikeBody(
+    isym: MemberSymbol[? <: ModuleOrObjectDef] & InnerSymbol,
+    methods: Ls[FunDefn],
+    privateFields: Ls[TermSymbol],
+    publicFields: Ls[BlockMemberSymbol -> TermSymbol],
+    ctor: Block,
+):
+  def subBlocks: Ls[Block] =
+    ctor :: methods.flatMap(_.subBlocks)
+  lazy val freeVars: Set[Local] =
+    ctor.freeVars ++ methods.flatMap(_.freeVars)
+  lazy val freeVarsLLIR: Set[Local] = ???
+
+object ClsLikeBody:
+  // TODO rm `empty`? it's currently unused
+  def empty(id: Tree.Ident)(using State) = ClsLikeBody(
+    isym = ModuleOrObjectSymbol(Tree.DummyTypeDef(syntax.Mod), id),
+    methods = Nil,
+    privateFields = Nil,
+    publicFields = Nil,
+    ctor = End(),
+  )
+
 
 final case class Handler(
     sym: BlockMemberSymbol,
@@ -440,6 +488,7 @@ final case class Handler(
 ):
   lazy val freeVars: Set[Local] = body.freeVars -- params.flatMap(_.paramSyms) - sym - resumeSym
   lazy val freeVarsLLIR: Set[Local] = body.freeVarsLLIR -- params.flatMap(_.paramSyms) - sym - resumeSym
+
 
 /* Represents either unreachable code (for functions that must return a result)
  * or the end of a non-returning function or a REPL block */
@@ -469,7 +518,11 @@ enum Case:
 sealed trait TrivialResult extends Result
 
 sealed abstract class Result extends AutoLocated:
-
+// // * Used for debugging locations:
+// sealed abstract class Result extends AutoLocated with ProductWithExtraInfo:
+//   def extraInfo: Str = toLoc.toString
+  
+  // * Note: see the note in for Block#children.
   protected def children: List[Located] = this match
     case Call(fun, args) => fun :: args.map(_.value)
     case Instantiate(mut, cls, args) => cls :: args.map(_.value)

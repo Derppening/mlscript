@@ -460,7 +460,7 @@ class BBTyper(using elState: Elaborator.State, tl: TL):
             goStats(stats)
           case (clsDef: ClassDef) :: stats =>
             goStats(stats)
-          case (modDef: ModuleDef) :: stats =>
+          case (modDef: ModuleOrObjectDef) :: stats =>
             goStats(stats)
           case Import(sym, pth) :: stats =>
             goStats(stats) // TODO:

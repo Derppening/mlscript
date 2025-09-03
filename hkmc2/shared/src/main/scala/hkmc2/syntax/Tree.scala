@@ -2,6 +2,8 @@ package hkmc2
 package syntax
 
 import scala.annotation.tailrec
+import scala.collection.mutable
+import sourcecode.Line
 
 import mlscript.utils.*, shorthands.*
 import hkmc2.utils.*
@@ -395,12 +397,21 @@ object PossiblyParenthesized:
     case _ => S(t)
 
 
-sealed abstract class OuterKind(val desc: Str)
+sealed abstract class OuterKind(val desc: Str)(using line: Line) extends Ordered[OuterKind]:
+  val ordinal: Int = line.value // YOLO
+  assert(!OuterKind.kinds.contains(ordinal))
+  OuterKind.kinds += (ordinal -> this)
+  def compare(that: OuterKind): Int = this.ordinal - that.ordinal
+object OuterKind:
+  private var counter = 0
+  private val kinds = mutable.Map.empty[Int, OuterKind]
+
+// Please don't put any of these on the same line...
 case object BlockKind extends OuterKind("block")
-sealed abstract class DeclKind(desc: Str) extends OuterKind(desc)
-sealed abstract class TermDefKind(val str: Str, desc: Str) extends DeclKind(desc)
-sealed abstract class ValLike(str: Str, desc: Str) extends TermDefKind(str, desc)
-sealed abstract class Val(str: Str, desc: Str) extends ValLike(str, desc)
+sealed abstract class DeclKind(desc: Str)(using Line) extends OuterKind(desc)
+sealed abstract class TermDefKind(val str: Str, desc: Str)(using Line) extends DeclKind(desc)
+sealed abstract class ValLike(str: Str, desc: Str)(using Line) extends TermDefKind(str, desc)
+sealed abstract class Val(str: Str, desc: Str)(using Line) extends ValLike(str, desc)
 case object ImmutVal extends Val("val", "value")
 case object MutVal extends Val("mut val", "mutable value")
 case object LetBind extends ValLike("let", "let binding")
@@ -408,7 +419,7 @@ case object HandlerBind extends TermDefKind("handler", "handler binding")
 case object ParamBind extends ValLike("", "parameter")
 case object Fun extends TermDefKind("fun", "function")
 case object Ins extends TermDefKind("using", "implicit instance")
-sealed abstract class TypeDefKind(desc: Str) extends DeclKind(desc)
+sealed abstract class TypeDefKind(desc: Str)(using Line) extends DeclKind(desc)
 sealed trait ObjDefKind
 sealed trait ClsLikeKind extends ObjDefKind:
   val desc: Str
@@ -416,9 +427,9 @@ case object Cls extends TypeDefKind("class") with ClsLikeKind
 case object Trt extends TypeDefKind("trait") with ObjDefKind
 case object Mxn extends TypeDefKind("mixin")
 case object Als extends TypeDefKind("type alias")
-case object Mod extends TypeDefKind("module") with ClsLikeKind
-case object Obj extends TypeDefKind("object") with ClsLikeKind
 case object Pat extends TypeDefKind("pattern") with ClsLikeKind
+case object Obj extends TypeDefKind("object") with ClsLikeKind
+case object Mod extends TypeDefKind("module") with ClsLikeKind
 
 
 
@@ -429,8 +440,10 @@ trait TermDefImpl extends TypeOrTermDef:
     (k is Fun) && paramLists.length > 0
   
 
-trait TypeOrTermDef:
+trait TypeOrTermDef extends Located:
   this: TypeDef | TermDef =>
+  
+  def describe: Str
   
   def k: DeclKind
   def head: Tree
@@ -517,17 +530,19 @@ end TypeOrTermDef
 trait TypeDefImpl(using State) extends TypeOrTermDef:
   this: TypeDef =>
   
-  lazy val symbol = k match
-    case Cls => semantics.ClassSymbol(this, name.getOrElse(Ident("‹error›")))
-    case Mod | Obj => semantics.ModuleSymbol(this, name.getOrElse(Ident("‹error›")))
-    case Als => semantics.TypeAliasSymbol(name.getOrElse(Ident("‹error›")))
-    case Pat => semantics.PatternSymbol(
+  import semantics.*
+  
+  lazy val symbol: MemberSymbol[? <: TypeLikeDef] = k match
+    case Cls => ClassSymbol(this, name.getOrElse(Ident("‹error›")))
+    case Mod | Obj => ModuleOrObjectSymbol(this, name.getOrElse(Ident("‹error›")))
+    case Als => TypeAliasSymbol(name.getOrElse(Ident("‹error›")))
+    case Pat => PatternSymbol(
       name.getOrElse(Ident("‹error›")),
       paramLists.headOption,
-      rhs.getOrElse(die))
+      rhs.getOrElse(Empty()))
     case Trt | Mxn => ???
   
-  lazy val definedSymbols: Map[Str, semantics.BlockMemberSymbol] =
+  lazy val definedSymbols: Map[Str, BlockMemberSymbol] =
     // val fromParams = 
     // val fromTypeParams = 
     withPart match
@@ -536,13 +551,13 @@ trait TypeDefImpl(using State) extends TypeOrTermDef:
     case _ =>
       Map.empty
   
-  lazy val clsParams: Ls[semantics.TermSymbol] =
+  lazy val clsParams: Ls[TermSymbol] =
     this.paramLists.headOption.fold(Nil): tup =>
       val pts = tup.fields
       val inUsing = pts.headOption.exists(_.isModified(Ins))
       pts.flatMap(_.asParam(inUsing = inUsing).toOption).map:
         case ParamTree(spd = S(_)) => lastWords("spreads are not allowed in class parameters")
-        case ParamTree(ident = id) => semantics.TermSymbol(ParamBind, symbol.asClsLike, id)
+        case ParamTree(ident = id) => TermSymbol(ParamBind, symbol.asClsLike, id)
       .toList
     
   lazy val allSymbols = definedSymbols ++ clsParams.map(s => s.nme -> s).toMap

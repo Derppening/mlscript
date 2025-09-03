@@ -22,8 +22,11 @@ hi(0)
 //│ JS (unsanitized):
 //│ let hi, res, $_stack$_safe$_body$_;
 //│ hi = function hi(n) {
-//│   let scrut, tmp, stackDelayRes, Cont$func$hi$1;
-//│   Cont$func$hi$1 = class Cont$func$hi$ extends runtime.FunctionContFrame.class {
+//│   let scrut, tmp, curDepth, stackDelayRes, Cont$func$hi$1;
+//│   globalThis.Object.freeze(class Cont$func$hi$ extends runtime.FunctionContFrame.class {
+//│     static {
+//│       Cont$func$hi$1 = this
+//│     }
 //│     constructor(pc) {
 //│       let tmp1;
 //│       tmp1 = super(null);
@@ -56,7 +59,8 @@ hi(0)
 //│     }
 //│     toString() { return runtime.render(this); }
 //│     static [definitionMetadata] = ["class", "Cont$func$hi$"]; 
-//│   };
+//│   });
+//│   curDepth = runtime.stackDepth;
 //│   stackDelayRes = runtime.checkDepth();
 //│   if (stackDelayRes instanceof runtime.EffectSig.class) {
 //│     stackDelayRes.contTrace.last.next = new Cont$func$hi$1(0);
@@ -93,7 +97,10 @@ sum(10000)
 //│ let sum1, res1, $_stack$_safe$_body$_1;
 //│ sum1 = function sum(n) {
 //│   let scrut, tmp, tmp1, curDepth, stackDelayRes, Cont$func$sum$1;
-//│   Cont$func$sum$1 = class Cont$func$sum$ extends runtime.FunctionContFrame.class {
+//│   globalThis.Object.freeze(class Cont$func$sum$ extends runtime.FunctionContFrame.class {
+//│     static {
+//│       Cont$func$sum$1 = this
+//│     }
 //│     constructor(pc) {
 //│       let tmp2;
 //│       tmp2 = super(null);
@@ -139,7 +146,7 @@ sum(10000)
 //│     }
 //│     toString() { return runtime.render(this); }
 //│     static [definitionMetadata] = ["class", "Cont$func$sum$"]; 
-//│   };
+//│   });
 //│   curDepth = runtime.stackDepth;
 //│   stackDelayRes = runtime.checkDepth();
 //│   if (stackDelayRes instanceof runtime.EffectSig.class) {
@@ -338,3 +345,4 @@ handle h = Object with
 h.whoops()
 //│ = 0
 //│ depth = 50000
+

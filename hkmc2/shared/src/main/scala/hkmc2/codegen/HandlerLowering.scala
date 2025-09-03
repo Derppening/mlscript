@@ -439,14 +439,29 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       functionHandlerCtx(s"Cont$$func$$${symToStr(f.sym)}$$", f.sym.nme))
     )
   
-  private def translateCls(cls: ClsLikeDefn)(using HandlerCtx): ClsLikeDefn =
-    val curCtorCtx = if handlerCtx.isTopLevel && (cls.k is syntax.Mod)
-      then topLevelCtx(s"Cont$$modCtor$$${symToStr(cls.sym)}$$", s"‹constructor of ${cls.sym.nme}›")
+  private def translateBody(cls: ClsLikeBody, sym: BlockMemberSymbol)(using HandlerCtx): ClsLikeBody =
+    val curCtorCtx =
+      if handlerCtx.isTopLevel
+      then 
+        topLevelCtx(s"Cont$$modCtor$$${symToStr(sym)}$$", s"‹constructor of ${sym.nme}›")
       else ctorCtx(
         cls.isym.asPath,
-        s"Cont$$ctor$$${symToStr(cls.sym)}$$", s"‹constructor of ${cls.sym.nme}›")
+        s"Cont$$ctor$$${symToStr(sym)}$$", s"‹constructor of ${sym.nme}›")
+    ClsLikeBody(
+      cls.isym,
+      cls.methods.map(translateFun),
+      cls.privateFields,
+      cls.publicFields,
+      translateBlock(cls.ctor, Set.empty, curCtorCtx),
+    )
+  
+  private def translateCls(cls: ClsLikeDefn)(using HandlerCtx): ClsLikeDefn =
+    val curCtorCtx = ctorCtx(
+      cls.isym.asPath,
+      s"Cont$$ctor$$${symToStr(cls.sym)}$$", s"‹constructor of ${cls.sym.nme}›")
     cls.copy(methods = cls.methods.map(translateFun),
-      ctor = translateBlock(cls.ctor, Set.empty, curCtorCtx))
+      ctor = translateBlock(cls.ctor, Set.empty, curCtorCtx),
+      companion = cls.companion.map(translateBody(_, cls.sym)))
   
   // Handle block becomes a FunDefn and CallPlaceholder
   private def translateHandleBlock(h: HandleBlock)(using HandlerCtx): Block =
@@ -477,7 +492,10 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       syntax.Cls,
       N, Nil,
       S(h.par), handlerMtds, Nil, Nil,
-      Assign(freshTmp(), Call(Value.Ref(State.builtinOpsMap("super")), h.args.map(_.asArg))(true, true), End()), End()) // TODO: handle effect in super call
+      Assign(freshTmp(), Call(Value.Ref(State.builtinOpsMap("super")), h.args.map(_.asArg))(true, true), End()),
+      End(),
+      N,
+    ) // TODO: handle effect in super call
     // NOTE: the super call is inside the preCtor
     // during resumption we need to resume both the this.x = x bindings done in JSBuilder and the ctor
     
@@ -644,7 +662,9 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
         pcVar.id,
         Value.Ref(pcVar),
         End()
-      )(S(pcSymbol))))
+      )(S(pcSymbol)),
+      N,
+    ))
   
   private def genNormalBody(b: Block, clsSym: BlockMemberSymbol)(using HandlerCtx): Block =
     val transform = new BlockTransformerShallow(SymbolSubst()):
