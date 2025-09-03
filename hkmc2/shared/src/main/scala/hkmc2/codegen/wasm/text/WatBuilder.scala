@@ -98,6 +98,17 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     )
     S(unreachable)
 
+  def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
+    if a.spread.nonEmpty then die else subexpression(a.value)
+
+  def subexpression(r: Result)(using Ctx, Raise, Scope): Expr = r match
+    case r: Value.Lam =>
+      warnExpr(Ls(
+        msg"WatBuilder::subexpression for Value.Lam not implemented yet" -> r.toLoc,
+        msg"Note: Block IR of expression is `${r.toString}`" -> N
+      ))
+    case r => result(r)
+
   def result(r: Result)(using Ctx, Raise, Scope): Expr = r match
     case Value.Lit(BoolLit(value)) =>
       S(ref.i31(i32.const(if value then 1 else 0)))
@@ -107,6 +118,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         if !l.functionLike =>
       if l.binary then
         l.nme match
+          case "+" =>
+            // TODO(Derppening): Refactor to lower to `Call(plus_impl, ...)`
+            warnExpr(Ls(
+              msg"WatBuilder::result for binary builtin symbol '+' not implemented yet" -> r.toLoc,
+              msg"Note: Block IR of expression is `${r.toString}`" -> N
+            ))
           case lNme =>
             warnExpr(Ls(
               msg"WatBuilder::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> r.toLoc,

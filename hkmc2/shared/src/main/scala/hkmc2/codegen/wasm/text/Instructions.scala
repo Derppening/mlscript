@@ -17,6 +17,13 @@ object Instructions:
       stackargs = Seq.empty,
       exprType = I32Type
     )
+
+    def add(lhs: FoldedInstr, rhs: FoldedInstr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.add",
+      instrargs = Seq.empty,
+      stackargs = Seq(S(lhs), S(rhs)),
+      exprType = I32Type
+    )
   end i32
 
   object ref:
@@ -26,6 +33,25 @@ object Instructions:
       stackargs = Seq(S(value)),
       exprType = RefType.i31ref
     )
+
+    def test(
+        value: FoldedInstr,
+        castType: WasmType | TypeRef
+    ): FoldedInstr = FoldedInstr(
+      mnemonic = "ref.test",
+      instrargs = Seq(castType.toWat),
+      stackargs = Seq(S(value)),
+      exprType = I32Type
+    )
   end ref
+
+  object i31ref:
+    def get(value: FoldedInstr, signed: Bool): FoldedInstr = FoldedInstr(
+      mnemonic = s"i31ref.get_${if signed then 's' else 'u'}",
+      instrargs = Seq.empty,
+      stackargs = Seq(S(value)),
+      exprType = I32Type
+    )
+  end i31ref
 
 end Instructions
