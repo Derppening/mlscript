@@ -1347,7 +1347,8 @@ class WatBackend
                         privFlds,
                         pubFlds,
                         preCtor,
-                        ctor
+                        ctor,
+                        modo
                       ) =>
                     // Guard against unsupported features for now
                     if ownr.nonEmpty then
@@ -1397,6 +1398,13 @@ class WatBackend
                             source = Diagnostic.Source.Compilation
                           )
                         )
+                    if modo.isDefined then
+                      raise(
+                        WarningReport(
+                          msg"WatBackend::returningTerm for ${defn.toString} (`companion.isDefined == true`) not implemented yet" -> N :: Nil,
+                          source = Diagnostic.Source.Compilation
+                        )
+                      )
 
                     val clsParams = paramsOpt.fold(Nil)(_.paramSyms)
                     val ctorParams = clsParams.map: p =>
