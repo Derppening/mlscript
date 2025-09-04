@@ -714,23 +714,23 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           )
     ))
 
-    def cast(value: ExprProxy, castType: WasmType): ExprProxy =
-      new ExprProxy(
-        S(
-          FoldedInstr(
+    def cast(value: ExprProxy, castType: WasmType): ExprProxy = new ExprProxy(S(
+      (value.inner, castType) match
+        case (S(value: FoldedInstr), castType: RefType) =>
+          WasmInstr.ref.cast(value, castType)
+        case (value, castType) => FoldedInstr(
             "ref.cast",
             Seq(castType.toWat),
-            Seq(value.inner),
+            Seq(value),
             castType
           )
-        )
-      )
+    ))
   end ref
 
   def i31ref = new I31Ref:
     def get(i31: ExprProxy, signed: Bool): ExprProxy = new ExprProxy(S(
       i31.inner match
-        case S(value: FoldedInstr) => WasmInstr.i31ref.get(value, signed)
+        case S(value: FoldedInstr) => WasmInstr.i31.get(value, signed)
         case _ => FoldedInstr(
             s"i31.get_${if signed then 's' else 'u'}",
             Seq(),

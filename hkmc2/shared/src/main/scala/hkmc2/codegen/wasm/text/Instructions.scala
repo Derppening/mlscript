@@ -3,6 +3,42 @@ package hkmc2.codegen.wasm.text
 import mlscript.utils.*, shorthands.*
 
 object Instructions:
+  def `if`(
+      condition: FoldedInstr,
+      ifTrue: FoldedInstr,
+      ifFalse: Opt[FoldedInstr]
+  ): FoldedInstr =
+    // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
+    val resultType =
+      (condition.exprType, ifTrue.exprType, ifFalse.map(_.exprType)) match
+        case (UnreachableType, _, _) => UnreachableType
+        case (_, thenTy, S(elseTy)) if thenTy eq elseTy => thenTy
+        case (_, thenTy, S(UnreachableType)) => thenTy
+        case (_, UnreachableType, S(elseTy)) => elseTy
+        case _ => NoneType
+
+    val thenInstr = FoldedInstr(
+      mnemonic = "then",
+      instrargs = Seq.empty,
+      stackargs = Seq(S(ifTrue)),
+      exprType = ifTrue.exprType
+    )
+    val elseInstr = ifFalse.map: elseExpr =>
+      FoldedInstr(
+        mnemonic = "else",
+        instrargs = Seq.empty,
+        stackargs = Seq(S(elseExpr)),
+        exprType = elseExpr.exprType
+      )
+
+    FoldedInstr(
+      mnemonic = "if",
+      instrargs =
+        resultType.toSeq.map(SignatureType(NoneType, _).signatureToWat),
+      stackargs = Seq(S(condition), S(thenInstr)) ++ elseInstr.map(S(_)).toSeq,
+      exprType = resultType
+    )
+
   def unreachable: FoldedInstr = FoldedInstr(
     mnemonic = "unreachable",
     instrargs = Seq.empty,
@@ -34,24 +70,28 @@ object Instructions:
       exprType = RefType.i31ref
     )
 
-    def test(
-        value: FoldedInstr,
-        castType: RefType
-    ): FoldedInstr = FoldedInstr(
+    def test(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.test",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(S(value)),
       exprType = I32Type
     )
+
+    def cast(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
+      mnemonic = "ref.cast",
+      instrargs = Seq(castType.toWat),
+      stackargs = Seq(S(value)),
+      exprType = castType
+    )
   end ref
 
-  object i31ref:
+  object i31:
     def get(i31: FoldedInstr, signed: Bool): FoldedInstr = FoldedInstr(
-      mnemonic = s"i31ref.get_${if signed then 's' else 'u'}",
+      mnemonic = s"i31.get_${if signed then 's' else 'u'}",
       instrargs = Seq.empty,
       stackargs = Seq(S(i31)),
       exprType = I32Type
     )
-  end i31ref
+  end i31
 
 end Instructions

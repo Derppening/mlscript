@@ -120,10 +120,36 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         l.nme match
           case "+" =>
             // TODO(Derppening): Refactor to lower to `Call(plus_impl, ...)`
-            warnExpr(Ls(
-              msg"WatBuilder::result for binary builtin symbol '+' not implemented yet" -> r.toLoc,
-              msg"Note: Block IR of expression is `${r.toString}`" -> N
-            ))
+            def castOperand(expr: FoldedInstr, opSide: Str): FoldedInstr =
+              expr.exprType match
+                case RefType(HeapType.Any, _) => `if`(
+                    ref.test(expr, RefType.i31ref),
+                    ifTrue =
+                      castOperand(ref.cast(expr, RefType.i31ref), opSide),
+                    ifFalse = S(unreachable)
+                  )
+                case RefType(HeapType.I31, _) => i31.get(expr, true)
+                case I32Type => expr
+                case ty => warnExpr(Ls(
+                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.toWat.toString}) not implemented yet" -> r.toLoc,
+                    msg"Note: Block IR of expression is `${r.toString}`" -> N
+                  ))
+                  unreachable
+
+            val lhsOp = castOperand(operand(lhs).get, "lhs")
+            val rhsOp = castOperand(operand(rhs).get, "rhs")
+
+            S(
+              (lhsOp.exprType, rhsOp.exprType) match
+                case (I32Type, I32Type) =>
+                  ref.i31(i32.add(lhsOp, rhsOp))
+                case (lhsType, rhsType) =>
+                  warnExpr(Ls(
+                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.toWat.toString}, ${rhsType.toWat.toString}) not implemented yet" -> r.toLoc,
+                    msg"Note: Block IR of expression is `${r.toString}`" -> N
+                  ))
+                  unreachable
+            )
           case lNme =>
             warnExpr(Ls(
               msg"WatBuilder::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> r.toLoc,
