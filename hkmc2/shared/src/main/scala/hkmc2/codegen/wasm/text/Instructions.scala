@@ -36,7 +36,7 @@ object Instructions:
 
     def test(
         value: FoldedInstr,
-        castType: WasmType | TypeRef
+        castType: RefType
     ): FoldedInstr = FoldedInstr(
       mnemonic = "ref.test",
       instrargs = Seq(castType.toWat),
@@ -46,10 +46,10 @@ object Instructions:
   end ref
 
   object i31ref:
-    def get(value: FoldedInstr, signed: Bool): FoldedInstr = FoldedInstr(
+    def get(i31: FoldedInstr, signed: Bool): FoldedInstr = FoldedInstr(
       mnemonic = s"i31ref.get_${if signed then 's' else 'u'}",
       instrargs = Seq.empty,
-      stackargs = Seq(S(value)),
+      stackargs = Seq(S(i31)),
       exprType = I32Type
     )
   end i31ref

@@ -696,22 +696,23 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty))
       )
 
-    def i31(value: ExprProxy): ExprProxy =
-      new ExprProxy(
-        S(FoldedInstr("ref.i31", Seq(), Seq(value.inner), gen.i31ref))
-      )
+    def i31(value: ExprProxy): ExprProxy = new ExprProxy(S(
+      value.inner match
+        case S(value: FoldedInstr) => WasmInstr.ref.i31(value)
+        case value => FoldedInstr("ref.i31", Seq(), Seq(value), gen.i31ref)
+    ))
 
-    def test(value: ExprProxy, castType: WasmType): ExprProxy =
-      new ExprProxy(
-        S(
-          FoldedInstr(
+    def test(value: ExprProxy, castType: WasmType): ExprProxy = new ExprProxy(S(
+      (value.inner, castType) match
+        case (S(value: FoldedInstr), castType: RefType) =>
+          WasmInstr.ref.test(value, castType)
+        case (value, castType) => FoldedInstr(
             "ref.test",
             Seq(castType.toWat),
-            Seq(value.inner),
+            Seq(value),
             gen.i32
           )
-        )
-      )
+    ))
 
     def cast(value: ExprProxy, castType: WasmType): ExprProxy =
       new ExprProxy(
@@ -727,17 +728,16 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   end ref
 
   def i31ref = new I31Ref:
-    def get(i31: ExprProxy, signed: Bool): ExprProxy =
-      ExprProxy(
-        S(
-          FoldedInstr(
+    def get(i31: ExprProxy, signed: Bool): ExprProxy = new ExprProxy(S(
+      i31.inner match
+        case S(value: FoldedInstr) => WasmInstr.i31ref.get(value, signed)
+        case _ => FoldedInstr(
             s"i31.get_${if signed then 's' else 'u'}",
             Seq(),
             Seq(i31.inner),
             I32Type
           )
-        )
-      )
+    ))
   end i31ref
 
   def struct = new Struct:
