@@ -1,8 +1,27 @@
-package hkmc2.codegen.wasm.text
+package hkmc2
+package codegen.wasm.text
 
 import mlscript.utils.*, shorthands.*
 
+import document.*
+
 object Instructions:
+  def block(
+      label: Opt[Str],
+      children: Seq[FoldedInstr],
+      resultType: WasmType
+  ): FoldedInstr =
+    val labelWat = label.map(lbl => doc"$$$lbl")
+    val resultsWat = resultType.toSeq.map:
+      SignatureType(NoneType, _).signatureToWat
+
+    FoldedInstr(
+      mnemonic = "block",
+      instrargs = labelWat.toSeq ++ resultsWat,
+      stackargs = children.map(S(_)),
+      exprType = resultType
+    )
+
   def `if`(
       condition: FoldedInstr,
       ifTrue: FoldedInstr,
@@ -93,5 +112,14 @@ object Instructions:
       exprType = I32Type
     )
   end i31
+
+  object local:
+    def get(index: Int, ty: WasmType): FoldedInstr = FoldedInstr(
+      mnemonic = "local.get",
+      instrargs = Seq(s"$index"),
+      stackargs = Seq.empty,
+      exprType = ty
+    )
+  end local
 
 end Instructions

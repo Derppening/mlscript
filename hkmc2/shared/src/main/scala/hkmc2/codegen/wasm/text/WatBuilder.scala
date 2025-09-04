@@ -14,7 +14,7 @@ import syntax.Tree.{BoolLit, IntLit}
 import Message.MessageContext
 import Scope.scope
 
-import scala.collection.mutable.Map as MutMap
+import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 
 extension (doc: Document)
   private def surroundUnlessEmpty(
@@ -44,7 +44,7 @@ private final case class FuncInfo(
       } #{ ${
         locals.map(p => doc"(local ${RefType.anyref.toWat})").toSeq.mkDocument(
           doc" # "
-        )
+        ).surroundUnlessEmpty(doc" # ")
       } # ${body.toWat} #} )\n(export "${name.nme}" (func $$${name.nme}))${
         if emitElem then doc"\n(elem declare func $$${name.nme})" else doc""
       }"""
@@ -59,6 +59,7 @@ object Ctx:
   def empty: Ctx = Ctx(
     types = MutMap.empty,
     funcs = MutMap.empty,
+    locals = Ls.empty,
     main = N
   )
 
@@ -67,6 +68,7 @@ object Ctx:
 private final case class Ctx(
     val types: MutMap[ClsLikeDefn, TypeInfo],
     val funcs: MutMap[FunDefn, FuncInfo],
+    var locals: Ls[ArrayBuf[Str]],
     var main: Opt[Symbol -> FuncInfo]
 ) extends ToWat:
 
@@ -97,6 +99,35 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ErrorReport(errMsg :: Nil, source = Diagnostic.Source.Compilation)
     )
     S(unreachable)
+
+  def getVar(l: Local, loc: Opt[Loc])(using Ctx, Raise, Scope): Expr = l match
+    case ts: semantics.TermSymbol =>
+      warnExpr(Ls(
+        msg"WatBuilder::getVar for TermSymbol not implemented yet" -> l.toLoc,
+        msg"Note: Block IR of expression is `${l.toString}`" -> N
+      ))
+    case ts: semantics.ModuleOrObjectSymbol if ts.asMod.isDefined =>
+      warnExpr(Ls(
+        msg"WatBuilder::getVar for ModuleOrObjectSymbol (`ts.asMod.isDefined`) not implemented yet" -> l.toLoc,
+        msg"Note: Block IR of expression is `${l.toString}`" -> N
+      ))
+    case ts: semantics.InnerSymbol =>
+      warnExpr(Ls(
+        msg"WatBuilder::getVar for InnerSymbol not implemented yet" -> l.toLoc,
+        msg"Note: Block IR of expression is `${l.toString}`" -> N
+      ))
+    case _ =>
+      val v = scope.lookup_!(l, loc)
+      if !scope.inScope(v) then
+        return warnExpr(Ls(
+          msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (`l` not in top-level scope) not implemented yet" -> l.toLoc,
+          msg"Note: Block IR of expression is `${l.toString}`" -> N
+        ))
+      val lclIdx = summon[Ctx].locals.head.indexOf(v).ensuring(
+        _ >= 0,
+        s"Expected local $l (id=`$v`) to be in scope"
+      )
+      S(local.get(lclIdx, RefType.anyref))
 
   def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
     if a.spread.nonEmpty then die else subexpression(a.value)
@@ -130,7 +161,8 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   )
                 case RefType(HeapType.I31, _) => i31.get(expr, true)
                 case I32Type => expr
-                case ty => warnExpr(Ls(
+                case ty =>
+                  warnExpr(Ls(
                     msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.toWat.toString}) not implemented yet" -> r.toLoc,
                     msg"Note: Block IR of expression is `${r.toString}`" -> N
                   ))
@@ -170,6 +202,21 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       errExpr(
         msg"This code requires effect handler instrumentation but was compiled without it." -> t.toLoc
       )
+    case Assign(l, r, rst) =>
+      val lExpr = getVar(l, t.toLoc).get
+      val rExpr = result(r).get
+      val assignExpr = lExpr.mnemonic match
+        case "global.get" => ???
+        case "local.get" =>
+          local.get(lExpr.instrargs(0).toString.toInt, RefType.anyref)
+        case mnemonic => ???
+      val rstBlk = returningTerm(rst)
+
+      S(Instructions.block(
+        label = N,
+        children = Seq(assignExpr) ++ rstBlk.toSeq,
+        resultType = rstBlk.map(_.exprType).getOrElse(NoneType)
+      ))
     case Return(res, true) =>
       result(res)
     case t =>
@@ -202,16 +249,24 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       BlockMemberSymbol("entry", Nil),
       params = Seq.empty,
       nResults = 1,
+      // TODO(Derppening): Should we place top-level scope variables in the global section?
       locals = scope._3.keysIterator.toSeq,
       entryFnExpr
     )
     ctx.main = S(entryFn.name -> entryFn)
     ctx
 
-  def blockPreamble(ss: Iterable[Symbol])(using Raise, Scope): Unit =
-    ss.filter(
+  def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Unit =
+    val vars = ss.filter(
       scope.lookup(_).toSeq.isEmpty
-    ).toSeq.toArray.sortBy(_.uid).toSeq.iterator.foreach(scope.allocateName(_))
+    ).toSeq.toArray.sortBy(_.uid).iterator.map:
+      scope.allocateName(_)
+
+    val ctx = summon[Ctx]
+    if vars.isEmpty then
+      ctx.locals = ArrayBuf.empty +: ctx.locals
+    else
+      ctx.locals = vars.to(ArrayBuf) +: ctx.locals
 
   def block(t: Block)(using Ctx, Raise, Scope) =
     blockPreamble(t.definedVars)

@@ -61,22 +61,27 @@ true
 
 
 :wasm
+:ewat
 let x = 0
 x
-//│ Wat:
-//│ (module
-//│   (type $_0 (func (result (ref null any))))
-//│   (func $main (result (ref null any)) 
-//│     (block (result (ref null any))
-//│       (global.set 0
-//│         (ref.i31
-//│           (i32.const 0)))
-//│       (global.get 0)))
-//│   (global $0 (mut (ref null any)) (ref.null any))
-//│   (export "main" (func $main))
-//│   (elem declare func $main))
-//│ rwasm: Running
-//│ 0
+//│ FAILURE: Unexpected warning
+//│ FAILURE LOCATION: warnExpr (WatBuilder.scala:93)
+//│ ╔══[WARNING] WatBackend::result for expression not implemented yet
+//│ ║  l.66: 	x
+//│ ║        	^
+//│ ╙── Note: Block IR of expression is `Ref(x)`
+//│ FAILURE: Unexpected exception
+//│ /!!!\ Uncaught error: java.lang.UnsupportedOperationException: UnreachableType is a compiler-internal type and cannot be converted to WAT
+//│ 	at: hkmc2.codegen.wasm.text.UnreachableType$.toWat(Module.scala:46)
+//│ 	at: hkmc2.codegen.wasm.text.SignatureType.signatureToWat$$anonfun$2(Module.scala:120)
+//│ 	at: scala.collection.immutable.List.map(List.scala:247)
+//│ 	at: scala.collection.immutable.List.map(List.scala:79)
+//│ 	at: hkmc2.codegen.wasm.text.SignatureType.signatureToWat(Module.scala:119)
+//│ 	at: hkmc2.codegen.wasm.text.Instructions$.$anonfun$2(Instructions.scala:16)
+//│ 	at: scala.collection.immutable.List.map(List.scala:247)
+//│ 	at: scala.collection.immutable.List.map(List.scala:79)
+//│ 	at: hkmc2.codegen.wasm.text.Instructions$.block(Instructions.scala:16)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:218)
 
 
 :wasm
