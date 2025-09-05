@@ -58,6 +58,20 @@ object Instructions:
       exprType = resultType
     )
 
+  def nop: FoldedInstr = FoldedInstr(
+    mnemonic = "nop",
+    instrargs = Seq.empty,
+    stackargs = Seq.empty,
+    exprType = NoneType
+  )
+
+  def `return`(value: Opt[FoldedInstr]): FoldedInstr = FoldedInstr(
+    mnemonic = "return",
+    instrargs = Seq.empty,
+    stackargs = Seq(value),
+    exprType = value.fold(NoneType)(_.exprType)
+  )
+
   def unreachable: FoldedInstr = FoldedInstr(
     mnemonic = "unreachable",
     instrargs = Seq.empty,

@@ -79,28 +79,20 @@ x
 
 
 :wasm
+:ewat
+:todo
 fun foo() = 42
 foo()
-//│ Wat:
-//│ (module
-//│   (type $_0 (func (result (ref null i31))))
-//│   (type $_1 (func (result (ref null i31))))
-//│   (type $_2 (func (result (ref null i31))))
-//│   (func $foo (result (ref null i31)) 
-//│     (return
-//│       (ref.i31
-//│         (i32.const 42))))
-//│   (func $main (result (ref null i31)) 
-//│     (block (result (ref null i31))
-//│       (nop)
-//│       (call_ref $_1
-//│         (ref.func $foo))))
-//│   (global $0 (mut (ref null any)) (ref.null any))
-//│   (export "main" (func $main))
-//│   (elem declare func $foo)
-//│   (elem declare func $main))
-//│ rwasm: Running
-//│ 42
+//│ ╔══[WARNING] WatBuilder::getVar for BlockMemberSymbol (symbol not in top-level scope) not implemented yet
+//│ ║  l.84: 	fun foo() = 42
+//│ ║        	^^^^^^^^^^^^^^
+//│ ╟── Note: Block IR of expression is `member:foo`
+//│ ╙── Note: Scope is Scope(Some(Scope(Some(Scope(None,Some(Some(globalThis:globalThis)),HashMap($wasm -> wasm))),None,HashMap(member:foo -> foo))),Some(None),HashMap())
+//│ ╔══[WARNING] WatBackend::result for expression not implemented yet
+//│ ║  l.85: 	foo()
+//│ ║        	^^^^^
+//│ ╙── Note: Block IR of expression is `Call(Ref(member:foo),List())`
+//│ /!!!\ Uncaught error: java.lang.UnsupportedOperationException: UnreachableType is a compiler-internal type and cannot be converted to WAT
 
 
 :wasm

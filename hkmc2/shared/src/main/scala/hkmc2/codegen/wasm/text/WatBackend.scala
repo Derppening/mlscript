@@ -628,8 +628,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         )
   ))
 
-  def nop(): ExprProxy =
-    new ExprProxy(S(FoldedInstr("nop", Seq(), Seq(), NoneType)))
+  def nop(): ExprProxy = new ExprProxy(S(WasmInstr.nop))
 
   def `return`(value: Opt[ExprProxy]): ExprProxy =
     new ExprProxy(
@@ -1011,7 +1010,7 @@ class WatBackend
     if a.spread.nonEmpty then die else subexpression(a.value)
 
   def subexpression(
-      r: Result
+      r: codegen.Result
   )(using ModuleProxy, Locals, Raise): ExprProxy = result(r)
 
   def fieldSelect(`this`: ExprProxy, s: Str)(using mod: ModuleProxy): Int =
@@ -1028,7 +1027,7 @@ class WatBackend
         )
 
   def result(
-      r: Result
+      r: codegen.Result
   )(using ModuleProxy, Locals, Raise): ExprProxy =
     val mod = summon[ModuleProxy]
     r match
@@ -1143,7 +1142,12 @@ class WatBackend
             RefType
           ].heapType.asInstanceOf[SignatureType]
           val wasmArgs = args.map(argument)
-          mod.call_ref(base, wasmArgs, baseTy.params, baseTy.results)
+          mod.call_ref(
+            base,
+            wasmArgs,
+            createType(baseTy.params.map(_.valtype)),
+            createType(baseTy.results.map(_.valtype))
+          )
         else base
       case sel @ Select(qual, id) =>
         sel.symbol match

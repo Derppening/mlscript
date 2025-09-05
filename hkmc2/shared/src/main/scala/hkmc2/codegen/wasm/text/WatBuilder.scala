@@ -11,8 +11,10 @@ import document.Document
 import js.CodeBuilder
 import semantics.*, Elaborator.State
 import syntax.Tree.{BoolLit, IntLit}
+import text.Param as WasmParam
 import Message.MessageContext
 import Scope.scope
+import Value.Lam
 
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 
@@ -80,6 +82,7 @@ private final case class Ctx(
 end Ctx
 
 final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
+  import Ctx.ctx
   import Instructions.*
 
   type Context = Unit
@@ -118,21 +121,20 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ))
     case _ =>
       val v = scope.lookup_!(l, loc)
-      if !scope.inScope(v) then
-        return warnExpr(Ls(
-          msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (`l` not in top-level scope) not implemented yet" -> l.toLoc,
-          msg"Note: Block IR of expression is `${l.toString}`" -> N
+      val lclIdx = ctx.locals.head.indexOf(v)
+      if lclIdx >= 0 then
+        S(local.get(lclIdx, RefType.anyref))
+      else
+        warnExpr(Ls(
+          msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc,
+          msg"Note: Block IR of expression is `${l.toString}`" -> N,
+          msg"Note: Scope is ${scope.toString}" -> N
         ))
-      val lclIdx = summon[Ctx].locals.head.indexOf(v).ensuring(
-        _ >= 0,
-        s"Expected local $l (id=`$v`) to be in scope"
-      )
-      S(local.get(lclIdx, RefType.anyref))
 
   def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
     if a.spread.nonEmpty then die else subexpression(a.value)
 
-  def subexpression(r: Result)(using Ctx, Raise, Scope): Expr = r match
+  def subexpression(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
     case r: Value.Lam =>
       warnExpr(Ls(
         msg"WatBuilder::subexpression for Value.Lam not implemented yet" -> r.toLoc,
@@ -140,7 +142,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ))
     case r => result(r)
 
-  def result(r: Result)(using Ctx, Raise, Scope): Expr = r match
+  def result(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
     case Value.Lit(BoolLit(value)) =>
       S(ref.i31(i32.const(if value then 1 else 0)))
     case Value.Lit(IntLit(value)) =>
@@ -226,8 +228,73 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         children = Seq(assignExpr) ++ rstBlk.toSeq,
         resultType = rstBlk.map(_.exprType).getOrElse(NoneType)
       ))
+
+    case Define(defn, rst) =>
+      def mkThis(sym: InnerSymbol): Expr = result(Value.This(sym))
+      defn match
+        case defn: (FunDefn | ClsLikeDefn) =>
+          val outerScope = scope
+          val (thisProxy, res) = scope.nestRebindThis(
+            // * Either this is an InnerSymbol or this is a Fun,
+            // * and we need to rebind `this` to None to shadow it.
+            defn.innerSym.collectFirst:
+              case s: InnerSymbol => s
+          ):
+            defn match
+              case FunDefn(own, sym, Nil, body) =>
+                lastWords("cannot generate function with no parameter list")
+              case FunDefn(own, sym, ps :: pss, bod) =>
+                val result = pss.foldRight(bod):
+                  case (ps, block) =>
+                    Return(Lam(ps, block), false)
+                val name = if sym.nameIsMeaningful then S(sym.nme) else N
+                val (params, bodyWat) = setupFunction(name, ps, result)
+                if sym.nameIsMeaningful then
+                  val funcVar = getVar(sym, sym.toLoc)
+                  // TODO(Derppening): Uhh...
+                  ctx.funcs(defn.asInstanceOf[FunDefn]) = FuncInfo(
+                    sym,
+                    ps.params.map(p => p.sym),
+                    bodyWat.get.exprType.toSeq.length,
+                    Seq.empty,
+                    bodyWat.get
+                  )
+                  funcVar
+                else
+                  warnExpr(Ls(
+                    msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> t.toLoc,
+                    msg"Note: Block IR of definition is `${defn.toString}`" -> N
+                  ))
+              case defn =>
+                warnExpr(Ls(
+                  msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> t.toLoc,
+                  msg"Note: Block IR of definition is `${defn.toString}`" -> N
+                ))
+          end val
+
+          val rstBlk = returningTerm(rst)
+          thisProxy match
+            case S(proxy) if !scope.thisProxyDefined =>
+              scope.thisProxyDefined = true
+              warnExpr(Ls(
+                msg"WatBuilder::returningTerm for Define(...) where `!scope.thisProxyDefined` not implemented yet" -> t.toLoc,
+                msg"Note: Block IR of definition is `${defn.toString}`" -> N
+              ))
+            case _ => S(Instructions.block(
+                label = N,
+                children = Seq(res.get, rstBlk.get),
+                resultType = rstBlk.map(_.exprType).getOrElse(NoneType)
+              ))
+
+        case defn =>
+          warnExpr(Ls(
+            msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> t.toLoc,
+            msg"Note: Block IR of expression is `${t.toString}`" -> N
+          ))
     case Return(res, true) =>
       result(res)
+    case Return(res, false) =>
+      S(`return`(result(res)))
     case t =>
       warnExpr(Ls(
         msg"WatBuilder::returningTerm for expression not implemented yet" -> t.toLoc,
@@ -271,14 +338,38 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ).toSeq.toArray.sortBy(_.uid).iterator.map:
       scope.allocateName(_)
 
-    val ctx = summon[Ctx]
     if vars.isEmpty then
       ctx.locals = ArrayBuf.empty +: ctx.locals
     else
       ctx.locals = vars.to(ArrayBuf) +: ctx.locals
 
-  def block(t: Block)(using Ctx, Raise, Scope) =
+  def block(t: Block)(using Ctx, Raise, Scope): Expr =
     blockPreamble(t.definedVars)
     returningTerm(t)
+
+  def body(t: Block)(using Ctx, Raise, Scope): Expr = 
+    // scope.nest givenIn:
+    //   block(t)
+    block(t)
+
+  def setupFunction(name: Option[Str], params: ParamList, body: Block)(using
+      Ctx,
+      Raise,
+      Scope
+  ): (Seq[WasmParam], Expr) =
+    // Add a frame for `ctx.locals`
+    // TODO(Derppening): If we are already in a function, we should just append locals to the current local set
+    ctx.locals = ArrayBuf() +: ctx.locals
+
+    scope.nest givenIn:
+      val paramsList = params.params.map(p =>
+        WasmParam(S(scope.allocateName(p.sym)), RefType.anyref)
+      )
+      val res = (paramsList.toSeq, this.body(body))
+
+      // Restore `ctx.locals`
+      ctx.locals = ctx.locals.tail
+      
+      res
 
 end WatBuilder

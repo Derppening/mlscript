@@ -52,6 +52,9 @@ private case class MultiValueType(types: Seq[WasmType]) extends WasmType:
   )
 end MultiValueType
 
+type NumType = I32Type.type | I64Type.type | F32Type.type | F64Type.type
+type VecType = V128Type.type
+
 /** Enumeration of all Wasm packed types. */
 enum WasmPackedType extends PackedType, ToWat:
   case NotPacked
@@ -112,13 +115,31 @@ object HeapType:
 /** Abstract base class for all Wasm heap types. */
 abstract class HeapType extends ToWat
 
+type ValType = NumType | VecType | RefType
+
+case class Param(id: Opt[Str], valtype: ValType) extends ToWat:
+  def toWat: Document =
+    doc"(param${id.fold(doc"")(id => doc" $id")} ${valtype.toWat})"
+end Param
+
+case class Result(valtype: ValType) extends ToWat:
+  def toWat: Document = doc"(result ${valtype.toWat})"
+end Result
+
+object SignatureType:
+  def apply(params: WasmType, results: WasmType): SignatureType =
+    new SignatureType(
+      params = params.toSeq.map(p => Param(N, p.asInstanceOf[ValType])),
+      results = results.toSeq.map(r => Result(r.asInstanceOf[ValType]))
+    )
+
 /** A type representing a function signature. */
-case class SignatureType(params: WasmType, results: WasmType) extends HeapType,
+case class SignatureType(params: Seq[Param], results: Seq[Result])
+    extends HeapType,
       ToWat:
+
   def signatureToWat: Document =
-    (params.toSeq.map(p => doc"(param ${p.toWat})") ++ results.toSeq.map(r =>
-      doc"(result ${r.toWat})"
-    )).mkDocument(" ")
+    (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
 
   def toWat: Document =
     doc"(func${signatureToWat.optionUnless(_.isEmpty).dlof(sig => doc" $sig")(doc"")})"
@@ -138,12 +159,18 @@ object Field:
     new Field(I32Type, packedType, mutable, id)
 
 /** A type represening a struct field. */
-case class Field(ty: WasmType, packedType: WasmPackedType, mutable: Bool, id: Opt[Str])
-    extends ToWat:
+case class Field(
+    ty: WasmType,
+    packedType: WasmPackedType,
+    mutable: Bool,
+    id: Opt[Str]
+) extends ToWat:
   def toWat: Document =
     val tyWat = if packedType != WasmPackedType.NotPacked then packedType.toWat
     else ty.toWat
-    doc"(field ${id.dlof(id => doc"$$$id ")(doc"")}${if mutable then doc"(mut ${tyWat})" else tyWat})"
+    doc"(field ${id.dlof(id => doc"$$$id ")(doc"")}${
+        if mutable then doc"(mut ${tyWat})" else tyWat
+      })"
 end Field
 
 /** A type representing a structure type. */
