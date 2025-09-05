@@ -77,7 +77,9 @@ object Instructions:
       mnemonic = "i32.add",
       instrargs = Seq.empty,
       stackargs = Seq(S(lhs), S(rhs)),
-      exprType = I32Type
+      exprType = (lhs.exprType, rhs.exprType) match
+        case (UnreachableType, _) | (_, UnreachableType) => UnreachableType
+        case _ => I32Type
     )
   end i32
 
@@ -86,21 +88,25 @@ object Instructions:
       mnemonic = "ref.i31",
       instrargs = Seq.empty,
       stackargs = Seq(S(value)),
-      exprType = RefType.i31ref
+      exprType =
+        if value.exprType is UnreachableType then UnreachableType
+        else RefType.i31ref
     )
 
     def test(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.test",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(S(value)),
-      exprType = I32Type
+      exprType =
+        if value.exprType is UnreachableType then UnreachableType else I32Type
     )
 
     def cast(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.cast",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(S(value)),
-      exprType = castType
+      exprType =
+        if value.exprType is UnreachableType then UnreachableType else castType
     )
   end ref
 
@@ -109,8 +115,11 @@ object Instructions:
       mnemonic = s"i31.get_${if signed then 's' else 'u'}",
       instrargs = Seq.empty,
       stackargs = Seq(S(i31)),
-      exprType = I32Type
+      exprType =
+        if i31.exprType is UnreachableType then UnreachableType else I32Type
     )
+
+    def get_s(i31: FoldedInstr): FoldedInstr = get(i31, true)
   end i31
 
   object local:

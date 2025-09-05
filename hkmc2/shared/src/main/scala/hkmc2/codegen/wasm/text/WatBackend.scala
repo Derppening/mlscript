@@ -565,8 +565,18 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       children: Seq[ExprProxy],
       resultType: Opt[WasmType]
   ): ExprProxy =
-    new ExprProxy(
-      S(
+    new ExprProxy(S(
+      if children.forall: child =>
+          child.inner match
+            case S(foldedInstr: FoldedInstr) => true
+            case _ => false
+      then
+        WasmInstr.block(
+          label,
+          children.map(_.inner.asInstanceOf[Option[FoldedInstr]].get),
+          resultType.getOrElse(NoneType)
+        )
+      else
         FoldedInstr(
           "block",
           label.map(label => s"$$$label").toSeq ++ resultType.map(
@@ -578,24 +588,31 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           children.map(_.inner),
           resultType.getOrElse(NoneType)
         )
-      )
-    )
+    ))
 
   def `if`(
       condition: ExprProxy,
       ifTrue: ExprProxy,
       ifFalse: Opt[ExprProxy]
-  ): ExprProxy =
-    // TODO(Derppening): Add support for `condition.getType is UnreachableType`
-    // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
-    val resultType = (ifTrue.getType, ifFalse.map(_.getType)) match
-      case (thenTy, S(elseTy)) if thenTy eq elseTy => thenTy
-      case (thenTy, S(UnreachableType)) => thenTy
-      case (UnreachableType, S(elseTy)) => elseTy
-      case _ => gen.none
+  ): ExprProxy = new ExprProxy(S(
+    (condition.inner, ifTrue.inner, ifFalse.map(_.inner)) match
+      case (
+            S(condition: FoldedInstr),
+            S(ifTrue: FoldedInstr),
+            S(S(ifFalse: FoldedInstr))
+          ) =>
+        WasmInstr.`if`(condition, ifTrue, S(ifFalse))
+      case (S(condition: FoldedInstr), S(ifTrue: FoldedInstr), N) =>
+        WasmInstr.`if`(condition, ifTrue, N)
+      case _ =>
+        // TODO(Derppening): Add support for `condition.getType is UnreachableType`
+        // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
+        val resultType = (ifTrue.getType, ifFalse.map(_.getType)) match
+          case (thenTy, S(elseTy)) if thenTy eq elseTy => thenTy
+          case (thenTy, S(UnreachableType)) => thenTy
+          case (UnreachableType, S(elseTy)) => elseTy
+          case _ => gen.none
 
-    new ExprProxy(
-      S(
         FoldedInstr(
           "if",
           resultType.toSeq.map(SignatureType(NoneType, _).signatureToWat),
@@ -609,8 +626,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
               .toSeq,
           resultType
         )
-      )
-    )
+  ))
 
   def nop(): ExprProxy =
     new ExprProxy(S(FoldedInstr("nop", Seq(), Seq(), NoneType)))
@@ -663,10 +679,13 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     def const(value: Int): ExprProxy =
       new ExprProxy(S(WasmInstr.i32.const(value)))
 
-    def add(left: ExprProxy, right: ExprProxy): ExprProxy =
-      new ExprProxy(
-        S(FoldedInstr("i32.add", Seq(), Seq(left.inner, right.inner), I32Type))
-      )
+    def add(left: ExprProxy, right: ExprProxy): ExprProxy = new ExprProxy(S(
+      (left.inner, right.inner) match
+        case (S(left: FoldedInstr), S(right: FoldedInstr)) =>
+          WasmInstr.i32.add(left, right)
+        case (left, right) =>
+          FoldedInstr("i32.add", Seq(), Seq(left, right), I32Type)
+    ))
   end i32
 
   def ref = new Ref:
@@ -731,10 +750,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     def get(i31: ExprProxy, signed: Bool): ExprProxy = new ExprProxy(S(
       i31.inner match
         case S(value: FoldedInstr) => WasmInstr.i31.get(value, signed)
-        case _ => FoldedInstr(
+        case i31 => FoldedInstr(
             s"i31.get_${if signed then 's' else 'u'}",
             Seq(),
-            Seq(i31.inner),
+            Seq(i31),
             I32Type
           )
     ))
@@ -839,17 +858,9 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   end struct
 
   def local = new Local:
-    def get(index: Int, ty: WasmType): ExprProxy =
-      ExprProxy(
-        S(
-          FoldedInstr(
-            "local.get",
-            Seq(s"$index"),
-            Seq(),
-            ty
-          )
-        )
-      )
+    def get(index: Int, ty: WasmType): ExprProxy = new ExprProxy(S(
+      WasmInstr.local.get(index, ty)
+    ))
 
     def set(index: Int, value: ExprProxy): ExprProxy =
       ExprProxy(
