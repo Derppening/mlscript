@@ -129,6 +129,14 @@ object Instructions:
       stackargs = Seq.empty,
       exprType = ty
     )
+
+    def set(index: Int, value: FoldedInstr): FoldedInstr = FoldedInstr(
+      mnemonic = "local.set",
+      instrargs = Seq(s"$index"),
+      stackargs = Seq(S(value)),
+      exprType =
+        if value.exprType is UnreachableType then UnreachableType else NoneType
+    )
   end local
 
 end Instructions

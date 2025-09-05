@@ -862,17 +862,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       WasmInstr.local.get(index, ty)
     ))
 
-    def set(index: Int, value: ExprProxy): ExprProxy =
-      ExprProxy(
-        S(
-          FoldedInstr(
-            "local.set",
-            Seq(s"$index"),
-            Seq(value.inner),
-            NoneType
-          )
-        )
-      )
+    def set(index: Int, value: ExprProxy): ExprProxy = new ExprProxy(S(
+      value.inner match
+        case S(value: FoldedInstr) => WasmInstr.local.set(index, value)
+        case value =>
+          FoldedInstr("local.set", Seq(s"$index"), Seq(value), NoneType)
+    ))
   end local
 
   def global = new Global:

@@ -145,6 +145,8 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       S(ref.i31(i32.const(if value then 1 else 0)))
     case Value.Lit(IntLit(value)) =>
       S(ref.i31(i32.const(value.toInt)))
+    case Value.Ref(l) => getVar(l, r.toLoc)
+
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
         if !l.functionLike =>
       if l.binary then
@@ -205,11 +207,18 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case Assign(l, r, rst) =>
       val lExpr = getVar(l, t.toLoc).get
       val rExpr = result(r).get
+      val idx = lExpr.instrargs(0).toString.toInt
       val assignExpr = lExpr.mnemonic match
-        case "global.get" => ???
-        case "local.get" =>
-          local.get(lExpr.instrargs(0).toString.toInt, RefType.anyref)
-        case mnemonic => ???
+        case "global.get" =>
+          warnExpr(Ls(
+            msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
+            msg"Note: Block IR of expression is `${t.toString}`" -> N
+          )).get
+        case "local.get" => local.set(idx, rExpr)
+        case mnemonic =>
+          lastWords(
+            s"Expected `global.get` or `local.get` when compiling instruction for `$l`, but got ${lExpr.mnemonic}"
+          )
       val rstBlk = returningTerm(rst)
 
       S(Instructions.block(

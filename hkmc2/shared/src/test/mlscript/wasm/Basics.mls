@@ -64,24 +64,18 @@ true
 :ewat
 let x = 0
 x
-//│ FAILURE: Unexpected warning
-//│ FAILURE LOCATION: warnExpr (WatBuilder.scala:93)
-//│ ╔══[WARNING] WatBackend::result for expression not implemented yet
-//│ ║  l.66: 	x
-//│ ║        	^
-//│ ╙── Note: Block IR of expression is `Ref(x)`
-//│ FAILURE: Unexpected exception
-//│ /!!!\ Uncaught error: java.lang.UnsupportedOperationException: UnreachableType is a compiler-internal type and cannot be converted to WAT
-//│ 	at: hkmc2.codegen.wasm.text.UnreachableType$.toWat(Module.scala:46)
-//│ 	at: hkmc2.codegen.wasm.text.SignatureType.signatureToWat$$anonfun$2(Module.scala:120)
-//│ 	at: scala.collection.immutable.List.map(List.scala:247)
-//│ 	at: scala.collection.immutable.List.map(List.scala:79)
-//│ 	at: hkmc2.codegen.wasm.text.SignatureType.signatureToWat(Module.scala:119)
-//│ 	at: hkmc2.codegen.wasm.text.Instructions$.$anonfun$2(Instructions.scala:16)
-//│ 	at: scala.collection.immutable.List.map(List.scala:247)
-//│ 	at: scala.collection.immutable.List.map(List.scala:79)
-//│ 	at: hkmc2.codegen.wasm.text.Instructions$.block(Instructions.scala:16)
-//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:218)
+//│ Wat:
+//│ (module
+//│   (func $entry (result (ref null any))
+//│     (local (ref null any))
+//│     (block (result (ref null any))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 0)))
+//│       (local.get 0)))
+//│   (export "entry" (func $entry)))
+//│ rwasm: Running
+//│ 0
 
 
 :wasm
@@ -176,7 +170,7 @@ new Foo(0)
 //│     (block (result (ref $Foo))
 //│       (local.set 1
 //│         (struct.new_default $Foo))
-//│       (block 
+//│       (block
 //│         (struct.set $Foo 0
 //│           (local.get 1)
 //│           (local.get 0))
@@ -210,7 +204,7 @@ class Foo(val a)
 //│     (block (result (ref $Foo))
 //│       (local.set 1
 //│         (struct.new_default $Foo))
-//│       (block 
+//│       (block
 //│         (struct.set $Foo 0
 //│           (local.get 1)
 //│           (local.get 0))
