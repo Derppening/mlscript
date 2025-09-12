@@ -26,15 +26,30 @@ extension (doc: Document)
     doc.optionUnless(_.isEmpty).fold(doc):
       prefix :: _ :: postfix
 
+object FuncInfo:
+  def apply(
+      name: BlockMemberSymbol,
+      params: Seq[Local],
+      nResults: Int,
+      locals: Seq[Local -> WasmType],
+      body: FoldedInstr
+  ): FuncInfo = FuncInfo(
+    FuncRef(name.nme),
+    params,
+    nResults,
+    locals,
+    body
+  )
+
 private final case class FuncInfo(
-    val name: BlockMemberSymbol,
+    val id: FuncRef,
     val params: Seq[Local],
     val nResults: Int,
-    val locals: Seq[Local],
+    val locals: Seq[Local -> WasmType],
     val body: FoldedInstr
 ) extends ToWat:
   def toWat: Document =
-    doc"""(func $$${name.nme}${
+    doc"""(func ${id.toWat}${
         params.map(p =>
           doc"(param ${p.nme} ${RefType.anyref.toWat})"
         ).toSeq.mkDocument(doc" ").surroundUnlessEmpty(doc" ")
@@ -43,20 +58,25 @@ private final case class FuncInfo(
           doc"(result ${RefType.anyref.toWat})"
         ).mkDocument(doc" ").surroundUnlessEmpty(doc" ")
       } #{ ${
-        locals.map(p => doc"(local ${RefType.anyref.toWat})").toSeq.mkDocument(
+        locals.map(p => doc"(local ${p._2.toWat})").toSeq.mkDocument(
           doc" # "
         ).surroundUnlessEmpty(doc" # ")
-      } # ${body.toWat} #} ) # (export "${name.nme}" (func $$${name.nme})) # (elem declare func $$${name.nme})"""
+      } # ${body.toWat} #} ) # (export "${id.id}" (func ${id.toWat})) # (elem declare func ${id.toWat})"""
 end FuncInfo
 
 private final case class TypeInfo(
-    val id: Str,
-    val wasmType: WasmType
-)
+    val id: TypeRef,
+    val compType: CompType
+) extends ToWat:
+
+  def toWat: Document =
+    doc"(type ${id.toWat} ${compType.toWat})"
+end TypeInfo
 
 object Ctx:
   def empty: Ctx = Ctx(
     types = MutMap.empty,
+    anonTypes = ArrayBuf.empty,
     funcs = MutMap.empty,
     locals = ArrayBuf() :: Nil,
     main = N
@@ -66,16 +86,23 @@ object Ctx:
 
 private final case class Ctx(
     val types: MutMap[Symbol, TypeInfo],
+    val anonTypes: ArrayBuf[TypeInfo],
     val funcs: MutMap[Symbol, FuncInfo],
-    var locals: Ls[ArrayBuf[Local]],
+    var locals: Ls[ArrayBuf[Local -> ValType]],
     // TODO(Derppening): Fold this into `funcs`
     var main: Opt[Symbol -> FuncInfo]
 ) extends ToWat:
 
   def toWat: Document =
-    doc"""(module #{ ${funcs.values.toSeq.map(_.toWat).mkDocument(
+    doc"""(module #{  # ${(types.valuesIterator ++ anonTypes.iterator).map(
+        _.toWat
+      ).toSeq.mkDocument(doc" # ").surroundUnlessEmpty(postfix =
         doc" # "
-      )} # ${main.fold(doc"")(_._2.toWat)}) #} """
+      )}${funcs.values.toSeq.map(
+        _.toWat
+      ).mkDocument(doc" # ").surroundUnlessEmpty(postfix =
+        doc" # "
+      )}${main.fold(doc"")(_._2.toWat)}) #} """
 
 end Ctx
 
@@ -118,15 +145,24 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${l.toString}`" -> N
       ))
     case _ =>
-      val lclIdx = ctx.locals.head.indexOf(l)
+      val lclIdx = ctx.locals.head.indexWhere(_._1 == l)
       if lclIdx >= 0 then
-        S(local.get(lclIdx, RefType.anyref))
+        S(local.get(lclIdx, ctx.locals.head(lclIdx)._2))
       else
         warnExpr(Ls(
           msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc,
           msg"Note: Block IR of expression is `${l.toString}`" -> N,
           msg"Note: Scope is ${scope.toString}" -> N
         ))
+
+  def argument(a: Arg)(using Ctx, Raise, Scope): Expr =
+    if a.spread.nonEmpty then
+      warnExpr(Ls(
+        msg"WatBackend::argument for spread expression not implemented yet" -> a.value.toLoc,
+        msg"Note: Block IR of expression is `${a.toString}`" -> N
+      ))
+      S(unreachable)
+    else result(a.value)
 
   def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
     if a.spread.nonEmpty then die else subexpression(a.value)
@@ -192,6 +228,26 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         errExpr(
           msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
         )
+    case Call(fun, args) =>
+      val base = subexpression(fun).get
+      if base.exprType is UnreachableType then return S(base)
+      val wasmArgs = args.map(argument)
+
+      val funcType = TypeInfo(
+        id = TypeRef(s"_${ctx.anonTypes.size}"),
+        compType = SignatureType(
+          params = Seq.fill(wasmArgs.size)(WasmParam(N, RefType.anyref)),
+          results = Seq(Result(RefType.anyref))
+        )
+      )
+      ctx.anonTypes += funcType
+
+      S(call_ref(
+        target = ref.cast(base, RefType(funcType.id, nullable = false)),
+        operands = wasmArgs.map(_.get).toSeq,
+        tyId = funcType.id,
+        sigType = funcType.compType.asInstanceOf[SignatureType]
+      ))
     case r =>
       warnExpr(Ls(
         msg"WatBackend::result for expression not implemented yet" -> r.toLoc,
@@ -248,15 +304,40 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 val name = if sym.nameIsMeaningful then S(sym.nme) else N
                 val (params, bodyWat, locals) = setupFunction(name, ps, result)
                 if sym.nameIsMeaningful then
-                  val funcVar = getVar(sym, sym.toLoc)
-                  ctx.funcs(defn.sym) = FuncInfo(
-                    sym,
-                    ps.params.map(p => p.sym),
-                    bodyWat.get.exprType.toSeq.length,
-                    locals,
-                    bodyWat.get
-                  )
-                  funcVar
+                  val funcVar = getVar(sym, sym.toLoc).get
+                  val funcInfo =
+                    FuncInfo(
+                      sym,
+                      ps.params.map(p => p.sym),
+                      bodyWat.get.exprType.toSeq.length,
+                      locals,
+                      bodyWat.get
+                    )
+                  ctx.funcs(defn.sym) = funcInfo
+
+                  val idx = funcVar.instrargs(0).toString.toInt
+                  funcVar.mnemonic match
+                    case "global.get" =>
+                      S(warnExpr(Ls(
+                        msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
+                        msg"Note: Block IR of expression is `${t.toString}`" -> N
+                      )).get)
+                    case "local.get" =>
+                      // Refine the type of the local variable to funcref - This is necessary for passing validation
+                      val (localId, _) = ctx.locals.head(idx)
+                      ctx.locals.head(idx) = (localId, RefType.funcref)
+
+                      S(local.set(
+                        idx,
+                        ref.func(
+                          funcInfo.id,
+                          RefType(TypeRef(sym.nme), nullable = false)
+                        )
+                      ))
+                    case mnemonic =>
+                      lastWords(
+                        s"Expected `global.get` or `local.get` when compiling instruction for `$funcVar`, but got ${funcVar.mnemonic}"
+                      )
                 else
                   warnExpr(Ls(
                     msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> t.toLoc,
@@ -298,7 +379,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${t.toString}`" -> N
       ))
 
-  // TODO(Derppening): Return `(wat: Document, entrypoint: Str)` 
+  // TODO(Derppening): Return `(wat: Document, entrypoint: Str)`
   def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: os.Path)(using
       Raise,
       Scope
@@ -318,16 +399,18 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         )
       )
     val ctx = Ctx.empty
-    val (entryFnExpr, entryFnLocals) = block(p.main)(using ctx, summon[Raise], summon[Scope])
+    val (entryFnExpr, entryFnLocals) =
+      block(p.main)(using ctx, summon[Raise], summon[Scope])
+    val entrySym = BlockMemberSymbol("entry", Nil)
     val entryFn = FuncInfo(
-      BlockMemberSymbol("entry", Nil),
+      name = entrySym,
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
       locals = entryFnLocals,
       entryFnExpr.get
     )
-    ctx.main = S(entryFn.name -> entryFn)
+    ctx.main = S(entrySym -> entryFn)
     ctx
 
   def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Seq[Local] =
@@ -335,16 +418,18 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       scope.lookup(_).toSeq.isEmpty
     ).toSeq.toArray.sortBy(_.uid).iterator.map: l =>
       scope.allocateName(l)
-      l
+      l -> RefType.anyref
     .to(ArrayBuf)
     ctx.locals.head ++= vars
-    vars.toSeq
+    vars.map(_._1).toSeq
 
-  def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
+  def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local -> WasmType]) =
     val locals = blockPreamble(t.definedVars)
-    (returningTerm(t), locals)
+    val returningExpr = returningTerm(t)
+    val refinedLocals = ctx.locals.head.filter(_._1 in locals).toSeq
+    (returningTerm(t), refinedLocals)
 
-  def body(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
+  def body(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local -> WasmType]) =
     scope.nest givenIn:
       block(t)
 
@@ -352,7 +437,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Ctx,
       Raise,
       Scope
-  ): (Seq[WasmParam], Expr, Seq[Local]) =
+  ): (Seq[WasmParam], Expr, Seq[Local -> WasmType]) =
     // Add a frame for `ctx.locals`
     ctx.locals = ctx.locals match
       case globals :: Nil => ArrayBuf() :: globals :: Nil

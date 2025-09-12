@@ -73,6 +73,7 @@ end WasmPackedType
 object RefType:
   def anyref: RefType = RefType(HeapType.Any, nullable = true)
   def i31ref: RefType = RefType(HeapType.I31, nullable = true)
+  def funcref: RefType = RefType(HeapType.Func, nullable = true)
 
 /** Wasm type representing a reference to a [[HeapType]]. */
 case class RefType(heapType: HeapType, nullable: Bool) extends WasmType:
@@ -195,6 +196,18 @@ type CompType = StructType | SignatureType
 case class TypeRef(id: Str) extends HeapType, ToWat:
   def toWat: Document = doc"$$$id"
 end TypeRef
+
+/**
+ * A functionthat is referenced by its name.
+ *
+ * This is used for types that are defined in the module's `func` section.
+ *
+ * @param id
+ *   The identifier of the function.
+ */
+case class FuncRef(id: Str) extends HeapType, ToWat:
+  def toWat: Document = doc"$$$id"
+end FuncRef
 
 /**
  * An abstraction over a generic WebAssembly instructions.

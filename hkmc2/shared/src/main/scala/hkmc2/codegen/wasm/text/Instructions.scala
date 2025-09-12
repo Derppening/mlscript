@@ -58,6 +58,21 @@ object Instructions:
       exprType = resultType
     )
 
+  def call_ref(
+    target: FoldedInstr,
+    operands: Seq[FoldedInstr],
+    tyId: TypeRef,
+    sigType: SignatureType
+  ): FoldedInstr = FoldedInstr(
+    mnemonic = "call_ref",
+    instrargs = tyId.toWat +: Seq(),
+    stackargs = S(target) +: operands.map(S(_)),
+    exprType = sigType.results match
+      case Seq() => NoneType
+      case ty +: Seq() => ty.valtype
+      case tys => MultiValueType(tys.map(_.valtype))
+  )
+
   def nop: FoldedInstr = FoldedInstr(
     mnemonic = "nop",
     instrargs = Seq.empty,
@@ -98,6 +113,13 @@ object Instructions:
   end i32
 
   object ref:
+    def func(id: FuncRef, ty: RefType): FoldedInstr = FoldedInstr(
+      mnemonic = "ref.func",
+      instrargs = Seq(id.toWat),
+      stackargs = Seq.empty,
+      ty
+    )
+
     def i31(value: FoldedInstr): FoldedInstr = FoldedInstr(
       mnemonic = "ref.i31",
       instrargs = Seq.empty,
