@@ -11,324 +11,327 @@ import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
 import text.Instructions as WasmInstr
-import Locals.locals
 import Message.MessageContext
+import ModuleProxy.Locals.locals
 
 import java.util.concurrent.atomic.AtomicLong
 import scala.collection.mutable
 import scala.util.boundary, boundary.break
 
-/**
- * A reference to an `export` field in a module.
- *
- * @param mod
- *   The module that contains the export.
- * @param intName
- *   The internal name of the export.
- */
-case class ExportRef(mod: ModuleProxy, intName: Str) extends Export[ExportRef],
-      ToWat:
-  def toWat: Document = doc"$$$intName"
-end ExportRef
-
-/**
- * A reference to an expression.
- *
- * @param inner
- *   The [[Expr]] that this proxy represents.
- */
-class ExprProxy(val inner: Expr) extends Expression[ExprProxy], ToWat:
-  /** Whether this expression consists of exactly zero instructions. */
-  def isEmpty: Boolean = inner match
-    case stackInstr: Ls[StackInstr] => stackInstr.isEmpty
-    case foldedInstr: Opt[FoldedInstr] => foldedInstr.isEmpty
-
-  /** See [[isEmpty]]. */
-  def nonEmpty: Boolean = !isEmpty
-
-  /** Returns the type of this expression. */
-  def getType: WasmType =
-    val instrType = inner match
-      case stackInstr: Ls[StackInstr] => stackInstr.lastOption.map(_.exprType)
-      case foldedInstr: Opt[FoldedInstr] => foldedInstr.map(_.exprType)
-    instrType.getOrElse(NoneType)
-
+object ModuleProxy:
   /**
-   * Returns the type of this expression, converted into a WAT-compatible type
-   * if needed.
+   * A reference to an `export` field in a module.
    *
-   * @param expectsValue
-   *   Whether this expression is in a context where a value is expected to be
-   *   generated.
+   * @param mod
+   *   The module that contains the export.
+   * @param intName
+   *   The internal name of the export.
    */
-  def getWasmType(expectsValue: Bool): WasmType = getType match
-    case UnreachableType =>
-      if expectsValue then RefType(HeapType.Any, nullable = true) else NoneType
-    case ty => ty
+  case class ExportRef(mod: ModuleProxy, intName: Str)
+      extends Export[ExportRef],
+        ToWat:
+    def toWat: Document = doc"$$$intName"
+  end ExportRef
 
   /**
-   * Converts the inner expression into a [[List]] of
-   * [[StackInstr stack instructions]].
+   * A reference to an expression.
+   *
+   * @param inner
+   *   The [[Expr]] that this proxy represents.
    */
-  def toStack: ExprProxy = inner match
-    case _: Ls[StackInstr] => this
-    case foldedInstr: Opt[FoldedInstr] =>
-      ExprProxy(foldedInstr.map(_.toStack).getOrElse(Ls()))
+  class ExprProxy(val inner: Expr) extends Expression[ExprProxy], ToWat:
+    /** Whether this expression consists of exactly zero instructions. */
+    def isEmpty: Boolean = inner match
+      case stackInstr: Ls[StackInstr] => stackInstr.isEmpty
+      case foldedInstr: Opt[FoldedInstr] => foldedInstr.isEmpty
 
-  def toWat: Document = inner match
-    case stackInstr: Ls[StackInstr] =>
-      stackInstr.map(_.toWat).mkDocument(" # ")
-    case foldedInstr: Opt[FoldedInstr] => foldedInstr.dlof(_.toWat)(doc"")
-end ExprProxy
+    /** See [[isEmpty]]. */
+    def nonEmpty: Boolean = !isEmpty
 
-/**
- * A reference to a `func` field in a module.
- *
- * @param mod
- *   The module that contains the function.
- * @param name
- *   The name of the function.
- */
-case class FuncRef(mod: ModuleProxy, name: Str) extends Function[FuncRef],
-      ToWat:
-  type Expr = ExprProxy
-
-  def toWat: Document = doc"$$$name"
-end FuncRef
-
-/**
- * A structure containing function information.
- *
- * @param name
- *   The name of the function.
- * @param results
- *   The result type of the function.
- */
-case class FunctionInfo(
-    name: Str,
-    params: WasmType,
-    results: WasmType
-) extends wasm.FunctionInfo[WasmType]
-
-/**
- * A reference to a `global` field in a module.
- *
- * @param mod
- *   The module that contains the global.
- * @param name
- *   The name of the global.
- */
-class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef], ToWat:
-  def toWat: Document = doc"$$$name"
-end GlobalRef
-
-/**
- * An index representing a local variable in a function.
- */
-case class LocalIdx(idx: Int) extends ToWat:
-  def toWat: Document = doc"$idx"
-end LocalIdx
-
-/** A builder for creating heap types. */
-class TypeBuilder(private val gen: WatBackend, size: Int)
-    extends wasm.TypeBuilder[WasmType, WasmPackedType]:
-  private val entries = mutable.ArrayBuffer[HeapType]()
-  entries.sizeHint(size)
-
-  /**
-   * Ensures that the `entries` buffer has at least `index` number of entries.
-   */
-  private def ensureFieldSize(index: Int) =
-    // Pad `entries` until we have the correct number of elements
-    entries ++= Seq.fill((index - entries.size + 1) max 0)(null)
-
-  def setSignatureType(
-      index: Int,
-      paramTypes: WasmType,
-      resultTypes: WasmType
-  ): Unit =
-    ensureFieldSize(index)
-    entries(index) = SignatureType(paramTypes, resultTypes)
-
-  def setStructType(
-      index: Int,
-      fields: Seq[(WasmType | WasmPackedType, Bool)]
-  ): Unit =
-    ensureFieldSize(index)
-    entries(index) = StructType(
-      fields.map: (ty, mut) =>
-        ty match
-          case packedTy: WasmPackedType => Field(packedTy, mut, N)
-          case ty: WasmType => Field(ty, mut, N)
-    )
-
-  def setStructTypeNamed(
-      index: Int,
-      fields: Seq[(WasmType | WasmPackedType, Bool, Str)]
-  ): Unit =
-    ensureFieldSize(index)
-    entries(index) = StructType(
-      fields.map: (ty, mut, id) =>
-        ty match
-          case packedTy: WasmPackedType => Field(packedTy, mut, S(id))
-          case ty: WasmType => Field(ty, mut, S(id))
-    )
-
-  def build(): WasmType =
-    gen.createType(entries.map(entry => RefType(entry, false)).toSeq)
-end TypeBuilder
-
-object Locals:
-  enum Scope:
-    case Global
-    case Local
-  end Scope
-
-  def locals(using locals: Locals): Locals = locals
-
-  def empty: Locals = Locals(N, N, Seq.empty)
-
-/**
- * A scope for tracking local variables within a function.
- *
- * This implementation is loosely based on [[hkmc2.utils.Scope]], using numeric
- * identifiers to adhere to WebAssembly requirements.
- *
- * @param parent
- *   The parent scope, or [[None]] if this is the global scope.
- * @param curThis
- *   The current `this` symbol. See [[hkmc2.utils.Scope]] for an explanation of
- *   the nested use of [Opt].
- * @param params
- *   The parameters of the function, if any.
- */
-class Locals(
-    val parent: Opt[Locals],
-    val curThis: Opt[Opt[(InnerSymbol, WasmType)]],
-    params: Seq[(Local, WasmType)]
-):
-  parent match
-    case S(p) =>
-      require(p.parent.isEmpty, "Nested local scopes are not supported")
-    case N =>
-      require(params.isEmpty, "Global scope should not contain parameters")
-
-  private val bindings = mutable.Map[Local, Int]()
-  private val paramTypes = mutable.ArrayBuffer[WasmType]()
-  private val localTypes = mutable.ArrayBuffer[WasmType]()
-
-  // Insert all parameters into scope
-  params.foreach: (l, ty) =>
-    allocateName(l, ty)
-
-  def nParams: Int = paramTypes.size
-
-  private def inferScope: Locals.Scope =
-    parent.dlof(_ => Locals.Scope.Local)(Locals.Scope.Global)
+    /** Returns the type of this expression. */
+    def getType: WasmType =
+      val instrType = inner match
+        case stackInstr: Ls[StackInstr] => stackInstr.lastOption.map(_.exprType)
+        case foldedInstr: Opt[FoldedInstr] => foldedInstr.map(_.exprType)
+      instrType.getOrElse(NoneType)
 
     /**
-     * Finds and returns the appropriate global/local index for the given
-     * `thisSym` symbol.
+     * Returns the type of this expression, converted into a WAT-compatible type
+     * if needed.
+     *
+     * @param expectsValue
+     *   Whether this expression is in a context where a value is expected to be
+     *   generated.
      */
-  def findThis_!(thisSym: InnerSymbol)(using Raise): (Locals.Scope, Int) =
-    curThis.map(_.map(_._1)) match
-      case S(S(`thisSym`)) =>
-        // `this` is bound to the first local variable
-        (inferScope, nParams)
-      case _ =>
-        raise(
-          ErrorReport(
-            msg"Resolution of `thisSym` (${thisSym.toString}) not yet supported" -> N :: Nil,
-            source = Diagnostic.Source.Compilation
-          )
-        )
-        (inferScope, -1)
+    def getWasmType(expectsValue: Bool): WasmType = getType match
+      case UnreachableType =>
+        if expectsValue then RefType(HeapType.Any, nullable = true)
+        else NoneType
+      case ty => ty
 
-  def lookup(l: Local): Opt[(Locals.Scope, Int)] =
-    bindings.get(l).map:
-      (inferScope, _)
-    .orElse:
-      parent.flatMap(_.lookup(l))
+    /**
+     * Converts the inner expression into a [[List]] of
+     * [[StackInstr stack instructions]].
+     */
+    def toStack: ExprProxy = inner match
+      case _: Ls[StackInstr] => this
+      case foldedInstr: Opt[FoldedInstr] =>
+        ExprProxy(foldedInstr.map(_.toStack).getOrElse(Ls()))
 
-  def lookup_!(l: Local)(using Raise): (Locals.Scope, Int) =
-    lookup(l).getOrElse:
-      // Prevent long-winded error messages which quote the entire definition.
-      val loc = l match
-        case sym: semantics.BlockMemberSymbol =>
-          sym.trees.collectFirst:
-            case t: syntax.Tree.TypeDef => t.head.toLoc
-          .flatten.orElse(l.toLoc)
-        case other => other.toLoc
-      raise(ErrorReport(
-        msg"No definition found in scope for '${l.nme}'" -> loc :: Nil,
-        extraInfo = Some(l -> l.getClass),
-        source = Diagnostic.Source.Compilation
-      ))
-      (inferScope, -1)
+    def toWat: Document = inner match
+      case stackInstr: Ls[StackInstr] =>
+        stackInstr.map(_.toWat).mkDocument(" # ")
+      case foldedInstr: Opt[FoldedInstr] => foldedInstr.dlof(_.toWat)(doc"")
+  end ExprProxy
 
-  def allocateName(
-      l: Local,
-      ty: WasmType,
-      isParam: Bool = false
-  ): (Locals.Scope, Int) =
-    val index = if isParam then
-      require(
-        localTypes.isEmpty,
-        "Cannot allocate name for parameter after local v"
+  /**
+   * A reference to a `func` field in a module.
+   *
+   * @param mod
+   *   The module that contains the function.
+   * @param name
+   *   The name of the function.
+   */
+  case class FuncRef(mod: ModuleProxy, name: Str) extends Function[FuncRef],
+        ToWat:
+    type Expr = ExprProxy
+
+    def toWat: Document = doc"$$$name"
+  end FuncRef
+
+  /**
+   * A structure containing function information.
+   *
+   * @param name
+   *   The name of the function.
+   * @param results
+   *   The result type of the function.
+   */
+  case class FunctionInfo(
+      name: Str,
+      params: WasmType,
+      results: WasmType
+  ) extends wasm.FunctionInfo[WasmType]
+
+  /**
+   * A reference to a `global` field in a module.
+   *
+   * @param mod
+   *   The module that contains the global.
+   * @param name
+   *   The name of the global.
+   */
+  class GlobalRef(mod: ModuleProxy, name: Str) extends Global[GlobalRef], ToWat:
+    def toWat: Document = doc"$$$name"
+  end GlobalRef
+
+  /**
+   * An index representing a local variable in a function.
+   */
+  case class LocalIdx(idx: Int) extends ToWat:
+    def toWat: Document = doc"$idx"
+  end LocalIdx
+
+  /** A builder for creating heap types. */
+  class TypeBuilder(private val gen: WatBackend, size: Int)
+      extends wasm.TypeBuilder[WasmType, WasmPackedType]:
+    private val entries = mutable.ArrayBuffer[HeapType]()
+    entries.sizeHint(size)
+  
+    /**
+     * Ensures that the `entries` buffer has at least `index` number of entries.
+     */
+    private def ensureFieldSize(index: Int) =
+      // Pad `entries` until we have the correct number of elements
+      entries ++= Seq.fill((index - entries.size + 1) max 0)(null)
+  
+    def setSignatureType(
+        index: Int,
+        paramTypes: WasmType,
+        resultTypes: WasmType
+    ): Unit =
+      ensureFieldSize(index)
+      entries(index) = SignatureType(paramTypes, resultTypes)
+  
+    def setStructType(
+        index: Int,
+        fields: Seq[(WasmType | WasmPackedType, Bool)]
+    ): Unit =
+      ensureFieldSize(index)
+      entries(index) = StructType(
+        fields.map: (ty, mut) =>
+          ty match
+            case packedTy: WasmPackedType => Field(packedTy, mut, N)
+            case ty: WasmType => Field(ty, mut, N)
       )
-      val index = paramTypes.size
-      paramTypes += ty
-      bindings += l -> index
-      index
-    else
-      val index =
-        paramTypes.size + curThis.flatten.dlof(_ => 1)(0) + localTypes.size
-      localTypes += ty
-      bindings += l -> index
-      index
-    (inferScope, index)
-
-  def getThisScope: Opt[Locals] =
-    curThis.fold(parent.flatMap(_.getThisScope))(_ => S(this))
-
-  def getOuterThisScope: Opt[Locals] = parent.flatMap(_.getThisScope)
-
-  def nestRebindThis[R](thisSym: Opt[(
-      InnerSymbol,
-      WasmType
-  )])(k: Locals ?=> R)(using Raise): (Opt[?], R) =
-    val nested = Locals(S(this), S(thisSym), Seq.empty)
-    val res = k(using nested)
-    getOuterThisScope match
-      case N => (N, res)
-      case S(outer) =>
+  
+    def setStructTypeNamed(
+        index: Int,
+        fields: Seq[(WasmType | WasmPackedType, Bool, Str)]
+    ): Unit =
+      ensureFieldSize(index)
+      entries(index) = StructType(
+        fields.map: (ty, mut, id) =>
+          ty match
+            case packedTy: WasmPackedType => Field(packedTy, mut, S(id))
+            case ty: WasmType => Field(ty, mut, S(id))
+      )
+  
+    def build(): WasmType =
+      gen.createType(entries.map(entry => RefType(entry, false)).toSeq)
+  end TypeBuilder
+  
+  object Locals:
+    enum Scope:
+      case Global
+      case Local
+    end Scope
+  
+    def locals(using locals: Locals): Locals = locals
+  
+    def empty: Locals = Locals(N, N, Seq.empty)
+  
+  /**
+   * A scope for tracking local variables within a function.
+   *
+   * This implementation is loosely based on [[hkmc2.utils.Scope]], using numeric
+   * identifiers to adhere to WebAssembly requirements.
+   *
+   * @param parent
+   *   The parent scope, or [[None]] if this is the global scope.
+   * @param curThis
+   *   The current `this` symbol. See [[hkmc2.utils.Scope]] for an explanation of
+   *   the nested use of [Opt].
+   * @param params
+   *   The parameters of the function, if any.
+   */
+  class Locals(
+      val parent: Opt[Locals],
+      val curThis: Opt[Opt[(InnerSymbol, WasmType)]],
+      params: Seq[(Local, WasmType)]
+  ):
+    parent match
+      case S(p) =>
+        require(p.parent.isEmpty, "Nested local scopes are not supported")
+      case N =>
+        require(params.isEmpty, "Global scope should not contain parameters")
+  
+    private val bindings = mutable.Map[Local, Int]()
+    private val paramTypes = mutable.ArrayBuffer[WasmType]()
+    private val localTypes = mutable.ArrayBuffer[WasmType]()
+  
+    // Insert all parameters into scope
+    params.foreach: (l, ty) =>
+      allocateName(l, ty)
+  
+    def nParams: Int = paramTypes.size
+  
+    private def inferScope: Locals.Scope =
+      parent.dlof(_ => Locals.Scope.Local)(Locals.Scope.Global)
+  
+      /**
+       * Finds and returns the appropriate global/local index for the given
+       * `thisSym` symbol.
+       */
+    def findThis_!(thisSym: InnerSymbol)(using Raise): (Locals.Scope, Int) =
+      curThis.map(_.map(_._1)) match
+        case S(S(`thisSym`)) =>
+          // `this` is bound to the first local variable
+          (inferScope, nParams)
+        case _ =>
+          raise(
+            ErrorReport(
+              msg"Resolution of `thisSym` (${thisSym.toString}) not yet supported" -> N :: Nil,
+              source = Diagnostic.Source.Compilation
+            )
+          )
+          (inferScope, -1)
+  
+    def lookup(l: Local): Opt[(Locals.Scope, Int)] =
+      bindings.get(l).map:
+        (inferScope, _)
+      .orElse:
+        parent.flatMap(_.lookup(l))
+  
+    def lookup_!(l: Local)(using Raise): (Locals.Scope, Int) =
+      lookup(l).getOrElse:
+        // Prevent long-winded error messages which quote the entire definition.
+        val loc = l match
+          case sym: semantics.BlockMemberSymbol =>
+            sym.trees.collectFirst:
+              case t: syntax.Tree.TypeDef => t.head.toLoc
+            .flatten.orElse(l.toLoc)
+          case other => other.toLoc
         raise(ErrorReport(
-          msg"Locals::nestRebindThis: Getting outer scope (`getOuterThisScope.isDefined`) not supported" -> N :: Nil,
+          msg"No definition found in scope for '${l.nme}'" -> loc :: Nil,
+          extraInfo = Some(l -> l.getClass),
           source = Diagnostic.Source.Compilation
         ))
-        (N, res)
-
-  /**
-   * Returns a [Seq] representing the types of all local variables declared with
-   * `(local ...)`.
-   *
-   * This includes the implicit `this` in the first position, if present in the
-   * function.
-   */
-  def getLocalsTypes: Seq[WasmType] =
-    curThis.flatten.map(_._2).toSeq ++ localTypes.toSeq
-
-  /**
-   * Returns a [Seq] representing the types of all local variables, including
-   * parameters.
-   */
-  def getTypes: Seq[WasmType] =
-    paramTypes.toSeq ++ curThis.flatten.map(_._2).toSeq ++ getLocalsTypes
-
-  /** Returns a [Seq] representing the types of all global variables. */
-  def getGlobalTypes: Seq[WasmType] = parent.dlof(_.getGlobalTypes)(getTypes)
-
-end Locals
+        (inferScope, -1)
+  
+    def allocateName(
+        l: Local,
+        ty: WasmType,
+        isParam: Bool = false
+    ): (Locals.Scope, Int) =
+      val index = if isParam then
+        require(
+          localTypes.isEmpty,
+          "Cannot allocate name for parameter after local v"
+        )
+        val index = paramTypes.size
+        paramTypes += ty
+        bindings += l -> index
+        index
+      else
+        val index =
+          paramTypes.size + curThis.flatten.dlof(_ => 1)(0) + localTypes.size
+        localTypes += ty
+        bindings += l -> index
+        index
+      (inferScope, index)
+  
+    def getThisScope: Opt[Locals] =
+      curThis.fold(parent.flatMap(_.getThisScope))(_ => S(this))
+  
+    def getOuterThisScope: Opt[Locals] = parent.flatMap(_.getThisScope)
+  
+    def nestRebindThis[R](thisSym: Opt[(
+        InnerSymbol,
+        WasmType
+    )])(k: Locals ?=> R)(using Raise): (Opt[?], R) =
+      val nested = Locals(S(this), S(thisSym), Seq.empty)
+      val res = k(using nested)
+      getOuterThisScope match
+        case N => (N, res)
+        case S(outer) =>
+          raise(ErrorReport(
+            msg"Locals::nestRebindThis: Getting outer scope (`getOuterThisScope.isDefined`) not supported" -> N :: Nil,
+            source = Diagnostic.Source.Compilation
+          ))
+          (N, res)
+  
+    /**
+     * Returns a [Seq] representing the types of all local variables declared with
+     * `(local ...)`.
+     *
+     * This includes the implicit `this` in the first position, if present in the
+     * function.
+     */
+    def getLocalsTypes: Seq[WasmType] =
+      curThis.flatten.map(_._2).toSeq ++ localTypes.toSeq
+  
+    /**
+     * Returns a [Seq] representing the types of all local variables, including
+     * parameters.
+     */
+    def getTypes: Seq[WasmType] =
+      paramTypes.toSeq ++ curThis.flatten.map(_._2).toSeq ++ getLocalsTypes
+  
+    /** Returns a [Seq] representing the types of all global variables. */
+    def getGlobalTypes: Seq[WasmType] = parent.dlof(_.getGlobalTypes)(getTypes)
+  
+  end Locals
 
 /**
  * A reference to a WebAssembly module.
@@ -339,7 +342,9 @@ end Locals
  *   The underlying [[wasm.Module]] that this proxy represents.
  */
 class ModuleProxy(private val gen: WatBackend, private var mod: Module)
-    extends WasmModule[WasmType, ExprProxy], ToWat:
+    extends WasmModule[WasmType, ModuleProxy.ExprProxy], ToWat:
+
+  import ModuleProxy.*
 
   /** Monotonically increasing counter for giving unique names to types. */
   private val anonTypeCounter = AtomicLong()
@@ -904,9 +909,11 @@ class WatBackend
       WasmType,
       WasmPackedType,
       ModuleProxy,
-      TypeBuilder,
-      ExprProxy
+      ModuleProxy.TypeBuilder,
+      ModuleProxy.ExprProxy
     ]:
+  import ModuleProxy.*
+
   type TypeRefs = Seq[WasmType]
 
   lazy val none: WasmType = NoneType
