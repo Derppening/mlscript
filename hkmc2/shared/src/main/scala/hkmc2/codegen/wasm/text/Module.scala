@@ -185,6 +185,12 @@ end StructType
 /** A composite type. */
 type CompType = StructType | SignatureType
 
+abstract class TypeRef extends HeapType, ToWat
+
+case class TypeIdx(idx: Long) extends TypeRef:
+  def toWat: Document = doc"${idx.toString}"
+end TypeIdx
+
 /**
  * A type that is referenced by its name.
  *
@@ -193,9 +199,9 @@ type CompType = StructType | SignatureType
  * @param id
  *   The identifier of the type.
  */
-case class TypeRef(id: Str) extends HeapType, ToWat:
+case class TypeId(id: Str) extends TypeRef:
   def toWat: Document = doc"$$$id"
-end TypeRef
+end TypeId
 
 /**
  * A functionthat is referenced by its name.
@@ -323,7 +329,7 @@ end ModType
  *   The content of the module function.
  */
 case class ModFunc(
-    val typeId: TypeRef,
+    val typeId: TypeId,
     val paramTypes: WasmType,
     val resultTypes: WasmType,
     val doc: Document

@@ -16,6 +16,7 @@ import Message.MessageContext
 import Scope.scope
 import Value.Lam
 
+import scala.collection.Map
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 
 extension (doc: Document)
@@ -65,18 +66,18 @@ private final case class FuncInfo(
 end FuncInfo
 
 private final case class TypeInfo(
-    val id: TypeRef,
+    val id: Opt[TypeId],
     val compType: CompType
 ) extends ToWat:
 
   def toWat: Document =
-    doc"(type ${id.toWat} ${compType.toWat})"
+    doc"(type ${id.fold(doc"")(_.toWat).surroundUnlessEmpty(postfix = doc" ")}${compType.toWat})"
 end TypeInfo
 
 object Ctx:
   def empty: Ctx = Ctx(
-    types = MutMap.empty,
-    anonTypes = ArrayBuf.empty,
+    _types = MutMap.empty,
+    _anonTypes = ArrayBuf.empty,
     funcs = MutMap.empty,
     locals = ArrayBuf() :: Nil,
     main = N
@@ -85,17 +86,27 @@ object Ctx:
   def ctx(using ctx: Ctx): Ctx = ctx
 
 private final case class Ctx(
-    val types: MutMap[Symbol, TypeInfo],
-    val anonTypes: ArrayBuf[TypeInfo],
+    private val _types: MutMap[Symbol, TypeIdx -> TypeInfo],
+    private val _anonTypes: ArrayBuf[TypeIdx -> TypeInfo],
     val funcs: MutMap[Symbol, FuncInfo],
     var locals: Ls[ArrayBuf[Local -> ValType]],
     // TODO(Derppening): Fold this into `funcs`
     var main: Opt[Symbol -> FuncInfo]
 ) extends ToWat:
 
+  def types: Map[Symbol, TypeIdx -> TypeInfo] = _types
+  def anonTypes: Seq[TypeIdx -> TypeInfo] = _anonTypes.toSeq
+
+  def addType(sym: Opt[Symbol], typeInfo: TypeInfo): TypeRef =
+    val typeEntry = TypeIdx(_types.size + _anonTypes.size) -> typeInfo
+    sym match
+      case S(sym) => _types(sym) = typeEntry
+      case N => _anonTypes += typeEntry
+    typeInfo.id.getOrElse(typeEntry._1)
+
   def toWat: Document =
-    doc"""(module #{  # ${(types.valuesIterator ++ anonTypes.iterator).map(
-        _.toWat
+    doc"""(module #{  # ${(_types.values ++ _anonTypes).map(
+        _._2.toWat
       ).toSeq.mkDocument(doc" # ").surroundUnlessEmpty(postfix =
         doc" # "
       )}${funcs.values.toSeq.map(
@@ -234,18 +245,18 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val wasmArgs = args.map(argument)
 
       val funcType = TypeInfo(
-        id = TypeRef(s"_${ctx.anonTypes.size}"),
+        id = N,
         compType = SignatureType(
           params = Seq.fill(wasmArgs.size)(WasmParam(N, RefType.anyref)),
           results = Seq(Result(RefType.anyref))
         )
       )
-      ctx.anonTypes += funcType
+      val funcRefType = ctx.addType(N, funcType)
 
       S(call_ref(
-        target = ref.cast(base, RefType(funcType.id, nullable = false)),
+        target = ref.cast(base, RefType(funcRefType, nullable = false)),
         operands = wasmArgs.map(_.get).toSeq,
-        tyId = funcType.id,
+        typeRef = funcRefType,
         sigType = funcType.compType.asInstanceOf[SignatureType]
       ))
     case r =>
@@ -331,7 +342,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         idx,
                         ref.func(
                           funcInfo.id,
-                          RefType(TypeRef(sym.nme), nullable = false)
+                          RefType(TypeId(sym.nme), nullable = false)
                         )
                       ))
                     case mnemonic =>

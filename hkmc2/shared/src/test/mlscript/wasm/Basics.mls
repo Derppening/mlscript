@@ -90,8 +90,8 @@ fun foo() = 42
 foo()
 //│ Wat:
 //│ (module
-//│   (type $_0 (func (result (ref null any))))
-//│   (type $_1 (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
 //│   (func $foo (result (ref null any))
 //│     (return
 //│       (ref.i31
@@ -103,8 +103,8 @@ foo()
 //│     (block (result (ref null any))
 //│       (local.set 0
 //│         (ref.func $foo))
-//│       (call_ref $_1
-//│         (ref.cast (ref $_1)
+//│       (call_ref 1
+//│         (ref.cast (ref 1)
 //│           (local.get 0)))))
 //│   (export "entry" (func $entry))
 //│   (elem declare func $entry))
@@ -119,10 +119,10 @@ fun foo() = 42
 foo() + foo()
 //│ Wat:
 //│ (module
-//│   (type $_0 (func (result (ref null any))))
-//│   (type $_1 (func (result (ref null any))))
-//│   (type $_2 (func (result (ref null any))))
-//│   (type $_3 (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
 //│   (func $foo (result (ref null any))
 //│     (return
 //│       (ref.i31
@@ -138,13 +138,13 @@ foo() + foo()
 //│         (ref.func $foo))
 //│       (block (result (ref null i31))
 //│         (local.set 1
-//│           (call_ref $_2
-//│             (ref.cast (ref $_2)
+//│           (call_ref 2
+//│             (ref.cast (ref 2)
 //│               (local.get 0))))
 //│         (block (result (ref null i31))
 //│           (local.set 2
-//│             (call_ref $_3
-//│               (ref.cast (ref $_3)
+//│             (call_ref 3
+//│               (ref.cast (ref 3)
 //│                 (local.get 0))))
 //│           (ref.i31
 //│             (i32.add

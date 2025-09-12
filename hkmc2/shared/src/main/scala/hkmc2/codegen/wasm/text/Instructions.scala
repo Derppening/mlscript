@@ -61,11 +61,11 @@ object Instructions:
   def call_ref(
     target: FoldedInstr,
     operands: Seq[FoldedInstr],
-    tyId: TypeRef,
+    typeRef: TypeRef,
     sigType: SignatureType
   ): FoldedInstr = FoldedInstr(
     mnemonic = "call_ref",
-    instrargs = tyId.toWat +: Seq(),
+    instrargs = Seq(typeRef.toWat),
     stackargs = S(target) +: operands.map(S(_)),
     exprType = sigType.results match
       case Seq() => NoneType

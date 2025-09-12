@@ -10,7 +10,7 @@ import semantics.*
 import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
-import text.Instructions as WasmInstr
+import text.{Instructions as WasmInstr, TypeId as TypeRef}
 import Message.MessageContext
 import ModuleProxy.Locals.locals
 
