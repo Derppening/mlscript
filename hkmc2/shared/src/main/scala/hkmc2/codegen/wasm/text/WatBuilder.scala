@@ -61,16 +61,17 @@ object Ctx:
   def empty: Ctx = Ctx(
     types = MutMap.empty,
     funcs = MutMap.empty,
-    locals = Ls.empty,
+    locals = ArrayBuf() :: Nil,
     main = N
   )
 
   def ctx(using ctx: Ctx): Ctx = ctx
 
 private final case class Ctx(
-    val types: MutMap[ClsLikeDefn, TypeInfo],
-    val funcs: MutMap[FunDefn, FuncInfo],
-    var locals: Ls[ArrayBuf[Str]],
+    val types: MutMap[Symbol, TypeInfo],
+    val funcs: MutMap[Symbol, FuncInfo],
+    var locals: Ls[ArrayBuf[Local]],
+    // TODO(Derppening): Fold this into `funcs`
     var main: Opt[Symbol -> FuncInfo]
 ) extends ToWat:
 
@@ -120,8 +121,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${l.toString}`" -> N
       ))
     case _ =>
-      val v = scope.lookup_!(l, loc)
-      val lclIdx = ctx.locals.head.indexOf(v)
+      val lclIdx = ctx.locals.head.indexOf(l)
       if lclIdx >= 0 then
         S(local.get(lclIdx, RefType.anyref))
       else
@@ -208,6 +208,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case Assign(l, r, rst) =>
       val lExpr = getVar(l, t.toLoc).get
+      if lExpr.exprType is UnreachableType then return S(lExpr)
       val rExpr = result(r).get
       val idx = lExpr.instrargs(0).toString.toInt
       val assignExpr = lExpr.mnemonic match
@@ -248,15 +249,14 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   case (ps, block) =>
                     Return(Lam(ps, block), false)
                 val name = if sym.nameIsMeaningful then S(sym.nme) else N
-                val (params, bodyWat) = setupFunction(name, ps, result)
+                val (params, bodyWat, locals) = setupFunction(name, ps, result)
                 if sym.nameIsMeaningful then
                   val funcVar = getVar(sym, sym.toLoc)
-                  // TODO(Derppening): Uhh...
-                  ctx.funcs(defn.asInstanceOf[FunDefn]) = FuncInfo(
+                  ctx.funcs(defn.sym) = FuncInfo(
                     sym,
                     ps.params.map(p => p.sym),
                     bodyWat.get.exprType.toSeq.length,
-                    Seq.empty,
+                    locals,
                     bodyWat.get
                   )
                   funcVar
@@ -301,6 +301,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${t.toString}`" -> N
       ))
 
+  // TODO(Derppening): Return `(wat: Document, entrypoint: Str)` 
   def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: os.Path)(using
       Raise,
       Scope
@@ -320,56 +321,56 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         )
       )
     val ctx = Ctx.empty
-    val entryFnExpr = block(p.main)(using ctx, summon[Raise], summon[Scope]).get
+    val (entryFnExpr, entryFnLocals) = block(p.main)(using ctx, summon[Raise], summon[Scope])
     val entryFn = FuncInfo(
       BlockMemberSymbol("entry", Nil),
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
-      locals = scope._3.keysIterator.toSeq,
-      entryFnExpr
+      locals = entryFnLocals,
+      entryFnExpr.get
     )
     ctx.main = S(entryFn.name -> entryFn)
     ctx
 
-  def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Unit =
+  def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Seq[Local] =
     val vars = ss.filter(
       scope.lookup(_).toSeq.isEmpty
-    ).toSeq.toArray.sortBy(_.uid).iterator.map:
-      scope.allocateName(_)
+    ).toSeq.toArray.sortBy(_.uid).iterator.map: l =>
+      scope.allocateName(l)
+      l
+    .to(ArrayBuf)
+    ctx.locals.head ++= vars
+    vars.toSeq
 
-    if vars.isEmpty then
-      ctx.locals = ArrayBuf.empty +: ctx.locals
-    else
-      ctx.locals = vars.to(ArrayBuf) +: ctx.locals
+  def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
+    val locals = blockPreamble(t.definedVars)
+    (returningTerm(t), locals)
 
-  def block(t: Block)(using Ctx, Raise, Scope): Expr =
-    blockPreamble(t.definedVars)
-    returningTerm(t)
-
-  def body(t: Block)(using Ctx, Raise, Scope): Expr = 
-    // scope.nest givenIn:
-    //   block(t)
-    block(t)
+  def body(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
+    scope.nest givenIn:
+      block(t)
 
   def setupFunction(name: Option[Str], params: ParamList, body: Block)(using
       Ctx,
       Raise,
       Scope
-  ): (Seq[WasmParam], Expr) =
+  ): (Seq[WasmParam], Expr, Seq[Local]) =
     // Add a frame for `ctx.locals`
-    // TODO(Derppening): If we are already in a function, we should just append locals to the current local set
-    ctx.locals = ArrayBuf() +: ctx.locals
+    ctx.locals = ctx.locals match
+      case globals :: Nil => ArrayBuf() :: globals :: Nil
+      case locals @ (_ :: _ :: Nil) => locals
+      case _ => lastWords(s"ctx.locals should only have 1-2 local scopes")
 
     scope.nest givenIn:
       val paramsList = params.params.map(p =>
         WasmParam(S(scope.allocateName(p.sym)), RefType.anyref)
       )
-      val res = (paramsList.toSeq, this.body(body))
+      val (wasmParams, (wasmBody, locals)) = (paramsList.toSeq, this.body(body))
 
       // Restore `ctx.locals`
       ctx.locals = ctx.locals.tail
-      
-      res
+
+      (wasmParams, wasmBody, locals)
 
 end WatBuilder
