@@ -11,7 +11,8 @@ false
 //│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 0)))
-//│   (export "entry" (func $entry)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
 //│ rwasm: Running
 //│ 0
 
@@ -23,7 +24,8 @@ true
 //│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 1)))
-//│   (export "entry" (func $entry)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
 //│ rwasm: Running
 //│ 1
 
@@ -36,7 +38,8 @@ true
 //│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 2)))
-//│   (export "entry" (func $entry)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
 //│ rwasm: Running
 //│ 2
 
@@ -55,7 +58,8 @@ true
 //│         (i31.get_s
 //│           (ref.i31
 //│             (i32.const 1))))))
-//│   (export "entry" (func $entry)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
 //│ rwasm: Running
 //│ 2
 
@@ -73,7 +77,8 @@ x
 //│         (ref.i31
 //│           (i32.const 0)))
 //│       (local.get 0)))
-//│   (export "entry" (func $entry)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
 //│ rwasm: Running
 //│ 0
 

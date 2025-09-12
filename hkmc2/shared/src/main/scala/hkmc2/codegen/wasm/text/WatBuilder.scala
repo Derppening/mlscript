@@ -33,8 +33,7 @@ private final case class FuncInfo(
     val locals: Seq[Local],
     val body: FoldedInstr
 ) extends ToWat:
-  def toWat: Document = toWat()
-  def toWat(emitElem: Bool = true): Document =
+  def toWat: Document =
     doc"""(func $$${name.nme}${
         params.map(p =>
           doc"(param ${p.nme} ${RefType.anyref.toWat})"
@@ -47,9 +46,7 @@ private final case class FuncInfo(
         locals.map(p => doc"(local ${RefType.anyref.toWat})").toSeq.mkDocument(
           doc" # "
         ).surroundUnlessEmpty(doc" # ")
-      } # ${body.toWat} #} )\n(export "${name.nme}" (func $$${name.nme}))${
-        if emitElem then doc"\n(elem declare func $$${name.nme})" else doc""
-      }"""
+      } # ${body.toWat} #} ) # (export "${name.nme}" (func $$${name.nme})) # (elem declare func $$${name.nme})"""
 end FuncInfo
 
 private final case class TypeInfo(
@@ -78,7 +75,7 @@ private final case class Ctx(
   def toWat: Document =
     doc"""(module #{ ${funcs.values.toSeq.map(_.toWat).mkDocument(
         doc" # "
-      )} # ${main.fold(doc"")(_._2.toWat(emitElem = false))}) #} """
+      )} # ${main.fold(doc"")(_._2.toWat)}) #} """
 
 end Ctx
 
