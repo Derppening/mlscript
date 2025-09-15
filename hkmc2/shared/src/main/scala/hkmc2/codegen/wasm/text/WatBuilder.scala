@@ -406,24 +406,16 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           source = Diagnostic.Source.Compilation
         )
       )
+
     val ctx = Ctx.empty
     val (entryFnExpr, entryFnLocals) =
       block(p.main)(using ctx, summon[Raise], summon[Scope])
-    val entrySym = BlockMemberSymbol(
-      "entry",
-      trees = Nil,
-      nameIsMeaningful = !ctx.funcs.exists(_._1.nme == "entry")
-    )
-    val entryNme = if entrySym.nameIsMeaningful then
-      entrySym.nme
-    else
-      // TODO(Derppening): How does Scala actually infer whether an argument is passed as a closure vs the value?
-      LazyList.continually(() => State.suid.nextUid).collectFirst:
-        // JS requires identifiers to not start with a digit
-        case uid if !ctx.funcs.exists(_._1.nme == s"_$uid") => s"_$uid"
-      .get
+
+    val entrySym = BlockMemberSymbol("entry", Nil)
+    val entryNme = scope.allocateName(entrySym)
+
     val entryFn = FuncInfo(
-      id = FuncRef(entryNme),
+      id = FuncId(entryNme),
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
@@ -431,6 +423,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       entryFnExpr
     )
     ctx.funcs(entrySym) = entryFn
+
     (ctx.toWat, entryFn.id.id)
 
   def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Seq[Local] =
