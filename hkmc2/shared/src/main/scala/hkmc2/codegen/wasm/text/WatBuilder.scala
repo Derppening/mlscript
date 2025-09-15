@@ -334,7 +334,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         msg"Note: Block IR of expression is `${t.toString}`" -> N
                       )).get)
                     case "local.get" =>
-                      // Refine the type of the local variable to funcref - This is necessary for passing validation
+                      // Refine the type of the local variable to funcref -
+                      // This is necessary as `any` and `func` are two
+                      // distinct hierarchies
                       val (localId, _) = ctx.locals.head(idx)
                       ctx.locals.head(idx) = (localId, RefType.funcref)
 
