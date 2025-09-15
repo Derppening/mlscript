@@ -392,11 +392,10 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${t.toString}`" -> N
       ))
 
-  // TODO(Derppening): Return `(wat: Document, entrypoint: Str)`
   def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: os.Path)(using
       Raise,
       Scope
-  ): Ctx =
+  ): (Document, Str) =
     for imprt <- p.imports do
       raise(
         WarningReport(
@@ -424,7 +423,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       entryFnExpr.get
     )
     ctx.main = S(entrySym -> entryFn)
-    ctx
+    (ctx.toWat, ctx.main.map(_._2.id.id).get)
 
   def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Seq[Local] =
     val vars = ss.filter(

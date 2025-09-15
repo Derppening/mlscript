@@ -78,21 +78,20 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       val low = ltl.givenIn:
         codegen.Lowering()
       val le = low.program(trm, CompilationTarget.Wasm)
-      val (mod, mainFnNme) = ltl.givenIn:
+      val (modWat, mainFnNme) = ltl.givenIn:
         if ewat.isSet then
           baseScp.nest.givenIn:
-            val progCtx = WatBuilder().program(le, N, wd)
-            (progCtx, progCtx.main.get._1.nme)
+            WatBuilder().program(le, N, wd)
         else
-          (WatBackend().program(le, N), "main")
+          (WatBackend().program(le, N).toWat, "main")
 
       if wat.isSet then
         output("Wat:")
-        output(mod.toWat.toString)
+        output(modWat.toString)
 
       if fwat.isSet then
         output("Formatted Wat (Folded):")
-        s"JSON.stringify(await wasm.binaryenFmtWat(`${mod.toWat.toString}`, true))"
+        s"JSON.stringify(await wasm.binaryenFmtWat(`${modWat.toString}`, true))"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
             output(prettifyBinaryenWat(content))
@@ -101,7 +100,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
             return
       if swat.isSet then
         output("Formatted Wat (Stack):")
-        s"JSON.stringify(await wasm.binaryenFmtWat(`${mod.toWat.toString}`, false))"
+        s"JSON.stringify(await wasm.binaryenFmtWat(`${modWat.toString}`, false))"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
             output(prettifyBinaryenWat(content))
@@ -112,7 +111,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       if rwasm.isSet then
         output("rwasm: Running")
 
-        s"await wasm.binaryenRunFunc(`${mod.toWat.toString}`, exports => exports.${mainFnNme}())"
+        s"await wasm.binaryenRunFunc(`${modWat.toString}`, exports => exports.${mainFnNme}())"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
             output(content)
