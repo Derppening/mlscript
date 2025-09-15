@@ -85,7 +85,6 @@ x
 
 :wasm
 :ewat
-:todo
 fun foo() = 42
 foo()
 //│ Wat:
