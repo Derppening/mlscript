@@ -79,8 +79,7 @@ object Ctx:
     _types = MutMap.empty,
     _anonTypes = ArrayBuf.empty,
     funcs = MutMap.empty,
-    locals = ArrayBuf() :: Nil,
-    main = N
+    locals = ArrayBuf() :: Nil
   )
 
   def ctx(using ctx: Ctx): Ctx = ctx
@@ -89,9 +88,7 @@ private final case class Ctx(
     private val _types: MutMap[Symbol, TypeIdx -> TypeInfo],
     private val _anonTypes: ArrayBuf[TypeIdx -> TypeInfo],
     val funcs: MutMap[Symbol, FuncInfo],
-    var locals: Ls[ArrayBuf[Local -> ValType]],
-    // TODO(Derppening): Fold this into `funcs`
-    var main: Opt[Symbol -> FuncInfo]
+    var locals: Ls[ArrayBuf[Local -> ValType]]
 ) extends ToWat:
 
   def types: Map[Symbol, TypeIdx -> TypeInfo] = _types
@@ -111,9 +108,7 @@ private final case class Ctx(
         doc" # "
       )}${funcs.values.toSeq.map(
         _.toWat
-      ).mkDocument(doc" # ").surroundUnlessEmpty(postfix =
-        doc" # "
-      )}${main.fold(doc"")(_._2.toWat)}) #} """
+      ).mkDocument(doc" # ")}) #} """
 
 end Ctx
 
@@ -413,17 +408,29 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val ctx = Ctx.empty
     val (entryFnExpr, entryFnLocals) =
       block(p.main)(using ctx, summon[Raise], summon[Scope])
-    val entrySym = BlockMemberSymbol("entry", Nil)
+    val entrySym = BlockMemberSymbol(
+      "entry",
+      trees = Nil,
+      nameIsMeaningful = !ctx.funcs.exists(_._1.nme == "entry")
+    )
+    val entryNme = if entrySym.nameIsMeaningful then
+      entrySym.nme
+    else
+      // TODO(Derppening): How does Scala actually infer whether an argument is passed as a closure vs the value?
+      LazyList.continually(() => State.suid.nextUid).collectFirst:
+        // JS requires identifiers to not start with a digit
+        case uid if !ctx.funcs.exists(_._1.nme == s"_$uid") => s"_$uid"
+      .get
     val entryFn = FuncInfo(
-      name = entrySym,
+      id = FuncRef(entryNme),
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
       locals = entryFnLocals,
       entryFnExpr.get
     )
-    ctx.main = S(entrySym -> entryFn)
-    (ctx.toWat, ctx.main.map(_._2.id.id).get)
+    ctx.funcs(entrySym) = entryFn
+    (ctx.toWat, entryFn.id.id)
 
   def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Seq[Local] =
     val vars = ss.filter(
