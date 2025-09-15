@@ -121,7 +121,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   import Instructions.*
 
   type Context = Unit
-  type Expr = Opt[FoldedInstr]
+  type Expr = FoldedInstr
 
   def warnExpr(warnMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
     warnExpr(warnMsg :: Nil)
@@ -130,13 +130,13 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     raise(
       WarningReport(warnMsgs, source = Diagnostic.Source.Compilation)
     )
-    S(unreachable)
+    unreachable
 
   def errExpr(errMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
     raise(
       ErrorReport(errMsg :: Nil, source = Diagnostic.Source.Compilation)
     )
-    S(unreachable)
+    unreachable
 
   def getVar(l: Local, loc: Opt[Loc])(using Ctx, Raise, Scope): Expr = l match
     case ts: semantics.TermSymbol =>
@@ -157,7 +157,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case _ =>
       val lclIdx = ctx.locals.head.indexWhere(_._1 == l)
       if lclIdx >= 0 then
-        S(local.get(lclIdx, ctx.locals.head(lclIdx)._2))
+        local.get(lclIdx, ctx.locals.head(lclIdx)._2)
       else
         warnExpr(Ls(
           msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc,
@@ -171,7 +171,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"WatBackend::argument for spread expression not implemented yet" -> a.value.toLoc,
         msg"Note: Block IR of expression is `${a.toString}`" -> N
       ))
-      S(unreachable)
+      unreachable
     else result(a.value)
 
   def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
@@ -187,9 +187,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   def result(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
     case Value.Lit(BoolLit(value)) =>
-      S(ref.i31(i32.const(if value then 1 else 0)))
+      ref.i31(i32.const(if value then 1 else 0))
     case Value.Lit(IntLit(value)) =>
-      S(ref.i31(i32.const(value.toInt)))
+      ref.i31(i32.const(value.toInt))
     case Value.Ref(l) => getVar(l, r.toLoc)
 
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
@@ -215,20 +215,18 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   ))
                   unreachable
 
-            val lhsOp = castOperand(operand(lhs).get, "lhs")
-            val rhsOp = castOperand(operand(rhs).get, "rhs")
+            val lhsOp = castOperand(operand(lhs), "lhs")
+            val rhsOp = castOperand(operand(rhs), "rhs")
 
-            S(
-              (lhsOp.exprType, rhsOp.exprType) match
-                case (I32Type, I32Type) =>
-                  ref.i31(i32.add(lhsOp, rhsOp))
-                case (lhsType, rhsType) =>
-                  warnExpr(Ls(
-                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.toWat.toString}, ${rhsType.toWat.toString}) not implemented yet" -> r.toLoc,
-                    msg"Note: Block IR of expression is `${r.toString}`" -> N
-                  ))
-                  unreachable
-            )
+            (lhsOp.exprType, rhsOp.exprType) match
+              case (I32Type, I32Type) =>
+                ref.i31(i32.add(lhsOp, rhsOp))
+              case (lhsType, rhsType) =>
+                warnExpr(Ls(
+                  msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.toWat.toString}, ${rhsType.toWat.toString}) not implemented yet" -> r.toLoc,
+                  msg"Note: Block IR of expression is `${r.toString}`" -> N
+                ))
+                unreachable
           case lNme =>
             warnExpr(Ls(
               msg"WatBuilder::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> r.toLoc,
@@ -239,8 +237,8 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
         )
     case Call(fun, args) =>
-      val base = subexpression(fun).get
-      if base.exprType is UnreachableType then return S(base)
+      val base = subexpression(fun)
+      if base.exprType is UnreachableType then return base
       val wasmArgs = args.map(argument)
 
       val funcType = TypeInfo(
@@ -252,12 +250,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
       val funcRefType = ctx.addType(N, funcType)
 
-      S(call_ref(
+      call_ref(
         target = ref.cast(base, RefType(funcRefType, nullable = false)),
-        operands = wasmArgs.map(_.get).toSeq,
+        operands = wasmArgs.toSeq,
         typeRef = funcRefType,
         sigType = funcType.compType.asInstanceOf[SignatureType]
-      ))
+      )
     case r =>
       warnExpr(Ls(
         msg"WatBackend::result for expression not implemented yet" -> r.toLoc,
@@ -270,16 +268,16 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"This code requires effect handler instrumentation but was compiled without it." -> t.toLoc
       )
     case Assign(l, r, rst) =>
-      val lExpr = getVar(l, t.toLoc).get
-      if lExpr.exprType is UnreachableType then return S(lExpr)
-      val rExpr = result(r).get
+      val lExpr = getVar(l, t.toLoc)
+      if lExpr.exprType is UnreachableType then return lExpr
+      val rExpr = result(r)
       val idx = lExpr.instrargs(0).toString.toInt
       val assignExpr = lExpr.mnemonicPrefix match
         case S("global") =>
           warnExpr(Ls(
             msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
             msg"Note: Block IR of expression is `${t.toString}`" -> N
-          )).get
+          ))
         case S("local") => local.set(idx, rExpr)
         case _ =>
           lastWords(
@@ -287,11 +285,11 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           )
       val rstBlk = returningTerm(rst)
 
-      S(Instructions.block(
+      Instructions.block(
         label = N,
-        children = Seq(assignExpr) ++ rstBlk.toSeq,
-        resultType = rstBlk.map(_.exprType).getOrElse(NoneType)
-      ))
+        children = Seq(assignExpr, rstBlk),
+        resultType = rstBlk.exprType
+      )
 
     case Define(defn, rst) =>
       def mkThis(sym: InnerSymbol): Expr = result(Value.This(sym))
@@ -314,24 +312,24 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 val name = if sym.nameIsMeaningful then S(sym.nme) else N
                 val (params, bodyWat, locals) = setupFunction(name, ps, result)
                 if sym.nameIsMeaningful then
-                  val funcVar = getVar(sym, sym.toLoc).get
+                  val funcVar = getVar(sym, sym.toLoc)
                   val funcInfo =
                     FuncInfo(
                       sym,
                       ps.params.map(p => p.sym),
-                      bodyWat.get.exprType.toSeq.length,
+                      bodyWat.exprType.toSeq.length,
                       locals,
-                      bodyWat.get
+                      bodyWat
                     )
                   ctx.funcs(defn.sym) = funcInfo
 
                   val idx = funcVar.instrargs(0).toString.toInt
                   funcVar.mnemonicPrefix match
                     case S("global") =>
-                      S(warnExpr(Ls(
+                      warnExpr(Ls(
                         msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
                         msg"Note: Block IR of expression is `${t.toString}`" -> N
-                      )).get)
+                      ))
                     case S("local") =>
                       // Refine the type of the local variable to funcref -
                       // This is necessary as `any` and `func` are two
@@ -339,13 +337,13 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       val (localId, _) = ctx.locals.head(idx)
                       ctx.locals.head(idx) = (localId, RefType.funcref)
 
-                      S(local.set(
+                      local.set(
                         idx,
                         ref.func(
                           funcInfo.id,
                           RefType(TypeId(sym.nme), nullable = false)
                         )
-                      ))
+                      )
                     case _ =>
                       lastWords(
                         s"Expected `global.*` or `local.*` when compiling instruction for `$funcVar`, but got ${funcVar.mnemonic}"
@@ -370,11 +368,11 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 msg"WatBuilder::returningTerm for Define(...) where `!scope.thisProxyDefined` not implemented yet" -> t.toLoc,
                 msg"Note: Block IR of definition is `${defn.toString}`" -> N
               ))
-            case _ => S(Instructions.block(
+            case _ => Instructions.block(
                 label = N,
-                children = Seq(res.get, rstBlk.get),
-                resultType = rstBlk.map(_.exprType).getOrElse(NoneType)
-              ))
+                children = Seq(res, rstBlk),
+                resultType = rstBlk.exprType
+              )
 
         case defn =>
           warnExpr(Ls(
@@ -384,7 +382,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case Return(res, true) =>
       result(res)
     case Return(res, false) =>
-      S(`return`(result(res)))
+      `return`(S(result(res)))
     case t =>
       warnExpr(Ls(
         msg"WatBuilder::returningTerm for expression not implemented yet" -> t.toLoc,
@@ -431,7 +429,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
       locals = entryFnLocals,
-      entryFnExpr.get
+      entryFnExpr
     )
     ctx.funcs(entrySym) = entryFn
     (ctx.toWat, entryFn.id.id)
