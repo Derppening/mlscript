@@ -27,6 +27,10 @@ extension (doc: Document)
     doc.optionUnless(_.isEmpty).fold(doc):
       prefix :: _ :: postfix
 
+extension (instr: FoldedInstr)
+  private def mnemonicPrefix: Opt[Str] =
+    instr.mnemonic.split('.').optionUnless(_.size == 1).map(_.head)
+
 object FuncInfo:
   def apply(
       name: BlockMemberSymbol,
@@ -270,16 +274,16 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       if lExpr.exprType is UnreachableType then return S(lExpr)
       val rExpr = result(r).get
       val idx = lExpr.instrargs(0).toString.toInt
-      val assignExpr = lExpr.mnemonic match
-        case "global.get" =>
+      val assignExpr = lExpr.mnemonicPrefix match
+        case S("global") =>
           warnExpr(Ls(
             msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
             msg"Note: Block IR of expression is `${t.toString}`" -> N
           )).get
-        case "local.get" => local.set(idx, rExpr)
-        case mnemonic =>
+        case S("local") => local.set(idx, rExpr)
+        case _ =>
           lastWords(
-            s"Expected `global.get` or `local.get` when compiling instruction for `$l`, but got ${lExpr.mnemonic}"
+            s"Expected `global.*` or `local.*` when compiling instruction for `$l`, but got ${lExpr.mnemonic}"
           )
       val rstBlk = returningTerm(rst)
 
@@ -322,13 +326,13 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   ctx.funcs(defn.sym) = funcInfo
 
                   val idx = funcVar.instrargs(0).toString.toInt
-                  funcVar.mnemonic match
-                    case "global.get" =>
+                  funcVar.mnemonicPrefix match
+                    case S("global") =>
                       S(warnExpr(Ls(
                         msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
                         msg"Note: Block IR of expression is `${t.toString}`" -> N
                       )).get)
-                    case "local.get" =>
+                    case S("local") =>
                       // Refine the type of the local variable to funcref -
                       // This is necessary as `any` and `func` are two
                       // distinct hierarchies
@@ -342,9 +346,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                           RefType(TypeId(sym.nme), nullable = false)
                         )
                       ))
-                    case mnemonic =>
+                    case _ =>
                       lastWords(
-                        s"Expected `global.get` or `local.get` when compiling instruction for `$funcVar`, but got ${funcVar.mnemonic}"
+                        s"Expected `global.*` or `local.*` when compiling instruction for `$funcVar`, but got ${funcVar.mnemonic}"
                       )
                 else
                   warnExpr(Ls(
