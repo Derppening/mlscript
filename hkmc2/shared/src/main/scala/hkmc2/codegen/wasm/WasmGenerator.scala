@@ -9,8 +9,7 @@ import js.CodeBuilder
 abstract class Export[E <: Export[E]]
 
 /**
- * Abstract class representing a Wasm expression, which is composed of zero or
- * more instructions.
+ * Abstract class representing a Wasm expression, which is composed of zero or more instructions.
  */
 abstract class Expression[E <: Expression[E]]
 
@@ -51,16 +50,15 @@ abstract class PackedType
 abstract class TypeBuilder[T <: Type, PT <: PackedType]:
 
   /**
-   * Sets the type at `index` to be a signature type with the given `paramTypes`
-   * and `resultTypes`.
+   * Sets the type at `index` to be a signature type with the given `paramTypes` and `resultTypes`.
    */
   def setSignatureType(index: Int, paramTypes: T, resultTypes: T): Unit
 
   /**
    * Sets the type at `index` to be a struct type with the given fields.
    *
-   * The tuple of each field should contain the Wasm type or the Wasm packed
-   * type, and whether the field is mutable respectively.
+   * The tuple of each field should contain the Wasm type or the Wasm packed type, and whether the
+   * field is mutable respectively.
    */
   def setStructType(index: Int, fields: Seq[(T | PT, Bool)] = Seq()): Unit
 
@@ -92,8 +90,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     def `null`(ty: Type): Expr
 
     /**
-     * Creates a `ref.func` instruction to a function with the given `name` and
-     * return type `ty`.
+     * Creates a `ref.func` instruction to a function with the given `name` and return type `ty`.
      */
     def func(name: Str, ty: Type): Expr
 
@@ -101,8 +98,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
     def i31(value: Expr): Expr
 
     /**
-     * Creates a `ref.test` instruction, testing if the value has the type of
-     * `castType`.
+     * Creates a `ref.test` instruction, testing if the value has the type of `castType`.
      */
     def test(value: Expr, castType: Type): Expr
 
@@ -158,8 +154,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   type Func <: Function[Func]
 
   /**
-   * Concrete type representing a structure containing information of a
-   * function.
+   * Concrete type representing a structure containing information of a function.
    */
   type FuncInfo <: FunctionInfo[Type]
 
@@ -178,8 +173,8 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   /**
    * Gets a function by name.
    *
-   * Refer to the implementation documentation for the specific handling if the
-   * function with the given name is not found.
+   * Refer to the implementation documentation for the specific handling if the function with the
+   * given name is not found.
    */
   def getFunction(name: Str): Func
 
@@ -406,8 +401,7 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[
   lazy val structref: T
 
   /**
-   * A special type indicating unreachable code when obtaining information about
-   * an expression.
+   * A special type indicating unreachable code when obtaining information about an expression.
    */
   lazy val unreachable: T
 
@@ -432,12 +426,11 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[
   def getExpressionType(expr: E): T
 
   /**
-   * Returns the type of this expression `expr`, lowering internal types into
-   * Wasm types where necessary.
+   * Returns the type of this expression `expr`, lowering internal types into Wasm types where
+   * necessary.
    *
    * @param expectsValue
-   *   Whether this expression is in a context where a value is expected to be
-   *   generated.
+   *   Whether this expression is in a context where a value is expected to be generated.
    */
   def getExpressionWasmType(expr: E, expectsValue: Bool): T
 

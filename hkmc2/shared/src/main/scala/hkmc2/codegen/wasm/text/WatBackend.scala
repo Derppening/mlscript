@@ -56,12 +56,10 @@ object ModuleProxy:
       instrType.getOrElse(NoneType)
 
     /**
-     * Returns the type of this expression, converted into a WAT-compatible type
-     * if needed.
+     * Returns the type of this expression, converted into a WAT-compatible type if needed.
      *
      * @param expectsValue
-     *   Whether this expression is in a context where a value is expected to be
-     *   generated.
+     *   Whether this expression is in a context where a value is expected to be generated.
      */
     def getWasmType(expectsValue: Bool): WasmType = getType match
       case UnreachableType =>
@@ -70,8 +68,7 @@ object ModuleProxy:
       case ty => ty
 
     /**
-     * Converts the inner expression into a [[List]] of
-     * [[StackInstr stack instructions]].
+     * Converts the inner expression into a [[List]] of [[StackInstr stack instructions]].
      */
     def toStack: ExprProxy = inner match
       case _: Ls[StackInstr] => this
@@ -137,14 +134,14 @@ object ModuleProxy:
       extends wasm.TypeBuilder[WasmType, WasmPackedType]:
     private val entries = mutable.ArrayBuffer[HeapType]()
     entries.sizeHint(size)
-  
+
     /**
      * Ensures that the `entries` buffer has at least `index` number of entries.
      */
     private def ensureFieldSize(index: Int) =
       // Pad `entries` until we have the correct number of elements
       entries ++= Seq.fill((index - entries.size + 1) max 0)(null)
-  
+
     def setSignatureType(
         index: Int,
         paramTypes: WasmType,
@@ -152,7 +149,7 @@ object ModuleProxy:
     ): Unit =
       ensureFieldSize(index)
       entries(index) = SignatureType(paramTypes, resultTypes)
-  
+
     def setStructType(
         index: Int,
         fields: Seq[(WasmType | WasmPackedType, Bool)]
@@ -164,7 +161,7 @@ object ModuleProxy:
             case packedTy: WasmPackedType => Field(packedTy, mut, N)
             case ty: WasmType => Field(ty, mut, N)
       )
-  
+
     def setStructTypeNamed(
         index: Int,
         fields: Seq[(WasmType | WasmPackedType, Bool, Str)]
@@ -176,32 +173,32 @@ object ModuleProxy:
             case packedTy: WasmPackedType => Field(packedTy, mut, S(id))
             case ty: WasmType => Field(ty, mut, S(id))
       )
-  
+
     def build(): WasmType =
       gen.createType(entries.map(entry => RefType(entry, false)).toSeq)
   end TypeBuilder
-  
+
   object Locals:
     enum Scope:
       case Global
       case Local
     end Scope
-  
+
     def locals(using locals: Locals): Locals = locals
-  
+
     def empty: Locals = Locals(N, N, Seq.empty)
-  
+
   /**
    * A scope for tracking local variables within a function.
    *
-   * This implementation is loosely based on [[hkmc2.utils.Scope]], using numeric
-   * identifiers to adhere to WebAssembly requirements.
+   * This implementation is loosely based on [[hkmc2.utils.Scope]], using numeric identifiers to
+   * adhere to WebAssembly requirements.
    *
    * @param parent
    *   The parent scope, or [[None]] if this is the global scope.
    * @param curThis
-   *   The current `this` symbol. See [[hkmc2.utils.Scope]] for an explanation of
-   *   the nested use of [Opt].
+   *   The current `this` symbol. See [[hkmc2.utils.Scope]] for an explanation of the nested use of
+   *   [Opt].
    * @param params
    *   The parameters of the function, if any.
    */
@@ -215,23 +212,22 @@ object ModuleProxy:
         require(p.parent.isEmpty, "Nested local scopes are not supported")
       case N =>
         require(params.isEmpty, "Global scope should not contain parameters")
-  
+
     private val bindings = mutable.Map[Local, Int]()
     private val paramTypes = mutable.ArrayBuffer[WasmType]()
     private val localTypes = mutable.ArrayBuffer[WasmType]()
-  
+
     // Insert all parameters into scope
     params.foreach: (l, ty) =>
       allocateName(l, ty)
-  
+
     def nParams: Int = paramTypes.size
-  
+
     private def inferScope: Locals.Scope =
       parent.dlof(_ => Locals.Scope.Local)(Locals.Scope.Global)
-  
+
       /**
-       * Finds and returns the appropriate global/local index for the given
-       * `thisSym` symbol.
+       * Finds and returns the appropriate global/local index for the given `thisSym` symbol.
        */
     def findThis_!(thisSym: InnerSymbol)(using Raise): (Locals.Scope, Int) =
       curThis.map(_.map(_._1)) match
@@ -246,13 +242,13 @@ object ModuleProxy:
             )
           )
           (inferScope, -1)
-  
+
     def lookup(l: Local): Opt[(Locals.Scope, Int)] =
       bindings.get(l).map:
         (inferScope, _)
       .orElse:
         parent.flatMap(_.lookup(l))
-  
+
     def lookup_!(l: Local)(using Raise): (Locals.Scope, Int) =
       lookup(l).getOrElse:
         // Prevent long-winded error messages which quote the entire definition.
@@ -268,7 +264,7 @@ object ModuleProxy:
           source = Diagnostic.Source.Compilation
         ))
         (inferScope, -1)
-  
+
     def allocateName(
         l: Local,
         ty: WasmType,
@@ -290,12 +286,12 @@ object ModuleProxy:
         bindings += l -> index
         index
       (inferScope, index)
-  
+
     def getThisScope: Opt[Locals] =
       curThis.fold(parent.flatMap(_.getThisScope))(_ => S(this))
-  
+
     def getOuterThisScope: Opt[Locals] = parent.flatMap(_.getThisScope)
-  
+
     def nestRebindThis[R](thisSym: Opt[(
         InnerSymbol,
         WasmType
@@ -310,27 +306,24 @@ object ModuleProxy:
             source = Diagnostic.Source.Compilation
           ))
           (N, res)
-  
+
     /**
-     * Returns a [Seq] representing the types of all local variables declared with
-     * `(local ...)`.
+     * Returns a [Seq] representing the types of all local variables declared with `(local ...)`.
      *
-     * This includes the implicit `this` in the first position, if present in the
-     * function.
+     * This includes the implicit `this` in the first position, if present in the function.
      */
     def getLocalsTypes: Seq[WasmType] =
       curThis.flatten.map(_._2).toSeq ++ localTypes.toSeq
-  
+
     /**
-     * Returns a [Seq] representing the types of all local variables, including
-     * parameters.
+     * Returns a [Seq] representing the types of all local variables, including parameters.
      */
     def getTypes: Seq[WasmType] =
       paramTypes.toSeq ++ curThis.flatten.map(_._2).toSeq ++ getLocalsTypes
-  
+
     /** Returns a [Seq] representing the types of all global variables. */
     def getGlobalTypes: Seq[WasmType] = parent.dlof(_.getGlobalTypes)(getTypes)
-  
+
   end Locals
 
 /**
@@ -782,8 +775,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
           )
 
     /**
-     * Unwraps the [[WasmType]] passed into `struct.new{,_default}` into a
-     * `StrucType`.
+     * Unwraps the [[WasmType]] passed into `struct.new{,_default}` into a `StrucType`.
      */
     private def unwrapStructNewType(
         ty: WasmType,
@@ -951,8 +943,8 @@ class WatBackend
   def newTypeBuilder(size: Int): TypeBuilder = TypeBuilder(this, size)
 
   /**
-   * Returns an expression equivalent to `expr` but returning a reference value
-   * instead, by inserting instructions as necessary.
+   * Returns an expression equivalent to `expr` but returning a reference value instead, by
+   * inserting instructions as necessary.
    */
   private def toRefExpr(expr: ExprProxy)(using mod: ModuleProxy): ExprProxy =
     expr.getType match
@@ -1580,9 +1572,8 @@ class WatBackend
   ): ModuleProxy =
     val mod = summon[ModuleProxy]
     val vars =
-      ss.filter(locals.lookup(_).isEmpty).toArray.sortBy(_.uid).iterator.map:
-        l =>
-          l -> locals.allocateName(l, this.anyref, false)
+      ss.filter(locals.lookup(_).isEmpty).toArray.sortBy(_.uid).iterator.map: l =>
+        l -> locals.allocateName(l, this.anyref, false)
     for (_, (_, (nme))) <- vars do
       mod.addGlobal(
         nme.toString,

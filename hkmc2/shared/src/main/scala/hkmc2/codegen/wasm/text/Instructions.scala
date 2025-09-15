@@ -59,10 +59,10 @@ object Instructions:
     )
 
   def call_ref(
-    target: FoldedInstr,
-    operands: Seq[FoldedInstr],
-    typeRef: TypeRef,
-    sigType: SignatureType
+      target: FoldedInstr,
+      operands: Seq[FoldedInstr],
+      typeRef: TypeRef,
+      sigType: SignatureType
   ): FoldedInstr = FoldedInstr(
     mnemonic = "call_ref",
     instrargs = Seq(typeRef.toWat),

@@ -18,11 +18,9 @@ private trait ToJSRepr:
 end ToJSRepr
 
 /**
- * Abstraction over a JavaScript variable with a unique number as its
- * identifier.
+ * Abstraction over a JavaScript variable with a unique number as its identifier.
  *
- * This is used to represent intermediate values when generating JavaScript
- * code.
+ * This is used to represent intermediate values when generating JavaScript code.
  */
 case class VarId(id: Long) extends ToJSRepr:
   /** Returns the name of the variable, i.e. `_$id`. */
@@ -33,8 +31,7 @@ end VarId
  * A reference to a Binaryen module.
  *
  * @param gen
- *   The [[BinaryenJSBackend]] instance that generates constructs for this
- *   module.
+ *   The [[BinaryenJSBackend]] instance that generates constructs for this module.
  * @param varId
  *   The identifier of the module in JavaScript code.
  */
@@ -382,8 +379,7 @@ end GlobalRef
  * A reference to a heap type builder in Binaryen.
  *
  * @param gen
- *   The [[BinaryenJSBackend]] instance that generates constructs for this type
- *   builder.
+ *   The [[BinaryenJSBackend]] instance that generates constructs for this type builder.
  * @param varId
  *   The identifier of the type builder in JavaScript code.
  */
@@ -443,12 +439,10 @@ case class PackedTypeRef(varId: VarId) extends wasm.PackedType with ToJSRepr:
 end PackedTypeRef
 
 /**
- * A [[WasmGenerator]] backend that produces Binaryen.js Javascript calls as its
- * output.
+ * A [[WasmGenerator]] backend that produces Binaryen.js Javascript calls as its output.
  *
  * @param modId
- *   The identifier of which the Binaryen module is loaded and referred to in
- *   the JavaScript code.
+ *   The identifier of which the Binaryen module is loaded and referred to in the JavaScript code.
  */
 class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
     extends WasmGenerator[TypeRef, PackedTypeRef, ModRef, TypeBuilder, ExprRef]
@@ -456,8 +450,8 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
   type TypeRefs = VarId
 
   /**
-   * A monotonically increasing counter for generating variable names of
-   * intermediate Binaryen values.
+   * A monotonically increasing counter for generating variable names of intermediate Binaryen
+   * values.
    */
   private val varCounter = AtomicLong()
 
@@ -572,8 +566,7 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
       TypeRef(freshId)
 
   /**
-   * Creates a fresh [[VarId]], executes [[block]], and returns the result of
-   * the block.
+   * Creates a fresh [[VarId]], executes [[block]], and returns the result of the block.
    *
    * This is used to simplify capturing intermediate Binaryen values.
    */

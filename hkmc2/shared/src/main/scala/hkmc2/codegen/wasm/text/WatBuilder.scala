@@ -331,9 +331,8 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         msg"Note: Block IR of expression is `${t.toString}`" -> N
                       ))
                     case S("local") =>
-                      // Refine the type of the local variable to funcref -
-                      // This is necessary as `any` and `func` are two
-                      // distinct hierarchies
+                      // Refine the type of the local variable to funcref - This is necessary as
+                      // `any` and `func` are two distinct hierarchies
                       val (localId, _) = ctx.locals.head(idx)
                       ctx.locals.head(idx) = (localId, RefType.funcref)
 

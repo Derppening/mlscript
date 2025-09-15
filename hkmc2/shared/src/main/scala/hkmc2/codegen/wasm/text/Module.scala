@@ -223,11 +223,11 @@ abstract sealed class Instruction extends ToWat:
   val mnemonic: String
 
   /**
-   * The arguments to the instruction. Note that this only includes arguments
-   * that are directly part of the instruction, not the stack arguments.
+   * The arguments to the instruction. Note that this only includes arguments that are directly part
+   * of the instruction, not the stack arguments.
    *
-   * For example, for `i32.add` this would be empty, but for `i32.const 42`,
-   * this would be `Seq(42)`.
+   * For example, for `i32.add` this would be empty, but for `i32.const 42`, this would be
+   * `Seq(42)`.
    */
   val instrargs: Seq[Any]
 
@@ -248,8 +248,8 @@ end StackInstr
 
 object FoldedInstr:
   /**
-   * Instruction mnemonics that do not (yet) support lowering from folded
-   * instructions to stack instructions.
+   * Instruction mnemonics that do not (yet) support lowering from folded instructions to stack
+   * instructions.
    */
   val unsupportedToStackMnemonics = Set("if", "then", "else")
 
@@ -299,8 +299,7 @@ case class FoldedInstr(
 end FoldedInstr
 
 /**
- * A WebAssembly expression, comprised of zero of more instructions that
- * generate a result value.
+ * A WebAssembly expression, comprised of zero of more instructions that generate a result value.
  */
 type Expr = Opt[FoldedInstr] | Ls[StackInstr]
 

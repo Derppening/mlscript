@@ -1,28 +1,27 @@
 package hkmc2
 
-import scala.collection.mutable
+import mlscript.utils.*, shorthands.*
 
-import mlscript.utils._, shorthands._
-
-import Diagnostic.Source
-import codegen.wasm._
+import codegen.wasm.*
 import semantics.Elaborator
 import semantics.Term.Blk
 import text.{WatBackend, WatBuilder}
 import hkmc2.codegen.CompilationTarget
-import hkmc2.syntax.Keyword.`then`
+import Diagnostic.Source
+
+import scala.collection.mutable
 
 abstract class WasmDiffMaker extends LlirDiffMaker:
-  /** Enables Wasm support. All subsequent options are no-op if this option is
-    * not set.
-    */
+  /**
+   * Enables Wasm support. All subsequent options are no-op if this option is not set.
+   */
   val wasm = NullaryCommand("wasm")
 
-  /** Outputs the compiled module as [[WasmGenerator]] implementation-defined
-    * text.
-    */
+  /**
+   * Outputs the compiled module as [[WasmGenerator]] implementation-defined text.
+   */
   val wat = NullaryCommand("wat")
-  
+
   /** Overrides and uses the WIP [[WatBuilder]] backend for WAT generation instead. */
   val ewat = NullaryCommand("ewat")
 
@@ -32,11 +31,12 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
   /** Outputs the compiled module as folded text (i.e. S-expression). */
   val fwat = NullaryCommand("fwat")
 
-  /** Compiles the Wasm text into a binary and executes it.
-    *
-    * This currently executes the `main` function of the Wasm module, regardless
-    * of what is defined in `startfunc`.
-    */
+  /**
+   * Compiles the Wasm text into a binary and executes it.
+   *
+   * This currently executes the `main` function of the Wasm module, regardless of what is defined
+   * in `startfunc`.
+   */
   val rwasm = NullaryCommand("rwasm")
 
   private val baseScp: utils.Scope =
