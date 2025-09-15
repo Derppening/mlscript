@@ -38,16 +38,10 @@ object FuncInfo:
       nResults: Int,
       locals: Seq[Local -> WasmType],
       body: FoldedInstr
-  ): FuncInfo = FuncInfo(
-    FuncRef(name.nme),
-    params,
-    nResults,
-    locals,
-    body
-  )
+  ): FuncInfo = FuncInfo(FuncId(name.nme), params, nResults, locals, body)
 
 private final case class FuncInfo(
-    val id: FuncRef,
+    val id: FuncId,
     val params: Seq[Local],
     val nResults: Int,
     val locals: Seq[Local -> WasmType],

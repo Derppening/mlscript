@@ -203,6 +203,8 @@ case class TypeId(id: Str) extends TypeRef:
   def toWat: Document = doc"$$$id"
 end TypeId
 
+abstract class FuncRef extends HeapType, ToWat
+
 /**
  * A functionthat is referenced by its name.
  *
@@ -211,9 +213,9 @@ end TypeId
  * @param id
  *   The identifier of the function.
  */
-case class FuncRef(id: Str) extends HeapType, ToWat:
+case class FuncId(id: Str) extends FuncRef, ToWat:
   def toWat: Document = doc"$$$id"
-end FuncRef
+end FuncId
 
 /**
  * An abstraction over a generic WebAssembly instructions.
