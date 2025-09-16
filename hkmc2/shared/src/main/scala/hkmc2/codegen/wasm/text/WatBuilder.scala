@@ -34,9 +34,9 @@ extension (instr: FoldedInstr)
 object FuncInfo:
   def apply(
       sym: BlockMemberSymbol,
-      params: Seq[Local],
+      params: Seq[Local -> Str],
       nResults: Int,
-      locals: Seq[Local -> WasmType],
+      locals: Seq[Local -> (Str, WasmType)],
       body: FoldedInstr
   ): FuncInfo = FuncInfo(
     sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
@@ -48,16 +48,16 @@ object FuncInfo:
 
 private final case class FuncInfo(
     val id: Opt[SymIdx],
-    val params: Seq[Local],
+    val params: Seq[Local -> Str],
     val nResults: Int,
     // TODO(Derppening): Change this back to Seq[Local] once funcref is disallowed
-    val locals: Seq[Local -> WasmType],
+    val locals: Seq[Local -> (Str, WasmType)],
     val body: FoldedInstr
 ) extends ToWat:
   def toWat: Document =
     doc"""(func ${id.fold(doc"")(_.toWat)}${
         params.map: p =>
-          doc"(param ${p.nme} ${RefType.anyref.toWat})"
+          doc"(param $$${p._2} ${RefType.anyref.toWat})"
         .toSeq.mkDocument(doc" ").surroundUnlessEmpty(doc" ")
       }${
         Seq.fill(nResults)(
@@ -65,7 +65,7 @@ private final case class FuncInfo(
         ).mkDocument(doc" ").surroundUnlessEmpty(doc" ")
       } #{ ${
         locals.map: p =>
-          doc"(local ${p._2.toWat})"
+          doc"(local $$${p._2._1} ${p._2._2.toWat})"
         .toSeq.mkDocument(doc" # ").surroundUnlessEmpty(doc" # ")
       } # ${body.toWat} #} )${
         id.fold(doc""): id =>
@@ -332,9 +332,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val funcInfo =
                     FuncInfo(
                       sym,
-                      ps.params.map(p => p.sym),
+                      ps.params.map(p => p.sym -> scope.lookup_!(p.sym, p.toLoc)),
                       bodyWat.exprType.toSeq.length,
-                      locals,
+                      locals.map((lcl, lclTy) => lcl -> (scope.lookup_!(lcl, lcl.toLoc), lclTy)),
                       bodyWat
                     )
                   val func = ctx.addFunc(S(defn.sym), funcInfo)
@@ -432,7 +432,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
-      locals = entryFnLocals,
+      locals = entryFnLocals.map((lcl, lclTy) => lcl -> (scope.lookup_!(lcl, N), lclTy)),
       entryFnExpr
     )
     ctx.addFunc(S(entrySym), entryFnInfo)
