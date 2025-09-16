@@ -33,22 +33,29 @@ extension (instr: FoldedInstr)
 
 object FuncInfo:
   def apply(
-      name: BlockMemberSymbol,
+      sym: BlockMemberSymbol,
       params: Seq[Local],
       nResults: Int,
       locals: Seq[Local -> WasmType],
       body: FoldedInstr
-  ): FuncInfo = FuncInfo(FuncId(name.nme), params, nResults, locals, body)
+  ): FuncInfo = FuncInfo(
+    sym.optionIf(_.nameIsMeaningful).map(sym => FuncId(sym.nme)),
+    params,
+    nResults,
+    locals,
+    body
+  )
 
 private final case class FuncInfo(
-    val id: FuncId,
+    val id: Opt[FuncId],
     val params: Seq[Local],
     val nResults: Int,
+    // TODO(Derppening): Change this back to Seq[Local] once funcref is disallowed
     val locals: Seq[Local -> WasmType],
     val body: FoldedInstr
 ) extends ToWat:
   def toWat: Document =
-    doc"""(func ${id.toWat}${
+    doc"""(func ${id.fold(doc"")(_.toWat)}${
         params.map(p =>
           doc"(param ${p.nme} ${RefType.anyref.toWat})"
         ).toSeq.mkDocument(doc" ").surroundUnlessEmpty(doc" ")
@@ -60,7 +67,10 @@ private final case class FuncInfo(
         locals.map(p => doc"(local ${p._2.toWat})").toSeq.mkDocument(
           doc" # "
         ).surroundUnlessEmpty(doc" # ")
-      } # ${body.toWat} #} ) # (export "${id.id}" (func ${id.toWat})) # (elem declare func ${id.toWat})"""
+      } # ${body.toWat} #} )${
+        id.fold(doc""): id =>
+          doc""" # (export "${id.id}" (func ${id.toWat})) # (elem declare func ${id.toWat})"""
+      }"""
 end FuncInfo
 
 private final case class TypeInfo(
@@ -74,39 +84,50 @@ end TypeInfo
 
 object Ctx:
   def empty: Ctx = Ctx(
-    _types = MutMap.empty,
-    _anonTypes = ArrayBuf.empty,
-    funcs = MutMap.empty,
+    types = ArrayBuf.empty,
+    namedTypes = MutMap.empty,
+    funcs = ArrayBuf.empty,
+    namedFuncs = MutMap.empty,
     locals = ArrayBuf() :: Nil
   )
 
   def ctx(using ctx: Ctx): Ctx = ctx
 
 private final case class Ctx(
-    private val _types: MutMap[Symbol, TypeIdx -> TypeInfo],
-    private val _anonTypes: ArrayBuf[TypeIdx -> TypeInfo],
-    val funcs: MutMap[Symbol, FuncInfo],
+    private val types: ArrayBuf[TypeInfo],
+    private val namedTypes: MutMap[Symbol, TypeIdx],
+    private val funcs: ArrayBuf[FuncInfo],
+    private val namedFuncs: MutMap[Symbol, FuncIdx],
+    // TODO(Derppening): Change this back to Seq[Local] once funcref is disallowed
     var locals: Ls[ArrayBuf[Local -> ValType]]
 ) extends ToWat:
 
-  def types: Map[Symbol, TypeIdx -> TypeInfo] = _types
-  def anonTypes: Seq[TypeIdx -> TypeInfo] = _anonTypes.toSeq
-
   def addType(sym: Opt[Symbol], typeInfo: TypeInfo): TypeRef =
-    val typeEntry = TypeIdx(_types.size + _anonTypes.size) -> typeInfo
-    sym match
-      case S(sym) => _types(sym) = typeEntry
-      case N => _anonTypes += typeEntry
-    typeInfo.id.getOrElse(typeEntry._1)
+    val typeIdx = TypeIdx(types.size)
+    types += typeInfo
+    sym.foreach:
+      namedTypes(_) = typeIdx
+    typeInfo.id.getOrElse(typeIdx)
+
+  def getType(typeref: Symbol | TypeRef): Opt[TypeInfo] = typeref match
+    case TypeIdx(idx) => types.unapply(idx.toInt)
+    case TypeId(nme) => namedTypes.find(_._1.nme == nme).flatMap(t => getType(t._2))
+    case sym: Symbol => namedTypes.get(sym).flatMap(getType(_))
+
+  def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncRef =
+    val funcIdx = FuncIdx(funcs.size)
+    funcs += funcInfo
+    sym.foreach:
+      namedFuncs(_) = funcIdx
+    funcInfo.id.getOrElse(funcIdx)
+
+  def getFunc(funcref: Symbol | FuncRef): Opt[FuncInfo] = funcref match
+    case FuncIdx(idx) => funcs.unapply(idx.toInt)
+    case FuncId(nme) => namedFuncs.find(_._1.nme == nme).flatMap(f => getFunc(f._2))
+    case sym: Symbol => namedFuncs.get(sym).flatMap(getFunc(_))
 
   def toWat: Document =
-    doc"""(module #{  # ${(_types.values ++ _anonTypes).map(
-        _._2.toWat
-      ).toSeq.mkDocument(doc" # ").surroundUnlessEmpty(postfix =
-        doc" # "
-      )}${funcs.values.toSeq.map(
-        _.toWat
-      ).mkDocument(doc" # ")}) #} """
+    doc"""(module #{  # ${(types.toSeq ++ funcs.toSeq).map(_.toWat).mkDocument(doc" # ")}) #} """
 
 end Ctx
 
@@ -235,6 +256,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       if base.exprType is UnreachableType then return base
       val wasmArgs = args.map(argument)
 
+      // TODO(Derppening): Only allow Ref/Select in `fun`, reject everything else
       val funcType = TypeInfo(
         id = N,
         compType = SignatureType(
@@ -315,7 +337,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       locals,
                       bodyWat
                     )
-                  ctx.funcs(defn.sym) = funcInfo
+                  val func = ctx.addFunc(S(defn.sym), funcInfo)
 
                   val idx = funcVar.instrargs(0).toString.toInt
                   funcVar.mnemonicPrefix match
@@ -332,10 +354,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
                       local.set(
                         idx,
-                        ref.func(
-                          funcInfo.id,
-                          RefType(TypeId(sym.nme), nullable = false)
-                        )
+                        ref.func(func, RefType(TypeId(sym.nme), nullable = false))
                       )
                     case _ =>
                       lastWords(
@@ -408,17 +427,17 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val entrySym = BlockMemberSymbol("entry", Nil)
     val entryNme = scope.allocateName(entrySym)
 
-    val entryFn = FuncInfo(
-      id = FuncId(entryNme),
+    val entryFnInfo = FuncInfo(
+      id = S(FuncId(entryNme)),
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
       locals = entryFnLocals,
       entryFnExpr
     )
-    ctx.funcs(entrySym) = entryFn
+    ctx.addFunc(S(entrySym), entryFnInfo)
 
-    (ctx.toWat, entryFn.id.id)
+    (ctx.toWat, entryNme)
 
   def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Seq[Local] =
     val vars = ss.filter(
@@ -434,7 +453,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val locals = blockPreamble(t.definedVars)
     val returningExpr = returningTerm(t)
     val refinedLocals = ctx.locals.head.filter(_._1 in locals).toSeq
-    (returningTerm(t), refinedLocals)
+    (returningExpr, refinedLocals)
 
   def body(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local -> WasmType]) =
     scope.nest givenIn:

@@ -185,9 +185,9 @@ end StructType
 /** A composite type. */
 type CompType = StructType | SignatureType
 
-abstract class TypeRef extends HeapType, ToWat
+abstract sealed class TypeRef extends HeapType, ToWat
 
-case class TypeIdx(idx: Long) extends TypeRef:
+case class TypeIdx(idx: Int) extends TypeRef:
   def toWat: Document = doc"${idx.toString}"
 end TypeIdx
 
@@ -203,7 +203,11 @@ case class TypeId(id: Str) extends TypeRef:
   def toWat: Document = doc"$$$id"
 end TypeId
 
-abstract class FuncRef extends HeapType, ToWat
+sealed abstract class FuncRef extends HeapType, ToWat
+
+case class FuncIdx(idx: Int) extends FuncRef:
+  def toWat: Document = doc"${idx.toString}"
+end FuncIdx
 
 /**
  * A functionthat is referenced by its name.
