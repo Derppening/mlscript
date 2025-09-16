@@ -56,17 +56,17 @@ private final case class FuncInfo(
 ) extends ToWat:
   def toWat: Document =
     doc"""(func ${id.fold(doc"")(_.toWat)}${
-        params.map(p =>
+        params.map: p =>
           doc"(param ${p.nme} ${RefType.anyref.toWat})"
-        ).toSeq.mkDocument(doc" ").surroundUnlessEmpty(doc" ")
+        .toSeq.mkDocument(doc" ").surroundUnlessEmpty(doc" ")
       }${
         Seq.fill(nResults)(
           doc"(result ${RefType.anyref.toWat})"
         ).mkDocument(doc" ").surroundUnlessEmpty(doc" ")
       } #{ ${
-        locals.map(p => doc"(local ${p._2.toWat})").toSeq.mkDocument(
-          doc" # "
-        ).surroundUnlessEmpty(doc" # ")
+        locals.map: p =>
+          doc"(local ${p._2.toWat})"
+        .toSeq.mkDocument(doc" # ").surroundUnlessEmpty(doc" # ")
       } # ${body.toWat} #} )${
         id.fold(doc""): id =>
           doc""" # (export "${id.id}" (func ${id.toWat})) # (elem declare func ${id.toWat})"""

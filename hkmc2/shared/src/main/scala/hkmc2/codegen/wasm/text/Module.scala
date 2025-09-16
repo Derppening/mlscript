@@ -143,7 +143,7 @@ case class SignatureType(params: Seq[Param], results: Seq[Result])
     (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
 
   def toWat: Document =
-    doc"(func${signatureToWat.optionUnless(_.isEmpty).dlof(sig => doc" $sig")(doc"")})"
+    doc"(func${signatureToWat.optionUnless(_.isEmpty).fold(doc"")(sig => doc" $sig")})"
 end SignatureType
 
 object Field:
@@ -169,7 +169,7 @@ case class Field(
   def toWat: Document =
     val tyWat = if packedType != WasmPackedType.NotPacked then packedType.toWat
     else ty.toWat
-    doc"(field ${id.dlof(id => doc"$$$id ")(doc"")}${
+    doc"(field ${id.fold(doc"")(id => doc"$$$id ")}${
         if mutable then doc"(mut ${tyWat})" else tyWat
       })"
 end Field
@@ -179,7 +179,7 @@ case class StructType(fields: Seq[Field]) extends HeapType:
   def toWat: Document =
     doc"(struct${fields.map(
         _.toWat
-      ).mkDocument(doc" ").optionUnless(_.isEmpty).dlof(f => doc" $f")(doc"")})"
+      ).mkDocument(doc" ").optionUnless(_.isEmpty).fold(doc"")(f => doc" $f")})"
 end StructType
 
 /** A composite type. */
@@ -249,7 +249,7 @@ case class StackInstr(
 ) extends Instruction:
   def toWat: Document = doc"$mnemonic${instrargs
       .optionIf(_.nonEmpty)
-      .dlof(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))(doc"")}"
+      .fold(doc"")(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))}"
 end StackInstr
 
 object FoldedInstr:
@@ -286,22 +286,23 @@ case class FoldedInstr(
             foldedInstr.map(_.toStack).getOrElse(Ls())
       .toList :+ StackInstr(mnemonic, instrargs, exprType)
 
-  def toWat: Document = doc"($mnemonic${instrargs
-      .optionIf(_.nonEmpty)
-      .dlof(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))(doc"")}${stackargs
-      .optionIf(_.nonEmpty)
-      .dlof(stackarg =>
-        doc" #{  # ${stackarg
-            .map(sarg =>
-              doc"${sarg match
-                  case stackInstr: Ls[StackInstr] =>
-                    stackInstr.map(_.toWat).mkDocument(" # ")
-                  case S(foldedInstr) => foldedInstr.toWat
-                  case N => doc""
-                }"
-            )
-            .mkDocument(doc" # ")} #} "
-      )(doc"")})"
+  def toWat: Document = doc"($mnemonic${
+      instrargs
+        .optionIf(_.nonEmpty)
+        .fold(doc"")(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))
+    }${
+      stackargs
+        .optionIf(_.nonEmpty)
+        .fold(doc""): stackarg =>
+          doc" #{  # ${stackarg
+              .map: sarg =>
+                doc"${sarg match
+                    case stackInstr: Ls[StackInstr] => stackInstr.map(_.toWat).mkDocument(" # ")
+                    case S(foldedInstr) => foldedInstr.toWat
+                    case N => doc""
+                  }"
+              .mkDocument(doc" # ")} #} "
+    })"
 end FoldedInstr
 
 /**
@@ -382,7 +383,7 @@ case class Module(
     da: Seq[Str -> Document] = Seq()
 ) extends ToWat:
   def toWat: Document =
-    doc"(module${id.dlof(id => doc" $id")(doc"")} #{  # ${Seq(
+    doc"(module${id.fold(doc"")(id => doc" $id")} #{  # ${Seq(
         ty.map(_._2.toWat),
         im.map(_._2),
         fn.map(_._2.toWat),
