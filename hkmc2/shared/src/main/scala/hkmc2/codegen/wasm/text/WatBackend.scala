@@ -10,7 +10,7 @@ import semantics.*
 import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
-import text.{Instructions as WasmInstr, TypeId as TypeRef}
+import text.{Instructions as WasmInstr, TypeIdx as TypeRef}
 import Message.MessageContext
 import ModuleProxy.Locals.locals
 
@@ -363,7 +363,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     mod = mod.copy(ty =
       mod.ty :+ (intName -> ModType(ty, doc"(type $$$intName ${ty.toWat})"))
     )
-    TypeRef(intName)
+    TypeRef(SymIdx(intName))
 
   /** Gets a type by name. */
   def getType(name: Str): Opt[CompType] =
@@ -553,7 +553,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
   def getFunctionInfo(ftype: Func): FuncInfo =
     val func = mod.fn.find(_._1 == ftype.name).map(_._2).get
     new FunctionInfo(
-      name = func._1.id,
+      name = func._1.idx.asInstanceOf[SymIdx].id,
       params = func.paramTypes,
       results = func.resultTypes
     )
@@ -764,7 +764,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     ): TypeRef =
       ty match
         case typeref @ TypeRef(id) =>
-          unwrapStructNewType(getType(id).get, S(typeref), instr)
+          unwrapStructNewType(getType(id.asInstanceOf[SymIdx].id).get, S(typeref), instr)
         case structType: StructType =>
           typeref match
             case S(typeref) => typeref
@@ -1016,7 +1016,7 @@ class WatBackend
     `this`.getType match
       case RefType(TypeRef(id), _) =>
         mod.getType(
-          id
+          id.asInstanceOf[SymIdx].id
         ).get.asInstanceOf[StructType].fields.indexWhere(_.id.exists(_ == s))
       case RefType(StructType(fields), _) =>
         fields.indexWhere(_.id.exists(_ == s))
@@ -1159,7 +1159,7 @@ class WatBackend
                 mod.getType(clsSymNme) match
                   case S(_: StructType) =>
                     mod.struct.new_default(RefType(
-                      TypeRef(clsSymNme),
+                      TypeRef(SymIdx(clsSymNme)),
                       nullable = true
                     ))
                   case _ =>
@@ -1194,7 +1194,7 @@ class WatBackend
                   fieldIdx,
                   mod.ref.cast(
                     qualExpr,
-                    RefType(TypeRef(termOwnerNme), nullable = false)
+                    RefType(TypeRef(SymIdx(termOwnerNme)), nullable = false)
                   ),
                   ty = termOwnerFields(fieldIdx).ty,
                   isSigned = false
@@ -1222,7 +1222,7 @@ class WatBackend
         val clazzStructTy = clazzRefTy.heapType.asInstanceOf[TypeRef]
 
         mod.call(
-          s"${clazzStructTy.id}::<constructor>",
+          s"${clazzStructTy.idx.asInstanceOf[SymIdx].id}::<constructor>",
           as.map(argument).map(toRefExpr(_)),
           clazzRefTy
         )
@@ -1430,7 +1430,7 @@ class WatBackend
 
                     // TODO(Derppening): Prepend s"$fileName/${isym.nme}$$${counter++}"
                     val typeref =
-                      mod.getType(isym.nme).dlof(_ => TypeRef(isym.nme)):
+                      mod.getType(isym.nme).dlof(_ => TypeRef(SymIdx(isym.nme))):
                         lastWords(
                           "Expected type to be present in WAT during codegen for class definition"
                         )

@@ -39,7 +39,7 @@ object FuncInfo:
       locals: Seq[Local -> WasmType],
       body: FoldedInstr
   ): FuncInfo = FuncInfo(
-    sym.optionIf(_.nameIsMeaningful).map(sym => FuncId(sym.nme)),
+    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
     params,
     nResults,
     locals,
@@ -47,7 +47,7 @@ object FuncInfo:
   )
 
 private final case class FuncInfo(
-    val id: Opt[FuncId],
+    val id: Opt[SymIdx],
     val params: Seq[Local],
     val nResults: Int,
     // TODO(Derppening): Change this back to Seq[Local] once funcref is disallowed
@@ -74,7 +74,7 @@ private final case class FuncInfo(
 end FuncInfo
 
 private final case class TypeInfo(
-    val id: Opt[TypeId],
+    val id: Opt[SymIdx],
     val compType: CompType
 ) extends ToWat:
 
@@ -95,36 +95,36 @@ object Ctx:
 
 private final case class Ctx(
     private val types: ArrayBuf[TypeInfo],
-    private val namedTypes: MutMap[Symbol, TypeIdx],
+    private val namedTypes: MutMap[Symbol, NumIdx],
     private val funcs: ArrayBuf[FuncInfo],
-    private val namedFuncs: MutMap[Symbol, FuncIdx],
+    private val namedFuncs: MutMap[Symbol, NumIdx],
     // TODO(Derppening): Change this back to Seq[Local] once funcref is disallowed
     var locals: Ls[ArrayBuf[Local -> ValType]]
 ) extends ToWat:
 
-  def addType(sym: Opt[Symbol], typeInfo: TypeInfo): TypeRef =
-    val typeIdx = TypeIdx(types.size)
+  def addType(sym: Opt[Symbol], typeInfo: TypeInfo): TypeIdx =
+    val numIdx = NumIdx(types.size)
     types += typeInfo
     sym.foreach:
-      namedTypes(_) = typeIdx
-    typeInfo.id.getOrElse(typeIdx)
+      namedTypes(_) = numIdx
+    TypeIdx(typeInfo.id.getOrElse(numIdx))
 
-  def getType(typeref: Symbol | TypeRef): Opt[TypeInfo] = typeref match
-    case TypeIdx(idx) => types.unapply(idx.toInt)
-    case TypeId(nme) => namedTypes.find(_._1.nme == nme).flatMap(t => getType(t._2))
-    case sym: Symbol => namedTypes.get(sym).flatMap(getType(_))
+  def getType(typeref: TypeIdx | Symbol): Opt[TypeInfo] = typeref match
+    case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
+    case TypeIdx(SymIdx(nme)) => namedTypes.find(_._1.nme == nme).flatMap(t => getType(TypeIdx(t._2)))
+    case sym: Symbol => namedTypes.get(sym).flatMap(idx => getType(TypeIdx(idx)))
 
-  def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncRef =
-    val funcIdx = FuncIdx(funcs.size)
+  def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
+    val numIdx = NumIdx(funcs.size)
     funcs += funcInfo
     sym.foreach:
-      namedFuncs(_) = funcIdx
-    funcInfo.id.getOrElse(funcIdx)
+      namedFuncs(_) = numIdx
+    FuncIdx(funcInfo.id.getOrElse(numIdx))
 
-  def getFunc(funcref: Symbol | FuncRef): Opt[FuncInfo] = funcref match
-    case FuncIdx(idx) => funcs.unapply(idx.toInt)
-    case FuncId(nme) => namedFuncs.find(_._1.nme == nme).flatMap(f => getFunc(f._2))
-    case sym: Symbol => namedFuncs.get(sym).flatMap(getFunc(_))
+  def getFunc(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
+    case FuncIdx(NumIdx(idx)) => funcs.unapply(idx.toInt)
+    case FuncIdx(SymIdx(nme)) => namedFuncs.find(_._1.nme == nme).flatMap(f => getFunc(FuncIdx(f._2)))
+    case sym: Symbol => namedFuncs.get(sym).flatMap(idx => getFunc(FuncIdx(idx)))
 
   def toWat: Document =
     doc"""(module #{  # ${(types.toSeq ++ funcs.toSeq).map(_.toWat).mkDocument(doc" # ")}) #} """
@@ -269,7 +269,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       call_ref(
         target = ref.cast(base, RefType(funcRefType, nullable = false)),
         operands = wasmArgs.toSeq,
-        typeRef = funcRefType,
+        typeIdx = funcRefType,
         sigType = funcType.compType.asInstanceOf[SignatureType]
       )
     case r =>
@@ -354,7 +354,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
                       local.set(
                         idx,
-                        ref.func(func, RefType(TypeId(sym.nme), nullable = false))
+                        ref.func(func, RefType(TypeIdx(SymIdx(sym.nme)), nullable = false))
                       )
                     case _ =>
                       lastWords(
@@ -428,7 +428,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val entryNme = scope.allocateName(entrySym)
 
     val entryFnInfo = FuncInfo(
-      id = S(FuncId(entryNme)),
+      id = S(SymIdx(entryNme)),
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?

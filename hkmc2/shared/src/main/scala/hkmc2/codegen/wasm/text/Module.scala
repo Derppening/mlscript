@@ -82,39 +82,39 @@ case class RefType(heapType: HeapType, nullable: Bool) extends WasmType:
 end RefType
 
 object HeapType:
-  case object Func extends HeapType:
+  case object Func extends ToWat:
     def toWat: Document = doc"func"
   end Func
-  case object Ext extends HeapType:
+  case object Ext extends ToWat:
     def toWat: Document = doc"extern"
   end Ext
-  case object Any extends HeapType:
+  case object Any extends ToWat:
     def toWat: Document = doc"any"
   end Any
-  case object Eq extends HeapType:
+  case object Eq extends ToWat:
     def toWat: Document = doc"eq"
   end Eq
-  case object I31 extends HeapType:
+  case object I31 extends ToWat:
     def toWat: Document = doc"i31"
   end I31
-  case object Struct extends HeapType:
+  case object Struct extends ToWat:
     def toWat: Document = doc"struct"
   end Struct
-  case object Array extends HeapType:
+  case object Array extends ToWat:
     def toWat: Document = doc"array"
   end Array
-  case object None extends HeapType:
+  case object None extends ToWat:
     def toWat: Document = doc"none"
   end None
-  case object NoExt extends HeapType:
+  case object NoExt extends ToWat:
     def toWat: Document = doc"noextern"
   end NoExt
-  case object NoFunc extends HeapType:
+  case object NoFunc extends ToWat:
     def toWat: Document = doc"nofunc"
   end NoFunc
 
 /** Abstract base class for all Wasm heap types. */
-abstract class HeapType extends ToWat
+// abstract class HeapType extends ToWat
 
 type ValType = NumType | VecType | RefType
 
@@ -135,9 +135,7 @@ object SignatureType:
     )
 
 /** A type representing a function signature. */
-case class SignatureType(params: Seq[Param], results: Seq[Result])
-    extends HeapType,
-      ToWat:
+case class SignatureType(params: Seq[Param], results: Seq[Result]) extends ToWat:
 
   def signatureToWat: Document =
     (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
@@ -175,7 +173,7 @@ case class Field(
 end Field
 
 /** A type representing a structure type. */
-case class StructType(fields: Seq[Field]) extends HeapType:
+case class StructType(fields: Seq[Field]) extends ToWat:
   def toWat: Document =
     doc"(struct${fields.map(
         _.toWat
@@ -185,41 +183,36 @@ end StructType
 /** A composite type. */
 type CompType = StructType | SignatureType
 
-abstract sealed class TypeRef extends HeapType, ToWat
+type HeapType = HeapType.Func.type
+    | HeapType.Ext.type 
+    | HeapType.Any.type 
+    | HeapType.Eq.type 
+    | HeapType.I31.type 
+    | HeapType.Struct.type 
+    | HeapType.Array.type 
+    | HeapType.None.type 
+    | HeapType.NoExt.type 
+    | HeapType.NoFunc.type 
+    | StructType 
+    | SignatureType 
+    | TypeIdx
 
-case class TypeIdx(idx: Int) extends TypeRef:
-  def toWat: Document = doc"${idx.toString}"
-end TypeIdx
+abstract sealed class Index extends ToWat
 
-/**
- * A type that is referenced by its name.
- *
- * This is used for types that are defined in the module's `type` section.
- *
- * @param id
- *   The identifier of the type.
- */
-case class TypeId(id: Str) extends TypeRef:
+case class NumIdx(val index: Int) extends Index:
+  def toWat: Document = doc"${index.toString}"
+end NumIdx
+
+case class SymIdx(val id: Str) extends Index:
   def toWat: Document = doc"$$$id"
-end TypeId
+end SymIdx
 
-sealed abstract class FuncRef extends HeapType, ToWat
+abstract sealed class CtxIdx(idx: Index) extends ToWat:
+  def toWat: Document = idx.toWat
+end CtxIdx
 
-case class FuncIdx(idx: Int) extends FuncRef:
-  def toWat: Document = doc"${idx.toString}"
-end FuncIdx
-
-/**
- * A functionthat is referenced by its name.
- *
- * This is used for types that are defined in the module's `func` section.
- *
- * @param id
- *   The identifier of the function.
- */
-case class FuncId(id: Str) extends FuncRef, ToWat:
-  def toWat: Document = doc"$$$id"
-end FuncId
+case class TypeIdx(idx: Index) extends CtxIdx(idx)
+case class FuncIdx(idx: Index) extends CtxIdx(idx)
 
 /**
  * An abstraction over a generic WebAssembly instructions.
@@ -335,7 +328,7 @@ end ModType
  *   The content of the module function.
  */
 case class ModFunc(
-    val typeId: TypeId,
+    val typeId: TypeIdx,
     val paramTypes: WasmType,
     val resultTypes: WasmType,
     val doc: Document
