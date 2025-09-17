@@ -13,7 +13,7 @@ object Instructions:
   ): FoldedInstr =
     val labelWat = label.map(lbl => doc"$$$lbl")
     val resultsWat = resultType.toSeq.map:
-      SignatureType(NoneType, _).signatureToWat
+      SignatureType(NoneType, _).toWat
 
     FoldedInstr(
       mnemonic = "block",
@@ -52,8 +52,7 @@ object Instructions:
 
     FoldedInstr(
       mnemonic = "if",
-      instrargs =
-        resultType.toSeq.map(SignatureType(NoneType, _).signatureToWat),
+      instrargs = resultType.toSeq.map(SignatureType(NoneType, _).toWat),
       stackargs = Seq(S(condition), S(thenInstr)) ++ elseInstr.map(S(_)).toSeq,
       exprType = resultType
     )
@@ -62,12 +61,12 @@ object Instructions:
       target: FoldedInstr,
       operands: Seq[FoldedInstr],
       typeIdx: TypeIdx,
-      sigType: SignatureType
+      funcType: FunctionType
   ): FoldedInstr = FoldedInstr(
     mnemonic = "call_ref",
     instrargs = Seq(typeIdx.toWat),
     stackargs = S(target) +: operands.map(S(_)),
-    exprType = sigType.results match
+    exprType = funcType.sigType.results match
       case Seq() => NoneType
       case ty +: Seq() => ty.valtype
       case tys => MultiValueType(tys.map(_.valtype))

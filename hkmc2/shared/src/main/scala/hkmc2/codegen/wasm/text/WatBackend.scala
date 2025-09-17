@@ -148,7 +148,7 @@ object ModuleProxy:
         resultTypes: WasmType
     ): Unit =
       ensureFieldSize(index)
-      entries(index) = SignatureType(paramTypes, resultTypes)
+      entries(index) = FunctionType(paramTypes, resultTypes)
 
     def setStructType(
         index: Int,
@@ -383,7 +383,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       name: Opt[Str],
       params: WasmType,
       results: WasmType
-  ): TypeRef = addType(name, SignatureType(params, results))
+  ): TypeRef = addType(name, FunctionType(params, results))
 
   type Exprt = ExportRef
   type Func = FuncRef
@@ -406,7 +406,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
     val fnTypeStrIndex = addFunctionType(N, params, results)
 
     val fnDecl =
-      doc"(func $$$name${SignatureType(params, results).signatureToWat.optionUnless(
+      doc"(func $$$name${SignatureType(params, results).toWat.optionUnless(
           _.isEmpty
         ).dlof(sig => doc" $sig ")(doc"")}${(vars
           .map(v => doc"(local ${v.toWat})") :+ body.toWat)
@@ -439,7 +439,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       results: WasmType
   ): Unit =
     val funcImp =
-      doc"(import \"$externalModuleName\" \"$externalBaseName\" (func $$$internalName${SignatureType(params, results).signatureToWat.optionUnless(
+      doc"(import \"$externalModuleName\" \"$externalBaseName\" (func $$$internalName${SignatureType(params, results).toWat.optionUnless(
           _.isEmpty
         ).dlof(s => doc" $s")(doc"")}"
 
@@ -577,12 +577,10 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       else
         FoldedInstr(
           "block",
-          label.map(label => s"$$$label").toSeq ++ resultType.map(
-            _.toSeq.map(SignatureType(
-              NoneType,
-              _
-            ).signatureToWat).mkDocument(doc" # ")
-          ),
+          label.map(label => s"$$$label").toSeq ++ resultType.map(_.toSeq.map(SignatureType(
+            NoneType,
+            _
+          ).toWat).mkDocument(doc" # ")),
           children.map(_.inner),
           resultType.getOrElse(NoneType)
         )
@@ -613,7 +611,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
         FoldedInstr(
           "if",
-          resultType.toSeq.map(SignatureType(NoneType, _).signatureToWat),
+          resultType.toSeq.map(SignatureType(NoneType, _).toWat),
           Seq(
             condition.inner,
             S(FoldedInstr("then", Seq(), Seq(ifTrue.inner), ifTrue.getType))
@@ -707,7 +705,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       //                   `(ref (exact $idx))`, but this appears to be a Wasm
       //                   proposal...
       require(ty.isInstanceOf[RefType])
-      require(ty.asInstanceOf[RefType].heapType.isInstanceOf[SignatureType])
+      require(ty.asInstanceOf[RefType].heapType.isInstanceOf[FunctionType])
       new ExprProxy(
         S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty))
       )

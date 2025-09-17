@@ -136,13 +136,19 @@ object SignatureType:
 
 /** A type representing a function signature. */
 case class SignatureType(params: Seq[Param], results: Seq[Result]) extends ToWat:
-
-  def signatureToWat: Document =
-    (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
-
-  def toWat: Document =
-    doc"(func${signatureToWat.optionUnless(_.isEmpty).fold(doc"")(sig => doc" $sig")})"
+  def toWat: Document = (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
 end SignatureType
+
+object FunctionType:
+  def apply(params: WasmType, results: WasmType): FunctionType =
+    new FunctionType(SignatureType(params, results))
+  def apply(params: Seq[Param], results: Seq[Result]): FunctionType =
+    new FunctionType(SignatureType(params, results))
+
+case class FunctionType(sigType: SignatureType) extends ToWat:
+  def toWat: Document =
+    doc"(func${sigType.toWat.optionUnless(_.isEmpty).fold(doc"")(sig => doc" $sig")})"
+end FunctionType
 
 object Field:
   /** Creates a field from a [[WasmType]]. */
@@ -181,7 +187,7 @@ case class StructType(fields: Seq[Field]) extends ToWat:
 end StructType
 
 /** A composite type. */
-type CompType = StructType | SignatureType
+type CompType = StructType | FunctionType
 
 type HeapType = HeapType.Func.type
     | HeapType.Ext.type 
@@ -193,8 +199,7 @@ type HeapType = HeapType.Func.type
     | HeapType.None.type 
     | HeapType.NoExt.type 
     | HeapType.NoFunc.type 
-    | StructType 
-    | SignatureType 
+    | CompType
     | TypeIdx
 
 abstract sealed class Index extends ToWat

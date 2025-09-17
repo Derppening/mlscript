@@ -259,7 +259,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       // TODO(Derppening): Only allow Ref/Select in `fun`, reject everything else
       val funcType = TypeInfo(
         id = N,
-        compType = SignatureType(
+        compType = FunctionType(
           params = Seq.fill(wasmArgs.size)(WasmParam(N, RefType.anyref)),
           results = Seq(Result(RefType.anyref))
         )
@@ -270,7 +270,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         target = ref.cast(base, RefType(funcRefType, nullable = false)),
         operands = wasmArgs.toSeq,
         typeIdx = funcRefType,
-        sigType = funcType.compType.asInstanceOf[SignatureType]
+        funcType = funcType.compType.asInstanceOf[FunctionType]
       )
     case r =>
       warnExpr(Ls(
