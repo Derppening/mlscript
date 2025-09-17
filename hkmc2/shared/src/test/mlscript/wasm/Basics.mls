@@ -9,7 +9,7 @@ false
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 0) (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 0)))
 //│   (export "entry" (func $entry))
@@ -23,7 +23,7 @@ true
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 0) (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 1)))
 //│   (export "entry" (func $entry))
@@ -38,7 +38,7 @@ true
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 0) (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 2)))
 //│   (export "entry" (func $entry))
@@ -53,7 +53,7 @@ true
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 0) (result (ref null any))
 //│     (ref.i31
 //│       (i32.add
 //│         (i31.get_s
@@ -75,7 +75,7 @@ x
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 0) (result (ref null any))
 //│     (local $x (ref null any))
 //│     (block (result (ref null any))
 //│       (local.set $x
@@ -96,13 +96,13 @@ foo()
 //│ (module
 //│   (type (func (result (ref null any))))
 //│   (type (func (result (ref null any))))
-//│   (func $foo (result (ref null any))
+//│   (func $foo (type 0) (result (ref null any))
 //│     (return
 //│       (ref.i31
 //│         (i32.const 42))))
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 1) (result (ref null any))
 //│     (local $foo (ref null any))
 //│     (block (result (ref null any))
 //│       (nop)
@@ -122,13 +122,13 @@ foo() + foo()
 //│ (module
 //│   (type (func (result (ref null any))))
 //│   (type (func (result (ref null any))))
-//│   (func $foo (result (ref null any))
+//│   (func $foo (type 0) (result (ref null any))
 //│     (return
 //│       (ref.i31
 //│         (i32.const 42))))
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 1) (result (ref null any))
 //│     (local $foo (ref null any))
 //│     (local $tmp (ref null any))
 //│     (local $tmp1 (ref null any))
@@ -176,7 +176,7 @@ foo(41)
 //│ (module
 //│   (type (func (param $x (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
-//│   (func $foo (param $x (ref null any)) (result (ref null any))
+//│   (func $foo (type 0) (param $x (ref null any)) (result (ref null any))
 //│     (return
 //│       (ref.i31
 //│         (i32.add
@@ -194,7 +194,7 @@ foo(41)
 //│               (i32.const 1)))))))
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
-//│   (func $entry (result (ref null any))
+//│   (func $entry (type 1) (result (ref null any))
 //│     (local $foo (ref null any))
 //│     (block (result (ref null any))
 //│       (nop)

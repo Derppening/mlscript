@@ -62,7 +62,7 @@ private final case class FuncInfo(
   )
 
   def toWat: Document =
-    doc"""(func ${id.fold(doc"")(_.toWat)}${
+    doc"""(func ${id.fold(doc"")(_.toWat)} (type ${typeIdx.toWat})${
         getSignatureType.toWat.surroundUnlessEmpty(doc" ")
       } #{ ${
         locals.map: p =>
