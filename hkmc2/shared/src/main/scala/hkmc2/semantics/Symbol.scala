@@ -85,7 +85,12 @@ abstract class Symbol(using State) extends Located:
   
   def asClsLike: Opt[ClassSymbol | ModuleOrObjectSymbol | PatternSymbol] =
     (asCls: Opt[ClassSymbol | ModuleOrObjectSymbol | PatternSymbol]) orElse asModOrObj orElse asPat
-  def asTpe: Opt[TypeSymbol] = asCls orElse asAls
+  def asTpe: Opt[TypeSymbol] = asCls
+    .orElse[TypeSymbol](asModOrObj)
+    .orElse[TypeSymbol](asAls)
+  def asNonModTpe: Opt[TypeSymbol] = asCls
+    .orElse[TypeSymbol](asObj)
+    .orElse[TypeSymbol](asAls)
   
   def asBlkMember: Opt[BlockMemberSymbol] = this match
     case mem: BlockMemberSymbol => S(mem)
@@ -93,7 +98,17 @@ abstract class Symbol(using State) extends Located:
       case S(defn: TypeLikeDef) => S(defn.bsym)
       case S(defn: TermDefinition) => S(defn.sym)
       case N => N
-  
+
+  /** Get the symbol corresponding to the "representative" of a set of overloaded definitions,
+    * or the sole definition, if it is not overloaded.
+    * We should consider the ordering terms > classes/objects/types > modules, for this purpose. */
+  def asPrincipal =
+    asCls orElse
+    asObj orElse
+    asAls orElse
+    asPat orElse
+    asMod
+
   override def equals(x: Any): Bool = x match
     case that: Symbol => uid === that.uid
     case _ => false
@@ -239,7 +254,7 @@ case class TupSymbol(arity: Opt[Int])(using State) extends CtorSymbol:
 
 
 /** A TypeSymbol that is not an alias. */
-type BaseTypeSymbol = ClassSymbol
+type BaseTypeSymbol = ClassSymbol | ModuleOrObjectSymbol
 
 type TypeSymbol = BaseTypeSymbol | TypeAliasSymbol
 

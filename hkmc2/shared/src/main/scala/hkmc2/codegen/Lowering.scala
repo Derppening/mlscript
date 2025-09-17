@@ -293,7 +293,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
   final def term(t: st, inStmtPos: Bool = false)(k: Result => Block)(using Subst): Block =
     tl.log(s"Lowering.term ${t.showDbg.truncate(100, "[...]")}${
       if inStmtPos then " (in stmt)" else ""}${
-      t.resolvedSymbol.fold("")(" – symbol " + _)}")
+      t.resolvedSym.fold("")(" – symbol " + _)}")
     
     def warnStmt = if inStmtPos then
       raise:
@@ -370,9 +370,9 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
         bs.defn match
         case S(_) if bs.asCls.exists(_ is ctx.builtins.Int31) =>
         // case S(_) if bs.asCls.exists(sym => (sym is ctx.builtins.Int31) || (sym is ctx.builtins.wasm.Int31)) =>
-          return term(Sel(State.runtimeSymbol.ref().resolve, ref.tree)(S(bs)).withLocOf(ref).resolve)(k)
+          return term(Sel(State.runtimeSymbol.ref().resolve, ref.tree)(S(bs), N).withLocOf(ref).resolve)(k)
         case S(d) if d.hasDeclareModifier.isDefined =>
-          return term(Sel(State.globalThisSymbol.ref().resolve, ref.tree)(S(bs)).withLocOf(ref).resolve)(k)
+          return term(Sel(State.globalThisSymbol.ref().resolve, ref.tree)(S(bs), N).withLocOf(ref).resolve)(k)
         case S(td: TermDefinition) if td.k is syntax.Fun =>
           // * Local functions with no parameter lists are getters
           // * and are lowered to functions with an empty parameter list
@@ -423,7 +423,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
           source = Diagnostic.Source.Compilation)
     case st.TyApp(f, ts) => term(f)(k) // * Type arguments are erased
     case st.App(f, arg) =>
-      val isMlsFun = f.resolvedSymbol.fold(f.isInstanceOf[st.Lam]):
+      val isMlsFun = f.resolvedSym.fold(f.isInstanceOf[st.Lam]):
         case _: sem.BuiltinSymbol => true
         case sym: sem.BlockMemberSymbol =>
           sym.trmImplTree.fold(sym.clsTree.isDefined)(_.k is syntax.Fun)
@@ -434,24 +434,24 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
       // * We have to instantiate `f` again because, if `f` is a Sel, the `term`
       // * function is not called again with f. See below `Sel` and `SelProj` cases.
       f.instantiated match
-      case t if t.resolvedSymbol.exists(_ is ctx.builtins.js.bitand) =>
+      case t if t.resolvedSym.exists(_ is ctx.builtins.js.bitand) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("bitand")))
-      case t if t.resolvedSymbol.exists(_ is ctx.builtins.js.bitnot) =>
+      case t if t.resolvedSym.exists(_ is ctx.builtins.js.bitnot) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("bitnot")))
-      case t if t.resolvedSymbol.exists(_ is ctx.builtins.js.bitor) =>
+      case t if t.resolvedSym.exists(_ is ctx.builtins.js.bitor) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("bitor")))
-      case t if t.resolvedSymbol.exists(_ is ctx.builtins.js.shl) =>
+      case t if t.resolvedSym.exists(_ is ctx.builtins.js.shl) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("shl")))
-      case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.js.try_catch) =>
+      case t if t.resolvedSym.isDefined && (t.resolvedSym.get is ctx.builtins.js.try_catch) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("try_catch")))
-      case t if t.resolvedSymbol.exists(_ is ctx.builtins.wasm.plus_impl) =>
+      case t if t.resolvedSym.exists(_ is ctx.builtins.wasm.plus_impl) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("plus_impl")))
-      case t if t.resolvedSymbol.exists(_ is ctx.builtins.wasm.test) =>
+      case t if t.resolvedSym.exists(_ is ctx.builtins.wasm.test) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("test")))
-      // case t if t.resolvedSymbol.exists(sym => (sym is ctx.builtins.Int31) || (sym is ctx.builtins.wasm.Int31)) =>
-      case t if t.resolvedSymbol.exists(_ is ctx.builtins.Int31) =>
+      // case t if t.resolvedSym.exists(sym => (sym is ctx.builtins.Int31) || (sym is ctx.builtins.wasm.Int31)) =>
+      case t if t.resolvedSym.exists(_ is ctx.builtins.Int31) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("Int31")))
-      case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.debug.printStack) =>
+      case t if t.resolvedSym.isDefined && (t.resolvedSym.get is ctx.builtins.debug.printStack) =>
         if !config.effectHandlers.exists(_.debug) then
           return fail:
             ErrorReport(
@@ -459,7 +459,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
               t.toLoc :: Nil,
               source = Diagnostic.Source.Compilation)
         conclude(Value.Ref(State.runtimeSymbol).selSN("raisePrintStackEffect").withLocOf(f))
-      case t if t.resolvedSymbol.isDefined && (t.resolvedSymbol.get is ctx.builtins.debug.getLocals) =>
+      case t if t.resolvedSym.isDefined && (t.resolvedSym.get is ctx.builtins.debug.getLocals) =>
         if !config.effectHandlers.exists(_.debug) then
           return fail:
             ErrorReport(
