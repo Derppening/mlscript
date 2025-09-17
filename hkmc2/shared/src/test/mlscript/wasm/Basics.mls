@@ -71,7 +71,7 @@ x
 //│ Wat:
 //│ (module
 //│   (func $entry (result (ref null any))
-//│     (local (ref null any))
+//│     (local $x (ref null any))
 //│     (block (result (ref null any))
 //│       (local.set 0
 //│         (ref.i31
@@ -97,7 +97,7 @@ foo()
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
 //│   (func $entry (result (ref null any))
-//│     (local (ref null func))
+//│     (local $foo (ref null func))
 //│     (block (result (ref null any))
 //│       (local.set 0
 //│         (ref.func $foo))
@@ -126,9 +126,9 @@ foo() + foo()
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
 //│   (func $entry (result (ref null any))
-//│     (local (ref null func))
-//│     (local (ref null any))
-//│     (local (ref null any))
+//│     (local $foo (ref null func))
+//│     (local $tmp (ref null any))
+//│     (local $tmp1 (ref null any))
 //│     (block (result (ref null i31))
 //│       (local.set 0
 //│         (ref.func $foo))
