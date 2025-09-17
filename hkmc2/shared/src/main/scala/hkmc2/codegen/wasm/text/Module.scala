@@ -120,7 +120,7 @@ type ValType = NumType | VecType | RefType
 
 case class Param(id: Opt[Str], valtype: ValType) extends ToWat:
   def toWat: Document =
-    doc"(param${id.fold(doc"")(id => doc" $id")} ${valtype.toWat})"
+    doc"(param${id.fold(doc"")(id => doc" $$$id")} ${valtype.toWat})"
 end Param
 
 case class Result(valtype: ValType) extends ToWat:
