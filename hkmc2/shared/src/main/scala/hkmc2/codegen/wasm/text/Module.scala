@@ -189,7 +189,7 @@ end StructType
 /** A composite type. */
 type CompType = StructType | FunctionType
 
-type HeapType = HeapType.Func.type
+type AbsHeapType = HeapType.Func.type
     | HeapType.Ext.type 
     | HeapType.Any.type 
     | HeapType.Eq.type 
@@ -199,8 +199,8 @@ type HeapType = HeapType.Func.type
     | HeapType.None.type 
     | HeapType.NoExt.type 
     | HeapType.NoFunc.type 
-    | CompType
-    | TypeIdx
+// TODO(Derppening): Remove CompType from HeapType once WatBackend is removed
+type HeapType = AbsHeapType | CompType | TypeIdx
 
 abstract sealed class Index extends ToWat
 
