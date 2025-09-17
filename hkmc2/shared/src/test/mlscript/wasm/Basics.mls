@@ -8,6 +8,7 @@
 false
 //│ Wat:
 //│ (module
+//│   (type (func (result (ref null any))))
 //│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 0)))
@@ -21,6 +22,7 @@ false
 true
 //│ Wat:
 //│ (module
+//│   (type (func (result (ref null any))))
 //│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 1)))
@@ -35,6 +37,7 @@ true
 2
 //│ Wat:
 //│ (module
+//│   (type (func (result (ref null any))))
 //│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.const 2)))
@@ -49,6 +52,7 @@ true
 1 + 1
 //│ Wat:
 //│ (module
+//│   (type (func (result (ref null any))))
 //│   (func $entry (result (ref null any))
 //│     (ref.i31
 //│       (i32.add
@@ -70,6 +74,7 @@ let x = 0
 x
 //│ Wat:
 //│ (module
+//│   (type (func (result (ref null any))))
 //│   (func $entry (result (ref null any))
 //│     (local $x (ref null any))
 //│     (block (result (ref null any))
@@ -90,6 +95,7 @@ foo()
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
 //│   (func $foo (result (ref null any))
 //│     (return
 //│       (ref.i31
@@ -106,7 +112,6 @@ foo()
 //│   (elem declare func $entry))
 //│ rwasm: Running
 //│ 42
-
 
 
 :wasm
@@ -135,7 +140,7 @@ foo() + foo()
 //│             (ref.func $foo)))
 //│         (block (result (ref null i31))
 //│           (local.set 2
-//│             (call_ref 1
+//│             (call_ref 0
 //│               (ref.func $foo)))
 //│           (ref.i31
 //│             (i32.add

@@ -34,12 +34,14 @@ extension (instr: FoldedInstr)
 object FuncInfo:
   def apply(
       sym: BlockMemberSymbol,
+      typeIdx: TypeIdx,
       params: Seq[Local -> Str],
       nResults: Int,
       locals: Seq[Local -> Str],
       body: FoldedInstr
   ): FuncInfo = FuncInfo(
     sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
+    typeIdx,
     params,
     nResults,
     locals,
@@ -48,6 +50,7 @@ object FuncInfo:
 
 private final case class FuncInfo(
     val id: Opt[SymIdx],
+    val typeIdx: TypeIdx,
     val params: Seq[Local -> Str],
     val nResults: Int,
     val locals: Seq[Local -> Str],
@@ -154,8 +157,11 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     unreachable
 
   def errExpr(errMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
+    errExpr(errMsg :: Nil)
+
+  def errExpr(errMsgs: Ls[Message -> Opt[Loc]])(using Ctx, Raise): Expr =
     raise(
-      ErrorReport(errMsg :: Nil, source = Diagnostic.Source.Compilation)
+      ErrorReport(errMsgs, source = Diagnostic.Source.Compilation)
     )
     unreachable
 
@@ -213,7 +219,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ref.i31(i32.const(value.toInt))
     case Value.Ref(l) =>
       ctx.getFunc(l) match
-        case S(funcIdx) => ref.func(funcIdx, RefType.funcref)
+        case S(funcIdx) =>
+          val funcInfo = ctx.getFuncInfo(l).get
+          ref.func(funcIdx, RefType(funcInfo.typeIdx, nullable = false))
         case N => getVar(l, r.toLoc)
 
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
@@ -265,21 +273,21 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       if base.exprType is UnreachableType then return base
       val wasmArgs = args.map(argument)
 
-      // TODO(Derppening): Only allow Ref/Select in `fun`, reject everything else
-      val funcType = TypeInfo(
-        id = N,
-        compType = FunctionType(
-          params = Seq.fill(wasmArgs.size)(WasmParam(N, RefType.anyref)),
-          results = Seq(Result(RefType.anyref))
-        )
-      )
-      val funcRefType = ctx.addType(N, funcType)
+      val baseTypeIdx = base.exprType match
+        case RefType(idx: TypeIdx, _) => idx
+        case ty => return errExpr(Ls(
+          msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>) type" -> r.toLoc,
+          msg"Note: Block IR of `fun` expression is `${fun.toString}`" -> N,
+          msg"Note: WAT of `fun` expression is `${base.toWat.toString}`" -> N,
+          msg"      ... which has an expression type of `${ty.toWat.toString}`" -> N
+        ))
+      val baseTypeInfo = ctx.getTypeInfo(baseTypeIdx).get
 
       call_ref(
         target = base,
         operands = wasmArgs.toSeq,
-        typeIdx = funcRefType,
-        funcType = funcType.compType.asInstanceOf[FunctionType]
+        typeIdx = baseTypeIdx,
+        funcType = baseTypeInfo.compType.asInstanceOf[FunctionType]
       )
     case r =>
       warnExpr(Ls(
@@ -337,9 +345,21 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 val name = if sym.nameIsMeaningful then S(sym.nme) else N
                 val (params, bodyWat, locals) = setupFunction(name, ps, result)
                 if sym.nameIsMeaningful then
+                  val funcTy = ctx.addType(
+                    sym = N,
+                    TypeInfo(
+                      id = N,
+                      FunctionType(
+                        params,
+                        results = Seq.fill(bodyWat.exprType.toSeq.length)(Result(RefType.anyref))
+                      )
+                    )
+                  )
+
                   val funcInfo =
                     FuncInfo(
                       sym,
+                      funcTy,
                       ps.params.map(p => p.sym -> scope.lookup_!(p.sym, p.toLoc)),
                       bodyWat.exprType.toSeq.length,
                       locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
@@ -415,8 +435,13 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val entrySym = BlockMemberSymbol("entry", Nil)
     val entryNme = scope.allocateName(entrySym)
 
+    val entryFnTy = ctx.addType(
+      sym = N,
+      TypeInfo(id = N, FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref))))
+    )
     val entryFnInfo = FuncInfo(
       id = S(SymIdx(entryNme)),
+      typeIdx = entryFnTy,
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
