@@ -65,7 +65,7 @@ object Instructions:
   ): FoldedInstr = FoldedInstr(
     mnemonic = "call_ref",
     instrargs = Seq(typeIdx.toWat),
-    stackargs = S(target) +: operands.map(S(_)),
+    stackargs = operands.map(S(_)) :+ S(target),
     exprType = funcType.sigType.results match
       case Seq() => NoneType
       case ty +: Seq() => ty.valtype
