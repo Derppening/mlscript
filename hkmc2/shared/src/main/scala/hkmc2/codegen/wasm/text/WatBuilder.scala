@@ -36,7 +36,7 @@ object FuncInfo:
       sym: BlockMemberSymbol,
       params: Seq[Local -> Str],
       nResults: Int,
-      locals: Seq[Local -> (Str, WasmType)],
+      locals: Seq[Local -> Str],
       body: FoldedInstr
   ): FuncInfo = FuncInfo(
     sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
@@ -50,22 +50,20 @@ private final case class FuncInfo(
     val id: Opt[SymIdx],
     val params: Seq[Local -> Str],
     val nResults: Int,
-    // TODO(Derppening): Change this back to Seq[Local] once funcref is disallowed
-    val locals: Seq[Local -> (Str, WasmType)],
+    val locals: Seq[Local -> Str],
     val body: FoldedInstr
 ) extends ToWat:
+  def getSignatureType: SignatureType = SignatureType(
+    params = params.map((_, varNme) => WasmParam(S(varNme), RefType.anyref)),
+    results = Seq.fill(nResults)(Result(RefType.anyref))
+  )
+
   def toWat: Document =
     doc"""(func ${id.fold(doc"")(_.toWat)}${
-        params.map: p =>
-          doc"(param $$${p._2} ${RefType.anyref.toWat})"
-        .toSeq.mkDocument(doc" ").surroundUnlessEmpty(doc" ")
-      }${
-        Seq.fill(nResults)(
-          doc"(result ${RefType.anyref.toWat})"
-        ).mkDocument(doc" ").surroundUnlessEmpty(doc" ")
+        getSignatureType.toWat.surroundUnlessEmpty(doc" ")
       } #{ ${
         locals.map: p =>
-          doc"(local $$${p._2._1} ${p._2._2.toWat})"
+          doc"(local $$${p._2} ${RefType.anyref.toWat})"
         .toSeq.mkDocument(doc" # ").surroundUnlessEmpty(doc" # ")
       } # ${body.toWat} #} )${
         id.fold(doc""): id =>
@@ -98,8 +96,7 @@ private final case class Ctx(
     private val namedTypes: MutMap[Symbol, NumIdx],
     private val funcs: ArrayBuf[FuncInfo],
     private val namedFuncs: MutMap[Symbol, NumIdx],
-    // TODO(Derppening): Change this back to Seq[Local] once funcref is disallowed
-    var locals: Ls[ArrayBuf[Local -> ValType]]
+    var locals: Ls[ArrayBuf[Local]]
 ) extends ToWat:
 
   def addType(sym: Opt[Symbol], typeInfo: TypeInfo): TypeIdx =
@@ -109,10 +106,11 @@ private final case class Ctx(
       namedTypes(_) = numIdx
     TypeIdx(typeInfo.id.getOrElse(numIdx))
 
-  def getType(typeref: TypeIdx | Symbol): Opt[TypeInfo] = typeref match
+  def getTypeInfo(typeref: TypeIdx | Symbol): Opt[TypeInfo] = typeref match
     case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
-    case TypeIdx(SymIdx(nme)) => namedTypes.find(_._1.nme == nme).flatMap(t => getType(TypeIdx(t._2)))
-    case sym: Symbol => namedTypes.get(sym).flatMap(idx => getType(TypeIdx(idx)))
+    case TypeIdx(SymIdx(nme)) =>
+      namedTypes.find(_._1.nme == nme).flatMap(t => getTypeInfo(TypeIdx(t._2)))
+    case sym: Symbol => namedTypes.get(sym).flatMap(idx => getTypeInfo(TypeIdx(idx)))
 
   def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
     val numIdx = NumIdx(funcs.size)
@@ -121,10 +119,18 @@ private final case class Ctx(
       namedFuncs(_) = numIdx
     FuncIdx(funcInfo.id.getOrElse(numIdx))
 
-  def getFunc(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
+  def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = funcref match
+    case FuncIdx(SymIdx(nme)) if resolveSymIdx =>
+      namedFuncs.find(_._1.nme == nme).map(f => FuncIdx(f._2))
+    case funcidx: FuncIdx => S(funcidx)
+    case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(FuncIdx(_))
+    case sym: Symbol =>
+      getFunc(sym, resolveSymIdx = true).map: numIdx =>
+        getFuncInfo(numIdx).flatMap(_.id).fold(numIdx)(FuncIdx(_))
+
+  def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
     case FuncIdx(NumIdx(idx)) => funcs.unapply(idx.toInt)
-    case FuncIdx(SymIdx(nme)) => namedFuncs.find(_._1.nme == nme).flatMap(f => getFunc(FuncIdx(f._2)))
-    case sym: Symbol => namedFuncs.get(sym).flatMap(idx => getFunc(FuncIdx(idx)))
+    case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))
 
   def toWat: Document =
     doc"""(module #{  # ${(types.toSeq ++ funcs.toSeq).map(_.toWat).mkDocument(doc" # ")}) #} """
@@ -170,9 +176,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${l.toString}`" -> N
       ))
     case _ =>
-      val lclIdx = ctx.locals.head.indexWhere(_._1 == l)
+      val lclIdx = ctx.locals.head.indexWhere(_ == l)
       if lclIdx >= 0 then
-        local.get(lclIdx, ctx.locals.head(lclIdx)._2)
+        local.get(lclIdx, RefType.anyref)
       else
         warnExpr(Ls(
           msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc,
@@ -205,7 +211,10 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ref.i31(i32.const(if value then 1 else 0))
     case Value.Lit(IntLit(value)) =>
       ref.i31(i32.const(value.toInt))
-    case Value.Ref(l) => getVar(l, r.toLoc)
+    case Value.Ref(l) =>
+      ctx.getFunc(l) match
+        case S(funcIdx) => ref.func(funcIdx, RefType.funcref)
+        case N => getVar(l, r.toLoc)
 
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
         if !l.functionLike =>
@@ -267,7 +276,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val funcRefType = ctx.addType(N, funcType)
 
       call_ref(
-        target = ref.cast(base, RefType(funcRefType, nullable = false)),
+        target = base,
         operands = wasmArgs.toSeq,
         typeIdx = funcRefType,
         funcType = funcType.compType.asInstanceOf[FunctionType]
@@ -328,38 +337,17 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 val name = if sym.nameIsMeaningful then S(sym.nme) else N
                 val (params, bodyWat, locals) = setupFunction(name, ps, result)
                 if sym.nameIsMeaningful then
-                  val funcVar = getVar(sym, sym.toLoc)
                   val funcInfo =
                     FuncInfo(
                       sym,
                       ps.params.map(p => p.sym -> scope.lookup_!(p.sym, p.toLoc)),
                       bodyWat.exprType.toSeq.length,
-                      locals.map((lcl, lclTy) => lcl -> (scope.lookup_!(lcl, lcl.toLoc), lclTy)),
+                      locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
                       bodyWat
                     )
                   val func = ctx.addFunc(S(defn.sym), funcInfo)
 
-                  val idx = funcVar.instrargs(0).toString.toInt
-                  funcVar.mnemonicPrefix match
-                    case S("global") =>
-                      warnExpr(Ls(
-                        msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
-                        msg"Note: Block IR of expression is `${t.toString}`" -> N
-                      ))
-                    case S("local") =>
-                      // Refine the type of the local variable to funcref - This is necessary as
-                      // `any` and `func` are two distinct hierarchies
-                      val (localId, _) = ctx.locals.head(idx)
-                      ctx.locals.head(idx) = (localId, RefType.funcref)
-
-                      local.set(
-                        idx,
-                        ref.func(func, RefType(TypeIdx(SymIdx(sym.nme)), nullable = false))
-                      )
-                    case _ =>
-                      lastWords(
-                        s"Expected `global.*` or `local.*` when compiling instruction for `$funcVar`, but got ${funcVar.mnemonic}"
-                      )
+                  nop
                 else
                   warnExpr(Ls(
                     msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> t.toLoc,
@@ -432,7 +420,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
-      locals = entryFnLocals.map((lcl, lclTy) => lcl -> (scope.lookup_!(lcl, N), lclTy)),
+      locals = entryFnLocals.map(l => l -> scope.lookup_!(l, l.toLoc)),
       entryFnExpr
     )
     ctx.addFunc(S(entrySym), entryFnInfo)
@@ -444,18 +432,16 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       scope.lookup(_).toSeq.isEmpty
     ).toSeq.toArray.sortBy(_.uid).iterator.map: l =>
       scope.allocateName(l)
-      l -> RefType.anyref
+      l
     .to(ArrayBuf)
     ctx.locals.head ++= vars
-    vars.map(_._1).toSeq
+    vars.toSeq
 
-  def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local -> WasmType]) =
+  def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
     val locals = blockPreamble(t.definedVars)
-    val returningExpr = returningTerm(t)
-    val refinedLocals = ctx.locals.head.filter(_._1 in locals).toSeq
-    (returningExpr, refinedLocals)
+    (returningTerm(t), locals)
 
-  def body(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local -> WasmType]) =
+  def body(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
     scope.nest givenIn:
       block(t)
 
@@ -463,7 +449,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Ctx,
       Raise,
       Scope
-  ): (Seq[WasmParam], Expr, Seq[Local -> WasmType]) =
+  ): (Seq[WasmParam], Expr, Seq[Local]) =
     // Add a frame for `ctx.locals`
     ctx.locals = ctx.locals match
       case globals :: Nil => ArrayBuf() :: globals :: Nil
