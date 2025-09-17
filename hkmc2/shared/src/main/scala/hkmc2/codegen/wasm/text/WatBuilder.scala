@@ -181,16 +181,15 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"WatBuilder::getVar for InnerSymbol not implemented yet" -> l.toLoc,
         msg"Note: Block IR of expression is `${l.toString}`" -> N
       ))
-    case _ =>
-      val lclIdx = ctx.locals.head.indexWhere(_ == l)
-      if lclIdx >= 0 then
-        local.get(lclIdx, RefType.anyref)
-      else
-        warnExpr(Ls(
+    case l =>
+      if !ctx.locals.head.contains(l) then
+        return warnExpr(Ls(
           msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc,
           msg"Note: Block IR of expression is `${l.toString}`" -> N,
-          msg"Note: Scope is ${scope.toString}" -> N
+          msg"Note: Scope is ${scope.toString}" -> N,
+          msg"Note: Locals is ${ctx.locals.toString}" -> N
         ))
+      local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
 
   def argument(a: Arg)(using Ctx, Raise, Scope): Expr =
     if a.spread.nonEmpty then
@@ -304,7 +303,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val lExpr = getVar(l, t.toLoc)
       if lExpr.exprType is UnreachableType then return lExpr
       val rExpr = result(r)
-      val idx = lExpr.instrargs(0).toString.toInt
+      val idx = lExpr.instrargs(0).asInstanceOf[LocalIdx]
       val assignExpr = lExpr.mnemonicPrefix match
         case S("global") =>
           warnExpr(Ls(
@@ -350,7 +349,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     TypeInfo(
                       id = N,
                       FunctionType(
-                        params,
+                        params = params.map(_._1),
                         results = Seq.fill(bodyWat.exprType.toSeq.length)(Result(RefType.anyref))
                       )
                     )
@@ -360,7 +359,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     FuncInfo(
                       sym,
                       funcTy,
-                      ps.params.map(p => p.sym -> scope.lookup_!(p.sym, p.toLoc)),
+                      ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
                       bodyWat.exprType.toSeq.length,
                       locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
                       bodyWat
@@ -474,22 +473,25 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Ctx,
       Raise,
       Scope
-  ): (Seq[WasmParam], Expr, Seq[Local]) =
+  ): (Seq[WasmParam -> Str], Expr, Seq[Local]) =
     // Add a frame for `ctx.locals`
     ctx.locals = ctx.locals match
       case globals :: Nil => ArrayBuf() :: globals :: Nil
       case locals @ (_ :: _ :: Nil) => locals
       case _ => lastWords(s"ctx.locals should only have 1-2 local scopes")
 
-    scope.nest givenIn:
-      val paramsList = params.params.map(p =>
-        WasmParam(S(scope.allocateName(p.sym)), RefType.anyref)
-      )
+    val result = scope.nest givenIn:
+      val paramsList = params.params.map: p =>
+        val paramNme = scope.allocateName(p.sym)
+        val param = WasmParam(S(paramNme), RefType.anyref)
+        ctx.locals.head += p.sym
+        param -> paramNme
       val (wasmParams, (wasmBody, locals)) = (paramsList.toSeq, this.body(body))
-
-      // Restore `ctx.locals`
-      ctx.locals = ctx.locals.tail
-
       (wasmParams, wasmBody, locals)
+
+    // Restore `ctx.locals`
+    ctx.locals = ctx.locals.tail
+
+    result
 
 end WatBuilder

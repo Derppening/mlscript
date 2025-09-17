@@ -158,16 +158,16 @@ object Instructions:
   end i31
 
   object local:
-    def get(index: Int, ty: WasmType): FoldedInstr = FoldedInstr(
+    def get(index: LocalIdx, ty: WasmType): FoldedInstr = FoldedInstr(
       mnemonic = "local.get",
-      instrargs = Seq(s"$index"),
+      instrargs = Seq(index),
       stackargs = Seq.empty,
       exprType = ty
     )
 
-    def set(index: Int, value: FoldedInstr): FoldedInstr = FoldedInstr(
+    def set(index: LocalIdx, value: FoldedInstr): FoldedInstr = FoldedInstr(
       mnemonic = "local.set",
-      instrargs = Seq(s"$index"),
+      instrargs = Seq(index),
       stackargs = Seq(S(value)),
       exprType =
         if value.exprType is UnreachableType then UnreachableType else NoneType

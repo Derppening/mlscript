@@ -10,7 +10,7 @@ import semantics.*
 import semantics.Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, UnitLit}
 import wasm.Module as WasmModule
-import text.{Instructions as WasmInstr, TypeIdx as TypeRef}
+import text.{Instructions as WasmInstr, LocalIdx as WasmLocalIdx, TypeIdx as TypeRef}
 import Message.MessageContext
 import ModuleProxy.Locals.locals
 
@@ -577,7 +577,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       else
         FoldedInstr(
           "block",
-          label.map(label => s"$$$label").toSeq ++ resultType.map(_.toSeq.map(SignatureType(
+          label.map(label => doc"$$$label").toSeq ++ resultType.map(_.toSeq.map(SignatureType(
             NoneType,
             _
           ).toWat).mkDocument(doc" # ")),
@@ -853,12 +853,12 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
 
   def local = new Local:
     def get(index: Int, ty: WasmType): ExprProxy = new ExprProxy(S(
-      WasmInstr.local.get(index, ty)
+      WasmInstr.local.get(WasmLocalIdx(NumIdx(index)), ty)
     ))
 
     def set(index: Int, value: ExprProxy): ExprProxy = new ExprProxy(S(
       value.inner match
-        case S(value: FoldedInstr) => WasmInstr.local.set(index, value)
+        case S(value: FoldedInstr) => WasmInstr.local.set(WasmLocalIdx(NumIdx(index)), value)
         case value =>
           FoldedInstr("local.set", Seq(s"$index"), Seq(value), NoneType)
     ))

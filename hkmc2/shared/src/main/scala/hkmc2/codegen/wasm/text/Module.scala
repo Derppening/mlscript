@@ -218,6 +218,7 @@ end CtxIdx
 
 case class TypeIdx(idx: Index) extends CtxIdx(idx)
 case class FuncIdx(idx: Index) extends CtxIdx(idx)
+case class LocalIdx(idx: Index) extends CtxIdx(idx)
 
 /**
  * An abstraction over a generic WebAssembly instructions.
@@ -265,7 +266,7 @@ object FoldedInstr:
  */
 case class FoldedInstr(
     val mnemonic: Str,
-    val instrargs: Seq[Any],
+    val instrargs: Seq[ToWat | Document],
     stackargs: Seq[Expr],
     val exprType: WasmType
 ) extends Instruction:
@@ -287,7 +288,12 @@ case class FoldedInstr(
   def toWat: Document = doc"($mnemonic${
       instrargs
         .optionIf(_.nonEmpty)
-        .fold(doc"")(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))
+        .fold(doc""):
+          _.map: a =>
+            a match
+              case a: ToWat => a.toWat
+              case a: Document => a
+          .mkDocument(doc" ", doc" ", doc"")
     }${
       stackargs
         .optionIf(_.nonEmpty)
