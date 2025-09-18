@@ -383,6 +383,32 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> t.toLoc,
                       msg"Note: Block IR of definition is `${defn.toString}`" -> N
                     ))
+                case clsLikeDefn: ClsLikeDefn =>
+                  // Guard against unsupported features
+                  def warnUnimplExpr(cond: Str): Nothing = break(warnExpr(Ls(
+                    msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> t.toLoc,
+                    msg"Note: Block IR of definition is `${defn.toString}`" -> N
+                  )))
+                  if clsLikeDefn.owner.nonEmpty then
+                    break(warnUnimplExpr("owner.nonEmpty"))
+                  if !(clsLikeDefn.k is syntax.Cls) then
+                    break(warnUnimplExpr("!(k is Cls)"))
+                  if clsLikeDefn.auxParams.nonEmpty then
+                    break(warnUnimplExpr("auxParams.nonEmpty"))
+                  if clsLikeDefn.parentPath.nonEmpty then
+                    break(warnUnimplExpr("parentPath.nonEmpty"))
+                  if clsLikeDefn.methods.nonEmpty then
+                    break(warnUnimplExpr("methods.nonEmpty"))
+                  clsLikeDefn.preCtor match
+                    case End(_) => ()
+                    case _ => break(warnUnimplExpr("preCtor is not End"))
+                  if clsLikeDefn.companion.isDefined then
+                    break(warnUnimplExpr("companion.isDefined"))
+
+                  warnExpr(Ls(
+                    msg"WatBuilder::returningTerm for ClsLikeDefn(...) not implemented yet" -> t.toLoc,
+                    msg"Note: Block IR of definition is `${defn.toString}`" -> N
+                  ))
                 case defn =>
                   warnExpr(Ls(
                     msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> t.toLoc,
