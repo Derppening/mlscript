@@ -9,17 +9,18 @@ object Instructions:
   def block(
       label: Opt[Str],
       children: Seq[FoldedInstr],
-      resultType: WasmType
+      resultTypes: Seq[Result]
   ): FoldedInstr =
     val labelWat = label.map(lbl => doc"$$$lbl")
-    val resultsWat = resultType.toSeq.map:
-      SignatureType(NoneType, _).toWat
 
     FoldedInstr(
       mnemonic = "block",
-      instrargs = labelWat.toSeq ++ resultsWat,
+      instrargs = labelWat.toSeq ++ resultTypes.map(resTy => SignatureType(NoneType, resTy.valtype)),
       stackargs = children.map(S(_)),
-      exprType = resultType
+      exprType = resultTypes.size match
+        case 0 => NoneType
+        case 1 => resultTypes.head.valtype
+        case _ => MultiValueType(resultTypes.map(_.valtype))
     )
 
   def `if`(

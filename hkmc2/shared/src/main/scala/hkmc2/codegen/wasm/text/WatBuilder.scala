@@ -18,6 +18,7 @@ import Value.Lam
 
 import scala.collection.Map
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
+import scala.util.boundary, boundary.break
 
 extension (doc: Document)
   private def surroundUnlessEmpty(
@@ -275,11 +276,11 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val baseTypeIdx = base.exprType match
         case RefType(idx: TypeIdx, _) => idx
         case ty => return errExpr(Ls(
-          msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>) type" -> r.toLoc,
-          msg"Note: Block IR of `fun` expression is `${fun.toString}`" -> N,
-          msg"Note: WAT of `fun` expression is `${base.toWat.toString}`" -> N,
-          msg"      ... which has an expression type of `${ty.toWat.toString}`" -> N
-        ))
+            msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>) type" -> r.toLoc,
+            msg"Note: Block IR of `fun` expression is `${fun.toString}`" -> N,
+            msg"Note: WAT of `fun` expression is `${base.toWat.toString}`" -> N,
+            msg"      ... which has an expression type of `${ty.toWat.toString}`" -> N
+          ))
       val baseTypeInfo = ctx.getTypeInfo(baseTypeIdx).get
 
       call_ref(
@@ -320,7 +321,10 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Instructions.block(
         label = N,
         children = Seq(assignExpr, rstBlk),
-        resultType = rstBlk.exprType
+        resultTypes = rstBlk.exprType match
+          case NoneType => Seq.empty
+          case MultiValueType(tys) => tys.map(ty => Result(ty.asInstanceOf[ValType]))
+          case ty => Seq(Result(ty.asInstanceOf[ValType]))
       )
 
     case Define(defn, rst) =>
@@ -334,49 +338,56 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             defn.innerSym.collectFirst:
               case s: InnerSymbol => s
           ):
-            defn match
-              case FunDefn(own, sym, Nil, body) =>
-                lastWords("cannot generate function with no parameter list")
-              case FunDefn(own, sym, ps :: pss, bod) =>
-                val result = pss.foldRight(bod):
-                  case (ps, block) =>
-                    Return(Lam(ps, block), false)
-                val name = if sym.nameIsMeaningful then S(sym.nme) else N
-                val (params, bodyWat, locals) = setupFunction(name, ps, result)
-                if sym.nameIsMeaningful then
-                  val funcTy = ctx.addType(
-                    sym = N,
-                    TypeInfo(
-                      id = N,
-                      FunctionType(
-                        params = params.map(_._1),
-                        results = Seq.fill(bodyWat.exprType.toSeq.length)(Result(RefType.anyref))
+            boundary:
+              defn match
+                case FunDefn(own, sym, Nil, body) =>
+                  lastWords("cannot generate function with no parameter list")
+                case FunDefn(own, sym, ps :: pss, bod) =>
+                  if own.nonEmpty then
+                    break(warnExpr(Ls(
+                      msg"WatBuilder::returningTerm for Define(...) with `owner.nonEmpty` not implemented yet" -> t.toLoc,
+                      msg"Note: Block IR of definition is `${defn.toString}`" -> N
+                    )))
+
+                  val result = pss.foldRight(bod):
+                    case (ps, block) =>
+                      Return(Lam(ps, block), false)
+                  val name = if sym.nameIsMeaningful then S(sym.nme) else N
+                  val (params, bodyWat, locals) = setupFunction(name, ps, result)
+                  if sym.nameIsMeaningful then
+                    val funcTy = ctx.addType(
+                      sym = N,
+                      TypeInfo(
+                        id = N,
+                        FunctionType(
+                          params = params.map(_._1),
+                          results = Seq.fill(bodyWat.exprType.toSeq.length)(Result(RefType.anyref))
+                        )
                       )
                     )
-                  )
 
-                  val funcInfo =
-                    FuncInfo(
-                      sym,
-                      funcTy,
-                      ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
-                      bodyWat.exprType.toSeq.length,
-                      locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
-                      bodyWat
-                    )
-                  val func = ctx.addFunc(S(defn.sym), funcInfo)
+                    val funcInfo =
+                      FuncInfo(
+                        sym,
+                        funcTy,
+                        ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
+                        bodyWat.exprType.toSeq.length,
+                        locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
+                        bodyWat
+                      )
+                    val func = ctx.addFunc(S(defn.sym), funcInfo)
 
-                  nop
-                else
+                    nop
+                  else
+                    warnExpr(Ls(
+                      msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> t.toLoc,
+                      msg"Note: Block IR of definition is `${defn.toString}`" -> N
+                    ))
+                case defn =>
                   warnExpr(Ls(
-                    msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> t.toLoc,
+                    msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> t.toLoc,
                     msg"Note: Block IR of definition is `${defn.toString}`" -> N
                   ))
-              case defn =>
-                warnExpr(Ls(
-                  msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> t.toLoc,
-                  msg"Note: Block IR of definition is `${defn.toString}`" -> N
-                ))
           end val
 
           val rstBlk = returningTerm(rst)
@@ -390,7 +401,10 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             case _ => Instructions.block(
                 label = N,
                 children = Seq(res, rstBlk),
-                resultType = rstBlk.exprType
+                resultTypes = rstBlk.exprType match
+                  case NoneType => Seq.empty
+                  case MultiValueType(tys) => tys.map(ty => Result(ty.asInstanceOf[ValType]))
+                  case ty => Seq(Result(ty.asInstanceOf[ValType]))
               )
 
         case defn =>

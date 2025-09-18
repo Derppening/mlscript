@@ -572,7 +572,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         WasmInstr.block(
           label,
           children.map(_.inner.asInstanceOf[Option[FoldedInstr]].get),
-          resultType.getOrElse(NoneType)
+          resultType.map(_.toSeq.map(ty => Result(ty.asInstanceOf[ValType]))).getOrElse(Seq.empty)
         )
       else
         FoldedInstr(
