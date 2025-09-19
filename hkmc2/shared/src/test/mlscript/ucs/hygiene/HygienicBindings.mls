@@ -41,14 +41,14 @@ fun h1(a) =
 //│ Normalized:
 //│ >  if
 //│ >    a is Option.Some.class(param0) and
-//│ >      let x = $param0#1
+//│ >      let x = $param0
 //│ >      x is Left.class(param0) and
-//│ >        let y = $param0#0
-//│ >        else y#666
-//│ >      let y = $param0#0
+//│ >        let y = $param0
+//│ >        else y
+//│ >      let y = $param0
 //│ >      y is Right.class(param0) and
-//│ >        let z = $param0#0
-//│ >        else z#666
+//│ >        let z = $param0
+//│ >        else z
 //│ >    a is Option.None.class then 0
 
 h1(Some(Left(42)))
@@ -73,16 +73,16 @@ fun h2(a) =
 //│ Normalized:
 //│ >  if
 //│ >    a is Option.Some.class(param0) and
-//│ >      let x = $param0#1
-//│ >      let x' = x#0
+//│ >      let x = $param0
+//│ >      let x' = x
 //│ >      x' is Left.class(param0) and
-//│ >        let y = $param0#0
-//│ >        else y#666
-//│ >      let y = $param0#0
-//│ >      let y' = y#666
+//│ >        let y = $param0
+//│ >        else y
+//│ >      let y = $param0
+//│ >      let y' = y
 //│ >      y' is Right.class(param0) and
-//│ >        let z = $param0#0
-//│ >        else z#666
+//│ >        let z = $param0
+//│ >        else z
 //│ >    a is Option.None.class then 0
 
 // :w

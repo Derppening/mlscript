@@ -39,14 +39,22 @@ object Elaborator:
     op -> op).toMap
 
   val reservedNames = binaryOps.toSet ++ aliasOps.keySet + "NaN" + "Infinity"
-
+  
+  // TODO: rename to ScopeKind?
   enum OuterCtx:
     case Function(returnHandlerSymbol: TempSymbol)
     case InnerScope(innerSymbol: InnerSymbol)
-    case LocalScope
+    case LocalScope(nameHint: Str)
     case LambdaOrHandlerBlock
     case NonReturnContext
-
+    
+    def showDbg: Str = this match
+      case Function(sym) => s"fun:${sym.nme}"
+      case InnerScope(inner) => inner.toString
+      case LocalScope(hint) => hint
+      case LambdaOrHandlerBlock => "LambdaOrHandlerBlock"
+      case NonReturnContext => "NonReturnContext"
+    
     def inner: Opt[InnerSymbol] = this match
       case InnerScope(inner) => S(inner)
       case _ => N
@@ -61,8 +69,9 @@ object Elaborator:
   // TODO later: use TempSymbol instead of VarSymbol? (currently, trying that creates lot of problems)
   class UnderCtx(val unders: Opt[mutable.ArrayBuffer[VarSymbol]])
   
-  case class Ctx(outer: OuterCtx, parent: Opt[Ctx], env: Map[Str, Ctx.Elem], 
-    mode: Mode):
+  case class Ctx(outer: OuterCtx, parent: Opt[Ctx], env: Map[Str, Ctx.Elem], mode: Mode):
+    
+    override def toString: Str = s"${parent.fold("")(_.toString+"/")}${outer.showDbg}"
     
     def +(local: Str -> Symbol): Ctx = copy(outer, env = env + local.mapSecond(Ctx.RefElem(_)))
     def ++(locals: IterableOnce[Str -> Symbol]): Ctx =
@@ -83,7 +92,7 @@ object Elaborator:
       )
     
     def nest(outerCtx: OuterCtx): Ctx = Ctx(outerCtx, Some(this), Map.empty, mode)
-    def nestLocal: Ctx = nest(OuterCtx.LocalScope)
+    def nestLocal(nameHint: Str): Ctx = nest(OuterCtx.LocalScope(nameHint))
     def nestInner(inner: InnerSymbol): Ctx = nest(OuterCtx.InnerScope(inner))
     
     def get(name: Str): Opt[Ctx.Elem] =
@@ -97,7 +106,7 @@ object Elaborator:
       case _: (OuterCtx.LambdaOrHandlerBlock.type | OuterCtx.InnerScope) =>
         getNonLocalRetHandler.fold(ReturnHandler.NotInFunction)(ReturnHandler.Required(_))
       case OuterCtx.NonReturnContext => ReturnHandler.Forbidden
-      case OuterCtx.LocalScope =>
+      case _: OuterCtx.LocalScope =>
         parent.fold(ReturnHandler.NotInFunction)(_.getRetHandler)
     
     // * Invariant: We expect that the top-level context only contain hard-coded symbols like `globalThis`
@@ -203,7 +212,7 @@ object Elaborator:
           new Ident(nme).withLocOf(id))(symOpt, N)
       def symbol = symOpt
     given Conversion[Symbol, Elem] = RefElem(_)
-    val empty: Ctx = Ctx(OuterCtx.LocalScope, N, Map.empty, Mode.Full)
+    val empty: Ctx = Ctx(OuterCtx.LocalScope("top-level"), N, Map.empty, Mode.Full)
     
   enum Mode:
     case Full
@@ -273,6 +282,8 @@ object Elaborator:
       "globalThis" -> globalThisSymbol,
     ))
     def dbg: Bool = false
+    def dbgRefNum(num: Int): Str =
+      if dbg then s"#$num" else ""
     def dbgUid(uid: Uid[Symbol]): Str =
       if dbg then s"‹$uid›" else ""
       // ^ we do not display the uid by default to avoid polluting diff-test outputs
@@ -345,7 +356,7 @@ extends Importer:
         raise(ErrorReport(msg"Unsupported ${k.name} in this position" -> tree.toLoc :: Nil))
       term(e) // * not `subterm` as `e` could be a lambda shorthand
     case b: Block =>
-      ctx.nestLocal.givenIn:
+      ctx.nestLocal("‹block›").givenIn:
         block(b, hasResult = true)._1 match
         case Term.Blk(Nil, res) => res
         case res => res
@@ -521,12 +532,12 @@ extends Importer:
           rhs.splitOn(acc)
       subterm(tree)
     case tree @ App(lhs, rhs) =>
-      val sym = FlowSymbol("‹app-res›")
+      val sym = FlowSymbol.app()
       val lt = subterm(lhs, inAppPrefix = true)
       val rt = subterm(rhs)
       Term.App(lt, rt)(tree, N, sym)
     case tree @ OpApp(lhs, op, rhss) =>
-      val sym = FlowSymbol("‹app-res›")
+      val sym = FlowSymbol.app()
       val lt = subterm(lhs, inAppPrefix = true)
       val ot = subterm(op, inAppPrefix = true)
       val rts = rhss.map(r => PlainFld(subterm(r)))
@@ -587,7 +598,7 @@ extends Importer:
         S:
           Param(FldFlags.empty, args, N, Modulefulness.none)
       )
-      val rs = FlowSymbol("‹app-res›")
+      val rs = FlowSymbol.app()
       Term.Lam(ps,
         Term.App(Term.SelProj(self.ref(), c, nme)(f), args.ref())(
           App(nme, Tup(Nil)) // FIXME
@@ -658,7 +669,7 @@ extends Importer:
             ErrorReport(msg"Non-local return statements are only supported with effect handlers enabled." -> tree.toLoc :: Nil)
           Term.Error
         else
-          val rs = FlowSymbol("‹app-res›")
+          val rs = FlowSymbol.app()
           val retMtdTree = new Ident("ret")
           val argTree = new Tup(body :: Nil)
           val dummyIdent = new Ident("return").withLocOf(kw)
@@ -729,13 +740,13 @@ extends Importer:
         // * TODO would be better to keep the fixity of applications part of the Tree repr.
         case (ap @ App(f: Ident, tup @ Tup(lhs :: args))) :: trees if !f.name.head.isLetter =>
           val res = go(acc, lhs :: Nil)
-          val sym = FlowSymbol("‹app-res›")
+          val sym = FlowSymbol.app()
           val fl = Fld(FldFlags.empty, res, N)
           val app = Term.App(subterm(f, inAppPrefix = true), Term.Tup(
             fl :: args.map(fld))(tup))(ap, N, sym)
           go(app, trees)
         case (ap @ App(f, tup @ Tup(args))) :: trees =>
-          val sym = FlowSymbol("‹app-res›")
+          val sym = FlowSymbol.app()
           go(Term.App(subterm(f, inAppPrefix = true),
               Term.Tup(Fld(FldFlags.empty, acc, N) :: args.map(fld))(tup)
             )(ap, N, sym), trees)
@@ -1243,7 +1254,7 @@ extends Importer:
         case Pat =>
           val patSym = td.symbol.asInstanceOf[PatternSymbol] // TODO improve `asInstanceOf`
           val owner = ctx.outer.inner
-          newCtx.nestInner(patSym).givenIn:
+          newCtx.givenIn:
             if pss.length > 1 then raise:
                 ErrorReport:
                   msg"Multiple parameter lists are not supported for this definition." ->
@@ -1294,7 +1305,7 @@ extends Importer:
         case k: (Mod.type | Obj.type) =>
           val modSym = td.symbol.asInstanceOf[ModuleOrObjectSymbol] // TODO: improve `asInstanceOf`
           val owner = ctx.outer.inner
-          newCtx.nestInner(modSym).givenIn:
+          newCtx.givenIn:
             trace(s"Processing module/object definition $nme"):
               val comp = sym.asCls match
                 case comp @ S(_) =>
@@ -1311,7 +1322,7 @@ extends Importer:
         case Cls =>
           val clsSym = td.symbol.asInstanceOf[ClassSymbol] // TODO: improve `asInstanceOf`
           val owner = ctx.outer.inner
-          newCtx.nestInner(clsSym).givenIn:
+          newCtx.givenIn:
             trace(s"Processing class definition $nme"):
               val comp = sym.asMod
               log(s"Companion: ${comp}")

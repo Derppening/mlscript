@@ -9,8 +9,8 @@ fun f(x) =
       _ then 1
 //│ Desugared:
 //│ >  if
-//│ >    let $scrut = builtin:==#0(x#0, 1)
-//│ >    let $scrut = builtin:+#0($scrut#0, 2)
+//│ >    let $scrut = builtin:==(x, 1)
+//│ >    let $scrut = builtin:+($scrut, 2)
 //│ >    $scrut is true then 0
 //│ >    else 1
 

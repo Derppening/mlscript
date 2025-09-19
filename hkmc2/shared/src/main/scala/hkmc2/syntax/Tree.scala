@@ -44,6 +44,9 @@ sealed trait Literal extends AutoLocated:
 
 enum SpreadKind:
   case Eager, Lazy
+  def str: Str = this match
+    case Eager => "..."
+    case Lazy => ".."
 object SpreadKind:
   def fromKw(kw: Keywrd[Keyword.Ellipsis]) = kw.kw match
     case Keyword.`..` => SpreadKind.Lazy
@@ -436,7 +439,7 @@ case object Mod extends TypeDefKind("module") with ClsLikeKind
 trait TermDefImpl extends TypeOrTermDef:
   this: TermDef =>
   
-  def sParameterizedMethod: Bool =
+  def isParameterizedMethod: Bool =
     (k is Fun) && paramLists.length > 0
   
 
@@ -465,7 +468,7 @@ trait TypeOrTermDef extends Located:
       
       // use Foo = ...
       case typ if k == Ins =>
-        val name = typ.toString()
+        val name = typ.showDbg
         val id: Ident = Ident(s"instance$$$name")
         (S(R(id)), R(id), Nil, N, S(typ))
       

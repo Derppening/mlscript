@@ -361,7 +361,7 @@ class Compiler(using Context)(using tl: TL)(using Ctx, State, Raise) extends Ter
       val makeSplit = completePattern(pattern, scrutinee, subScrutinees, Nil)
       (makeConsequent, alternative) => Split.Let(
         sym = transformSymbol,
-        term = Term.Lam(params, Blk(letBindings, term.clone)),
+        term = Term.Lam(params, Blk(letBindings, term.mkClone)),
         tail = makeSplit(
           // The `outputSymbol` is the output of `pattern`.
           //                vvvvvvvvvvvv

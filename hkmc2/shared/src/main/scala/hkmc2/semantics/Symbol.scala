@@ -17,6 +17,8 @@ abstract class Symbol(using State) extends Located:
   
   def nme: Str
   
+  def getState: State = summon
+  
   val uid: Uid[Symbol] = State.suid.nextUid
   
   val directRefs: mutable.Buffer[Term.Ref] = mutable.Buffer.empty
@@ -126,11 +128,23 @@ class FlowSymbol(label: Str)(using State) extends Symbol:
   val outFlows: mutable.Buffer[FlowSymbol] = mutable.Buffer.empty
   val outFlows2: mutable.Buffer[Consumer] = mutable.Buffer.empty
   val inFlows: mutable.Buffer[ConcreteProd] = mutable.Buffer.empty
+  def showDbg: Str =
+    label + s"‹$uid›"
   override def toString: Str =
     label + State.dbgUid(uid)
 
   def subst(using s: SymbolSubst): FlowSymbol = s.mapFlowSym(this)
 
+object FlowSymbol:
+  
+  def app()(using State) =
+    // FlowSymbol("‹app-res›")
+    FlowSymbol("@")
+
+  def sel(nme: Str)(using State) =
+    FlowSymbol(s"⋅$nme")
+  
+end FlowSymbol
 
 sealed trait LocalSymbol extends Symbol:
   def subst(using s: SymbolSubst): LocalSymbol
@@ -206,7 +220,7 @@ class BlockMemberSymbol(val nme: Str, val trees: Ls[TypeOrTermDef], val nameIsMe
   def trmImplTree: Opt[Tree.TermDef] = trees.collectFirst:
     case t: Tree.TermDef if t.rhs.isDefined => t
   
-  def isParameterizedMethod: Bool = trmTree.exists(_.sParameterizedMethod)
+  def isParameterizedMethod: Bool = trmTree.exists(_.isParameterizedMethod)
   
   lazy val hasLiftedClass: Bool =
     objTree.isDefined || trmTree.isDefined || clsTree.exists(_.paramLists.nonEmpty)
