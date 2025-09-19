@@ -649,7 +649,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       returnType: WasmType
   ): ExprProxy =
     new ExprProxy(
-      S(FoldedInstr("call", Seq(s"$$$name"), operands.map(_.inner), returnType))
+      S(FoldedInstr("call", Seq(doc"$$$name"), operands.map(_.inner), returnType))
     )
 
   def call_ref(
@@ -679,7 +679,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         case (S(left: FoldedInstr), S(right: FoldedInstr)) =>
           WasmInstr.i32.add(left, right)
         case (left, right) =>
-          FoldedInstr("i32.add", Seq(), Seq(left, right), I32Type)
+          FoldedInstr("i32.add", Seq(), Seq[Expr](left, right), Seq(I32Type))
     ))
   end i32
 
@@ -707,7 +707,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       require(ty.isInstanceOf[RefType])
       require(ty.asInstanceOf[RefType].heapType.isInstanceOf[FunctionType])
       new ExprProxy(
-        S(FoldedInstr("ref.func", Seq(s"$$$name"), Seq(), ty))
+        S(FoldedInstr("ref.func", Seq(doc"$$$name"), Seq(), ty))
       )
 
     def i31(value: ExprProxy): ExprProxy = new ExprProxy(S(
@@ -827,7 +827,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
             "struct.get",
             Seq(
               ref.getWasmType(true).asInstanceOf[RefType].heapType.toWat,
-              index
+              doc"$index"
             ),
             Seq(ref.inner),
             ty
@@ -842,7 +842,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
             "struct.set",
             Seq(
               ref.getWasmType(true).asInstanceOf[RefType].heapType.toWat,
-              index
+              doc"$index"
             ),
             Seq(ref.inner, value.inner),
             gen.none
@@ -860,7 +860,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
       value.inner match
         case S(value: FoldedInstr) => WasmInstr.local.set(WasmLocalIdx(NumIdx(index)), value)
         case value =>
-          FoldedInstr("local.set", Seq(s"$index"), Seq(value), NoneType)
+          FoldedInstr("local.set", Seq(doc"$index"), Seq(value), NoneType)
     ))
   end local
 
@@ -870,7 +870,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         S(
           FoldedInstr(
             "global.get",
-            Seq(s"$index"),
+            Seq(doc"$index"),
             Seq(),
             ty
           )
@@ -882,7 +882,7 @@ class ModuleProxy(private val gen: WatBackend, private var mod: Module)
         S(
           FoldedInstr(
             "global.set",
-            Seq(s"$index"),
+            Seq(doc"$index"),
             Seq(value.inner),
             NoneType
           )

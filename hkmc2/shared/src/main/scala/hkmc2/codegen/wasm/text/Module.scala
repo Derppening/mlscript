@@ -189,16 +189,17 @@ end StructType
 /** A composite type. */
 type CompType = StructType | FunctionType
 
-type AbsHeapType = HeapType.Func.type
-    | HeapType.Ext.type 
-    | HeapType.Any.type 
-    | HeapType.Eq.type 
-    | HeapType.I31.type 
-    | HeapType.Struct.type 
-    | HeapType.Array.type 
-    | HeapType.None.type 
-    | HeapType.NoExt.type 
-    | HeapType.NoFunc.type 
+type AbsHeapType =
+  HeapType.Func.type
+    | HeapType.Ext.type
+    | HeapType.Any.type
+    | HeapType.Eq.type
+    | HeapType.I31.type
+    | HeapType.Struct.type
+    | HeapType.Array.type
+    | HeapType.None.type
+    | HeapType.NoExt.type
+    | HeapType.NoFunc.type
 // TODO(Derppening): Remove CompType from HeapType once WatBackend is removed
 type HeapType = AbsHeapType | CompType | TypeIdx
 
@@ -237,7 +238,7 @@ abstract sealed class Instruction extends ToWat:
   val instrargs: Seq[Any]
 
   /** The result type of this expression. */
-  val exprType: WasmType
+  def exprType: WasmType
 end Instruction
 
 /** A WebAssembly stack instruction. */
@@ -258,6 +259,23 @@ object FoldedInstr:
    */
   val unsupportedToStackMnemonics = Set("if", "then", "else")
 
+  @deprecated("Use the overload with Opt[WasmType] or Seq[WasmType] to explicitly handle multi-value types")
+  def apply(
+      mnemonic: Str,
+      instrargs: Seq[ToWat | Document],
+      stackargs: Seq[Expr],
+      exprType: WasmType
+  ): FoldedInstr = 
+    new FoldedInstr(mnemonic, instrargs, stackargs, exprType.toSeq)
+
+  def apply(
+      mnemonic: Str,
+      instrargs: Seq[ToWat | Document],
+      stackargs: Seq[FoldedInstr],
+      resultType: Opt[WasmType]
+  ): FoldedInstr = 
+    new FoldedInstr(mnemonic, instrargs, stackargs.map(S(_)), resultType.toSeq)
+
 /**
  * A WebAssembly folded instruction.
  *
@@ -267,8 +285,9 @@ object FoldedInstr:
 case class FoldedInstr(
     val mnemonic: Str,
     val instrargs: Seq[ToWat | Document],
+    // TODO(Derppening): Change to Seq[FoldedInstr] once WatBackend is removed
     stackargs: Seq[Expr],
-    val exprType: WasmType
+    val resultTypes: Seq[WasmType]
 ) extends Instruction:
   /** Converts this folded instruction into a sequence of stack instructions. */
   def toStack: Ls[StackInstr] =
@@ -284,6 +303,16 @@ case class FoldedInstr(
           case foldedInstr: Opt[FoldedInstr] =>
             foldedInstr.map(_.toStack).getOrElse(Ls())
       .toList :+ StackInstr(mnemonic, instrargs, exprType)
+
+  def exprType = resultTypes match
+    case Seq() => NoneType
+    case Seq(ty) => ty
+    case _ => MultiValueType(resultTypes)
+
+  def resultType_! = resultTypes match
+    case Seq() => N
+    case Seq(ty) => S(ty)
+    case _ => lastWords(s"exptype_! called on instruction with multi-value result type: $this")
 
   def toWat: Document = doc"($mnemonic${
       instrargs
