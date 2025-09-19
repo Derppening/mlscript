@@ -40,7 +40,7 @@ object FuncInfo:
       nResults: Int,
       locals: Seq[Local -> Str],
       body: FoldedInstr
-  ): FuncInfo = FuncInfo(
+  ): FuncInfo = new FuncInfo(
     sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
     typeIdx,
     params,
@@ -74,6 +74,12 @@ private final case class FuncInfo(
           doc""" # (export "${id.id}" (func ${id.toWat})) # (elem declare func ${id.toWat})"""
       }"""
 end FuncInfo
+
+object TypeInfo:
+  def apply(sym: BlockMemberSymbol, compType: CompType): TypeInfo = new TypeInfo(
+    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
+    compType
+  )
 
 private final case class TypeInfo(
     val id: Opt[SymIdx],
@@ -109,6 +115,15 @@ private final case class Ctx(
     sym.foreach:
       namedTypes(_) = numIdx
     TypeIdx(typeInfo.id.getOrElse(numIdx))
+
+  def getType(typeref: TypeIdx | Symbol, resolveSymIdx: Bool = false): Opt[TypeIdx] = typeref match
+    case TypeIdx(SymIdx(nme)) if resolveSymIdx =>
+      namedTypes.find(_._1.nme == nme).map(t => TypeIdx(t._2))
+    case typeidx: TypeIdx => S(typeidx)
+    case sym: Symbol if resolveSymIdx => namedTypes.get(sym).map(TypeIdx(_))
+    case sym: Symbol =>
+      getType(sym, resolveSymIdx = true).map: numIdx =>
+        getTypeInfo(numIdx).flatMap(_.id).fold(numIdx)(TypeIdx(_))
 
   def getTypeInfo(typeref: TypeIdx | Symbol): Opt[TypeInfo] = typeref match
     case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
@@ -178,10 +193,14 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${l.toString}`" -> N
       ))
     case ts: semantics.InnerSymbol =>
-      warnExpr(Ls(
-        msg"WatBuilder::getVar for InnerSymbol not implemented yet" -> l.toLoc,
-        msg"Note: Block IR of expression is `${l.toString}`" -> N
-      ))
+      if !ctx.locals.head.contains(l) then
+        return warnExpr(Ls(
+          msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" -> ts.toLoc,
+          msg"Note: Block IR of expression is `${ts.toString}`" -> N,
+          msg"Note: Scope is ${scope.toString}" -> N,
+          msg"Note: Locals is ${ctx.locals.toString}" -> N
+        ))
+      local.get(LocalIdx(SymIdx(scope.findThis_!(ts))), RefType.anyref)
     case l =>
       if !ctx.locals.head.contains(l) then
         return warnExpr(Ls(
@@ -276,7 +295,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val baseTypeIdx = base.exprType match
         case RefType(idx: TypeIdx, _) => idx
         case ty => return errExpr(Ls(
-            msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>) type" -> r.toLoc,
+            msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>)` type" -> r.toLoc,
             msg"Note: Block IR of `fun` expression is `${fun.toString}`" -> N,
             msg"Note: WAT of `fun` expression is `${base.toWat.toString}`" -> N,
             msg"      ... which has an expression type of `${ty.toWat.toString}`" -> N
@@ -289,6 +308,32 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         typeIdx = baseTypeIdx,
         funcType = baseTypeInfo.compType.asInstanceOf[FunctionType]
       )
+
+    case Instantiate(_, cls, as) =>
+      val ctorClsPath = cls match
+        case sel: Select => sel
+        case cls => return warnExpr(Ls(
+            msg"WatBuilder::result for Instantiate(...) where `cls` is not a Select(...) path not implemented yet " -> cls.toLoc,
+            msg"Note: Block IR of `cls` expression is `${cls.toString}`" -> N
+          ))
+      val ctorClsSym = ctorClsPath.symbol match
+        case S(sym) => sym
+        case N => return errExpr(Ls(
+            msg"Class path for an Instantiate(...) expression must be resolved" -> cls.toLoc,
+            msg"Note: Block IR of `cls` expression is `${cls.toString}`" -> N
+          ))
+      val ctorClsBlkSym = ctorClsSym.asBlkMember match
+        case S(sym) => sym
+        case N => lastWords(
+            s"Expected resolved class for an Instantiate(...) expression to be a BlockMemberSymbol, but got ${ctorClsSym.getClass.getName}"
+          )
+      val ctorFuncIdx = ctx.getFunc(ctorClsBlkSym) match
+        case S(idx) => idx
+        case N => lastWords(s"Missing constructor definition for class ${ctorClsBlkSym.toString}")
+
+      val objType = ctx.getFuncInfo(ctorFuncIdx).get.body.exprType
+      call(funcidx = ctorFuncIdx, as.map(argument), Seq(Result(objType.asInstanceOf[ValType])))
+
     case r =>
       warnExpr(Ls(
         msg"WatBackend::result for expression not implemented yet" -> r.toLoc,
@@ -405,10 +450,76 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   if clsLikeDefn.companion.isDefined then
                     break(warnUnimplExpr("companion.isDefined"))
 
-                  warnExpr(Ls(
-                    msg"WatBuilder::returningTerm for ClsLikeDefn(...) not implemented yet" -> clsLikeDefn.sym.toLoc,
-                    msg"Note: Block IR of definition is `${defn.toString}`" -> N
-                  ))
+                  val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
+                  val ctorParams = clsParams.map: p =>
+                    p -> scope.allocateName(p)
+                  val ctorAuxParams = clsLikeDefn.auxParams.map: ps =>
+                    ps.params.map: p =>
+                      p -> scope.allocateName(p.sym)
+
+                  val typeref = ctx.addType(
+                    sym = S(clsLikeDefn.sym),
+                    typeInfo =
+                      TypeInfo(
+                        sym = clsLikeDefn.sym,
+                        compType = StructType(
+                          (clsLikeDefn.publicFields.map(_._2) ++ clsLikeDefn.privateFields).map:
+                            f =>
+                              Field(RefType.anyref, mutable = true, id = S(f.nme))
+                        )
+                      )
+                  )
+
+                  // * If there are no ctor params, pop one param list off the aux params
+                  val (newCtorAuxParams, initialCtorParams) = clsLikeDefn.paramsOpt match
+                    case None => ctorAuxParams match
+                        case head :: next => (next, head)
+                        case Nil => (ctorAuxParams, Nil)
+                    case Some(_) => (ctorAuxParams, ctorParams)
+
+                  ctx.locals.head += clsLikeDefn.isym
+                  val thisVar = getVar(clsLikeDefn.isym, N).instrargs(0).asInstanceOf[LocalIdx]
+                  val ctorCode = Instructions.block(
+                    label = N,
+                    Seq(
+                      local.set(thisVar, struct.new_default(typeref)),
+                      // TODO(Derppening): block(ctor)
+                      nop,
+                      `return`(S(local.get(thisVar, RefType(typeref, nullable = false))))
+                    ),
+                    resultTypes = Seq(Result(RefType(typeref, nullable = false)))
+                  )
+
+                  val ctorAux = if newCtorAuxParams.isEmpty then
+                    ctorCode
+                  else
+                    break(warnUnimplExpr("newCtorAuxParams.nonEmpty"))
+
+                  val funcTy = ctx.addType(
+                    sym = N,
+                    TypeInfo(
+                      id = N,
+                      FunctionType(
+                        params = ctorParams.map(p => WasmParam(S(p._2), RefType.anyref)),
+                        results = Seq(Result(RefType.anyref))
+                      )
+                    )
+                  )
+
+                  ctx.addFunc(
+                    S(clsLikeDefn.sym),
+                    FuncInfo(
+                      sym = clsLikeDefn.sym,
+                      typeIdx = funcTy,
+                      params = ctorParams,
+                      nResults = ctorCode.exprType.toSeq.length,
+                      locals = Seq(clsLikeDefn.isym -> scope.findThis_!(clsLikeDefn.isym)),
+                      body = ctorAux
+                    )
+                  )
+
+                  nop
+
                 case defn =>
                   warnExpr(Ls(
                     msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc,

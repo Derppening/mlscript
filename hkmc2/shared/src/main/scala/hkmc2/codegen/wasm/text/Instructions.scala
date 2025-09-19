@@ -15,7 +15,8 @@ object Instructions:
 
     FoldedInstr(
       mnemonic = "block",
-      instrargs = labelWat.toSeq ++ resultTypes.map(resTy => SignatureType(NoneType, resTy.valtype)),
+      instrargs =
+        labelWat.toSeq ++ resultTypes.map(resTy => SignatureType(NoneType, resTy.valtype)),
       stackargs = children.map(S(_)),
       exprType = resultTypes.size match
         case 0 => NoneType
@@ -57,6 +58,20 @@ object Instructions:
       stackargs = Seq(S(condition), S(thenInstr)) ++ elseInstr.map(S(_)).toSeq,
       exprType = resultType
     )
+
+  def call(
+    funcidx: FuncIdx,
+    operands: Seq[FoldedInstr],
+    returnTypes: Seq[Result]
+  ): FoldedInstr = FoldedInstr(
+    mnemonic = "call",
+    instrargs = Seq(funcidx.toWat),
+    stackargs = operands.map(S(_)),
+    exprType = returnTypes.size match
+      case 0 => NoneType
+      case 1 => returnTypes.head.valtype
+      case _ => MultiValueType(returnTypes.map(_.valtype))
+  )
 
   def call_ref(
       target: FoldedInstr,
@@ -174,5 +189,14 @@ object Instructions:
         if value.exprType is UnreachableType then UnreachableType else NoneType
     )
   end local
+
+  object struct:
+    def new_default(ty: TypeIdx): FoldedInstr = FoldedInstr(
+      mnemonic = "struct.new_default",
+      instrargs = Seq(ty.toWat),
+      stackargs = Seq.empty,
+      exprType = RefType(ty, nullable = false)
+    )
+  end struct
 
 end Instructions
