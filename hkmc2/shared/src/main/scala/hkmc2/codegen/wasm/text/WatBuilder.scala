@@ -96,11 +96,11 @@ object Ctx:
     namedTypes = MutMap.empty,
     funcs = ArrayBuf.empty,
     namedFuncs = MutMap.empty,
-    locals = ArrayBuf() :: Nil
+    locals = MutMap() :: Nil
   )
 
   def ctx(using ctx: Ctx): Ctx = ctx
-  
+
   extension (ref: CtxIdx | Symbol)
     private def prettyString: Str = ref match
       case idx: CtxIdx => s"type index `${idx.toWat.toString}`"
@@ -111,7 +111,7 @@ private final case class Ctx(
     private val namedTypes: MutMap[Symbol, NumIdx],
     private val funcs: ArrayBuf[FuncInfo],
     private val namedFuncs: MutMap[Symbol, NumIdx],
-    var locals: Ls[ArrayBuf[Local]]
+    private var locals: Ls[MutMap[Local, NumIdx]]
 ) extends ToWat:
 
   import Ctx.prettyString
@@ -174,6 +174,21 @@ private final case class Ctx(
     getFuncInfo(funcref).getOrElse:
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
+  def pushLocal(): Unit = locals = MutMap() :: locals
+  def popLocal(): Unit = locals = locals.tail
+
+  def addLocal(sym: Local): LocalIdx =
+    val numIdx = NumIdx(locals.head.size)
+    locals.head(sym) = numIdx
+    LocalIdx(numIdx)
+
+  def addLocals(syms: Seq[Local]): Seq[LocalIdx] =
+    syms.map(addLocal)
+
+  def containsLocal(sym: Local): Bool = locals.head.contains(sym)
+
+  def getLocals: Ls[Seq[Local]] = locals.map(_.toSeq.sortBy(_._2.index).map(_._1))
+
   def toWat: Document =
     doc"""(module #{  # ${(types.toSeq ++ funcs.toSeq).map(_.toWat).mkDocument(doc" # ")}) #} """
 
@@ -216,21 +231,21 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         msg"Note: Block IR of expression is `${l.toString}`" -> N
       ))
     case ts: semantics.InnerSymbol =>
-      if !ctx.locals.head.contains(l) then
+      if !ctx.containsLocal(l) then
         return warnExpr(Ls(
           msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" -> ts.toLoc,
           msg"Note: Block IR of expression is `${ts.toString}`" -> N,
           msg"Note: Scope is ${scope.toString}" -> N,
-          msg"Note: Locals is ${ctx.locals.toString}" -> N
+          msg"Note: Locals is ${ctx.getLocals.toString}" -> N
         ))
       local.get(LocalIdx(SymIdx(scope.findThis_!(ts))), RefType.anyref)
     case l =>
-      if !ctx.locals.head.contains(l) then
+      if !ctx.containsLocal(l) then
         return warnExpr(Ls(
           msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc,
           msg"Note: Block IR of expression is `${l.toString}`" -> N,
           msg"Note: Scope is ${scope.toString}" -> N,
-          msg"Note: Locals is ${ctx.locals.toString}" -> N
+          msg"Note: Locals is ${ctx.getLocals.toString}" -> N
         ))
       local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
 
@@ -261,7 +276,8 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ref.i31(i32.const(value.toInt))
     case Value.Ref(l) =>
       ctx.getFunc(l) match
-        case S(funcIdx) => ref.func(funcIdx, RefType(ctx.getFuncInfo_!(l).typeIdx, nullable = false))
+        case S(funcIdx) =>
+          ref.func(funcIdx, RefType(ctx.getFuncInfo_!(l).typeIdx, nullable = false))
         case N => getVar(l, r.toLoc)
 
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
@@ -498,7 +514,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         case Nil => (ctorAuxParams, Nil)
                     case Some(_) => (ctorAuxParams, ctorParams)
 
-                  ctx.locals.head += clsLikeDefn.isym
+                  ctx.addLocal(clsLikeDefn.isym)
                   val thisVar = getVar(clsLikeDefn.isym, N).instrargs(0).asInstanceOf[LocalIdx]
                   val ctorCode = Instructions.block(
                     label = N,
@@ -629,9 +645,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ).toSeq.toArray.sortBy(_.uid).iterator.map: l =>
       scope.allocateName(l)
       l
-    .to(ArrayBuf)
-    ctx.locals.head ++= vars
-    vars.toSeq
+    .toSeq
+    ctx.addLocals(vars)
+    vars
 
   def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
     val locals = blockPreamble(t.definedVars)
@@ -647,22 +663,19 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Scope
   ): (Seq[WasmParam -> Str], Expr, Seq[Local]) =
     // Add a frame for `ctx.locals`
-    ctx.locals = ctx.locals match
-      case globals :: Nil => ArrayBuf() :: globals :: Nil
-      case locals @ (_ :: _ :: Nil) => locals
-      case _ => lastWords(s"ctx.locals should only have 1-2 local scopes")
+    ctx.pushLocal()
 
     val result = scope.nest givenIn:
       val paramsList = params.params.map: p =>
         val paramNme = scope.allocateName(p.sym)
         val param = WasmParam(S(paramNme), RefType.anyref)
-        ctx.locals.head += p.sym
+        ctx.addLocal(p.sym)
         param -> paramNme
       val (wasmParams, (wasmBody, locals)) = (paramsList.toSeq, this.body(body))
       (wasmParams, wasmBody, locals)
 
     // Restore `ctx.locals`
-    ctx.locals = ctx.locals.tail
+    ctx.popLocal()
 
     result
 
