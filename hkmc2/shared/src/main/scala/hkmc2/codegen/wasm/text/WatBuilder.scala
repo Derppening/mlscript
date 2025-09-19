@@ -100,6 +100,11 @@ object Ctx:
   )
 
   def ctx(using ctx: Ctx): Ctx = ctx
+  
+  extension (ref: CtxIdx | Symbol)
+    private def prettyString: Str = ref match
+      case idx: CtxIdx => s"type index `${idx.toWat.toString}`"
+      case sym: Symbol => s"symbol `sym.toString`"
 
 private final case class Ctx(
     private val types: ArrayBuf[TypeInfo],
@@ -108,6 +113,8 @@ private final case class Ctx(
     private val namedFuncs: MutMap[Symbol, NumIdx],
     var locals: Ls[ArrayBuf[Local]]
 ) extends ToWat:
+
+  import Ctx.prettyString
 
   def addType(sym: Opt[Symbol], typeInfo: TypeInfo): TypeIdx =
     val numIdx = NumIdx(types.size)
@@ -125,11 +132,19 @@ private final case class Ctx(
       getType(sym, resolveSymIdx = true).map: numIdx =>
         getTypeInfo(numIdx).flatMap(_.id).fold(numIdx)(TypeIdx(_))
 
+  def getType_!(typeref: TypeIdx | Symbol, resolveSymIdx: Bool = false): TypeIdx =
+    getType(typeref, resolveSymIdx).getOrElse:
+      lastWords(s"Missing type definition for ${typeref.prettyString}")
+
   def getTypeInfo(typeref: TypeIdx | Symbol): Opt[TypeInfo] = typeref match
     case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
     case TypeIdx(SymIdx(nme)) =>
       namedTypes.find(_._1.nme == nme).flatMap(t => getTypeInfo(TypeIdx(t._2)))
     case sym: Symbol => namedTypes.get(sym).flatMap(idx => getTypeInfo(TypeIdx(idx)))
+
+  def getTypeInfo_!(typeref: TypeIdx | Symbol): TypeInfo =
+    getTypeInfo(typeref).getOrElse:
+      lastWords(s"Missing type definition for ${typeref.prettyString}")
 
   def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
     val numIdx = NumIdx(funcs.size)
@@ -147,9 +162,17 @@ private final case class Ctx(
       getFunc(sym, resolveSymIdx = true).map: numIdx =>
         getFuncInfo(numIdx).flatMap(_.id).fold(numIdx)(FuncIdx(_))
 
+  def getFunc_!(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): FuncIdx =
+    getFunc(funcref, resolveSymIdx).getOrElse:
+      lastWords(s"Missing function definition for ${funcref.prettyString}")
+
   def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
     case FuncIdx(NumIdx(idx)) => funcs.unapply(idx.toInt)
     case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))
+
+  def getFuncInfo_!(funcref: FuncIdx | Symbol): FuncInfo =
+    getFuncInfo(funcref).getOrElse:
+      lastWords(s"Missing function definition for ${funcref.prettyString}")
 
   def toWat: Document =
     doc"""(module #{  # ${(types.toSeq ++ funcs.toSeq).map(_.toWat).mkDocument(doc" # ")}) #} """
@@ -238,9 +261,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ref.i31(i32.const(value.toInt))
     case Value.Ref(l) =>
       ctx.getFunc(l) match
-        case S(funcIdx) =>
-          val funcInfo = ctx.getFuncInfo(l).get
-          ref.func(funcIdx, RefType(funcInfo.typeIdx, nullable = false))
+        case S(funcIdx) => ref.func(funcIdx, RefType(ctx.getFuncInfo_!(l).typeIdx, nullable = false))
         case N => getVar(l, r.toLoc)
 
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
@@ -300,7 +321,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             msg"Note: WAT of `fun` expression is `${base.toWat.toString}`" -> N,
             msg"      ... which has an expression type of `${ty.toWat.toString}`" -> N
           ))
-      val baseTypeInfo = ctx.getTypeInfo(baseTypeIdx).get
+      val baseTypeInfo = ctx.getTypeInfo_!(baseTypeIdx)
 
       call_ref(
         target = base,
@@ -331,7 +352,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         case S(idx) => idx
         case N => lastWords(s"Missing constructor definition for class ${ctorClsBlkSym.toString}")
 
-      val objType = ctx.getFuncInfo(ctorFuncIdx).get.body.exprType
+      val objType = ctx.getFuncInfo_!(ctorFuncIdx).body.exprType
       call(funcidx = ctorFuncIdx, as.map(argument), Seq(Result(objType.asInstanceOf[ValType])))
 
     case r =>
