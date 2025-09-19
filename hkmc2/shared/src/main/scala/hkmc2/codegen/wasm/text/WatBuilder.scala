@@ -298,17 +298,17 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr = t match
     case _: HandleBlock =>
       errExpr(
-        msg"This code requires effect handler instrumentation but was compiled without it." -> t.toLoc
+        msg"This code requires effect handler instrumentation but was compiled without it." -> N
       )
     case Assign(l, r, rst) =>
-      val lExpr = getVar(l, t.toLoc)
+      val lExpr = getVar(l, l.toLoc)
       if lExpr.exprType is UnreachableType then return lExpr
       val rExpr = result(r)
       val idx = lExpr.instrargs(0).asInstanceOf[LocalIdx]
       val assignExpr = lExpr.mnemonicPrefix match
         case S("global") =>
           warnExpr(Ls(
-            msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> t.toLoc,
+            msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> l.toLoc,
             msg"Note: Block IR of expression is `${t.toString}`" -> N
           ))
         case S("local") => local.set(idx, rExpr)
@@ -345,7 +345,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 case FunDefn(own, sym, ps :: pss, bod) =>
                   if own.nonEmpty then
                     break(warnExpr(Ls(
-                      msg"WatBuilder::returningTerm for Define(...) with `owner.nonEmpty` not implemented yet" -> t.toLoc,
+                      msg"WatBuilder::returningTerm for Define(...) with `owner.nonEmpty` not implemented yet" -> defn.sym.toLoc,
                       msg"Note: Block IR of definition is `${defn.toString}`" -> N
                     )))
 
@@ -380,13 +380,13 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     nop
                   else
                     warnExpr(Ls(
-                      msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> t.toLoc,
+                      msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> defn.sym.toLoc,
                       msg"Note: Block IR of definition is `${defn.toString}`" -> N
                     ))
                 case clsLikeDefn: ClsLikeDefn =>
                   // Guard against unsupported features
                   def warnUnimplExpr(cond: Str): Nothing = break(warnExpr(Ls(
-                    msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> t.toLoc,
+                    msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> clsLikeDefn.sym.toLoc,
                     msg"Note: Block IR of definition is `${defn.toString}`" -> N
                   )))
                   if clsLikeDefn.owner.nonEmpty then
@@ -406,12 +406,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     break(warnUnimplExpr("companion.isDefined"))
 
                   warnExpr(Ls(
-                    msg"WatBuilder::returningTerm for ClsLikeDefn(...) not implemented yet" -> t.toLoc,
+                    msg"WatBuilder::returningTerm for ClsLikeDefn(...) not implemented yet" -> clsLikeDefn.sym.toLoc,
                     msg"Note: Block IR of definition is `${defn.toString}`" -> N
                   ))
                 case defn =>
                   warnExpr(Ls(
-                    msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> t.toLoc,
+                    msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc,
                     msg"Note: Block IR of definition is `${defn.toString}`" -> N
                   ))
           end val
@@ -421,7 +421,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             case S(proxy) if !scope.thisProxyDefined =>
               scope.thisProxyDefined = true
               warnExpr(Ls(
-                msg"WatBuilder::returningTerm for Define(...) where `!scope.thisProxyDefined` not implemented yet" -> t.toLoc,
+                msg"WatBuilder::returningTerm for Define(...) where `!scope.thisProxyDefined` not implemented yet" -> defn.sym.toLoc,
                 msg"Note: Block IR of definition is `${defn.toString}`" -> N
               ))
             case _ => Instructions.block(
@@ -435,7 +435,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
         case defn =>
           warnExpr(Ls(
-            msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> t.toLoc,
+            msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc,
             msg"Note: Block IR of expression is `${t.toString}`" -> N
           ))
     case Return(res, true) =>
@@ -444,7 +444,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       `return`(S(result(res)))
     case t =>
       warnExpr(Ls(
-        msg"WatBuilder::returningTerm for expression not implemented yet" -> t.toLoc,
+        msg"WatBuilder::returningTerm for expression not implemented yet" -> N,
         msg"Note: Block IR of expression is `${t.toString}`" -> N
       ))
 
