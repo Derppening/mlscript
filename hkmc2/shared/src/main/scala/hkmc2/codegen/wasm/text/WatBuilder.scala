@@ -500,9 +500,15 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       TypeInfo(
                         sym = clsLikeDefn.sym,
                         compType = StructType(
-                          (clsLikeDefn.publicFields.map(_._2) ++ clsLikeDefn.privateFields).map:
-                            f =>
-                              Field(RefType.anyref, mutable = true, id = S(f.nme))
+                          (clsLikeDefn.publicFields.map(
+                            _._2
+                          ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
+                            f -> (NumIdx(index) -> Field(
+                              RefType.anyref,
+                              mutable = true,
+                              id = S(f.nme)
+                            ))
+                          .toMap
                         )
                       )
                   )

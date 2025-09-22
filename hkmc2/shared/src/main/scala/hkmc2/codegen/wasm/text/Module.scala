@@ -5,6 +5,9 @@ package text
 import mlscript.utils.*, shorthands.*
 
 import document.*
+import semantics.FieldSymbol
+
+import scala.collection.Map
 
 /** Trait indicating a WAT representation is available. */
 trait ToWat:
@@ -178,12 +181,25 @@ case class Field(
       })"
 end Field
 
+object StructType:
+  def apply(fields: Map[FieldSymbol, NumIdx -> Field]): StructType = new StructType(
+    fields.values.toSeq.sortBy(_._1.index).map(_._2),
+    S(fields.view.mapValues(_._1).toMap)
+  )
+
+  @deprecated
+  def apply(fields: Seq[Field]): StructType = new StructType(fields, N)
+
 /** A type representing a structure type. */
-case class StructType(fields: Seq[Field]) extends ToWat:
+case class StructType private (fields: Seq[Field], symToField: Opt[Map[FieldSymbol, NumIdx]])
+    extends ToWat:
+
+  def fieldSeq: Seq[Field] = fields
+
   def toWat: Document =
-    doc"(struct${fields.map(
-        _.toWat
-      ).mkDocument(doc" ").optionUnless(_.isEmpty).fold(doc"")(f => doc" $f")})"
+    doc"(struct${fieldSeq.map(_.toWat).mkDocument(doc" ").optionUnless(_.isEmpty).fold(doc"")(f =>
+        doc" $f"
+      )})"
 end StructType
 
 /** A composite type. */
@@ -220,6 +236,7 @@ end CtxIdx
 case class TypeIdx(idx: Index) extends CtxIdx(idx)
 case class FuncIdx(idx: Index) extends CtxIdx(idx)
 case class LocalIdx(idx: Index) extends CtxIdx(idx)
+case class FieldIdx(idx: Index) extends CtxIdx(idx)
 
 /**
  * An abstraction over a generic WebAssembly instructions.
@@ -259,13 +276,15 @@ object FoldedInstr:
    */
   val unsupportedToStackMnemonics = Set("if", "then", "else")
 
-  @deprecated("Use the overload with Opt[WasmType] or Seq[WasmType] to explicitly handle multi-value types")
+  @deprecated(
+    "Use the overload with Opt[WasmType] or Seq[WasmType] to explicitly handle multi-value types"
+  )
   def apply(
       mnemonic: Str,
       instrargs: Seq[ToWat | Document],
       stackargs: Seq[Expr],
       exprType: WasmType
-  ): FoldedInstr = 
+  ): FoldedInstr =
     new FoldedInstr(mnemonic, instrargs, stackargs, exprType.toSeq)
 
   def apply(
@@ -273,7 +292,7 @@ object FoldedInstr:
       instrargs: Seq[ToWat | Document],
       stackargs: Seq[FoldedInstr],
       resultType: Opt[WasmType]
-  ): FoldedInstr = 
+  ): FoldedInstr =
     new FoldedInstr(mnemonic, instrargs, stackargs.map(S(_)), resultType.toSeq)
 
 /**

@@ -1016,7 +1016,7 @@ class WatBackend
         mod.getType(
           id.asInstanceOf[SymIdx].id
         ).get.asInstanceOf[StructType].fields.indexWhere(_.id.exists(_ == s))
-      case RefType(StructType(fields), _) =>
+      case RefType(StructType(fields, _), _) =>
         fields.indexWhere(_.id.exists(_ == s))
       case _ =>
         throw IllegalArgumentException(
