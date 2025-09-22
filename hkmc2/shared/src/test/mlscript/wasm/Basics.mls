@@ -90,6 +90,36 @@ x
 
 :wasm
 :ewat
+:ge
+fun foo() = 42
+foo
+//│ ╔══[COMPILATION ERROR] Returning function instances is not supported
+//│ ║  l.95: 	foo
+//│ ╙──      	^^^
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $foo (type 0) (result (ref null any))
+//│     (return
+//│       (ref.i31
+//│         (i32.const 42))))
+//│   (export "foo" (func $foo))
+//│   (elem declare func $foo)
+//│   (func $entry (type 1) (result (ref null any))
+//│     (local $foo (ref null any))
+//│     (block (result (ref 0))
+//│       (nop)
+//│       (ref.func $foo)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ rwasm: Running
+//│ Uncaught:
+//│ CompileError: WebAssembly.instantiate(): Compiling function #1 failed: type error in fallthru[0] (expected anyref, got (ref 0)) @+62
+
+
+:wasm
+:ewat
 fun foo() = 42
 foo()
 //│ Wat:

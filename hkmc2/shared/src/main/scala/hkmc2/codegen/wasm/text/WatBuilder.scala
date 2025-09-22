@@ -593,9 +593,31 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             msg"Note: Block IR of expression is `${t.toString}`" -> N
           ))
     case Return(res, true) =>
-      result(res)
+      val resWat = result(res)
+      resWat.exprType match
+        case RefType(heapType, _) => heapType match
+            case HeapType.Func =>
+              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+            case typeidx: TypeIdx
+                if ctx.getTypeInfo_!(typeidx).compType.isInstanceOf[FunctionType] =>
+              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+            case _ => ()
+        case _ => ()
+
+      resWat
     case Return(res, false) =>
-      `return`(S(result(res)))
+      val resWat = result(res)
+      resWat.exprType match
+        case RefType(heapType, _) => heapType match
+            case HeapType.Func =>
+              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+            case typeidx: TypeIdx
+                if ctx.getTypeInfo_!(typeidx).compType.isInstanceOf[FunctionType] =>
+              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+            case _ => ()
+        case _ => ()
+
+      `return`(S(resWat))
     case t =>
       warnExpr(Ls(
         msg"WatBuilder::returningTerm for expression not implemented yet" -> N,
