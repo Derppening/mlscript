@@ -4,6 +4,7 @@ package codegen
 import scala.language.implicitConversions
 import scala.annotation.tailrec
 import os.{Path as AbsPath, RelPath}
+import sourcecode.Line
 
 import mlscript.utils.*, shorthands.*
 import utils.*
@@ -1044,7 +1045,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
       (using Subst): (List[ParamList], Block) =
     (paramLists, returnedTerm(bodyTerm))
   
-  def reportAnnotations(target: Statement, annotations: Ls[Annot]): Unit =
+  def reportAnnotations(target: Statement, annotations: Ls[Annot])(using Line): Unit =
     annotations.foreach:
       case Annot.Untyped => ()
       case annot => raise:

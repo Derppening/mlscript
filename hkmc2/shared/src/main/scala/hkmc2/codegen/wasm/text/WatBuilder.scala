@@ -3,6 +3,7 @@ package codegen
 package wasm
 package text
 
+import sourcecode.Line
 import mlscript.utils.*, shorthands.*
 import hkmc2.utils.*
 
@@ -32,24 +33,7 @@ extension (instr: FoldedInstr)
   private def mnemonicPrefix: Opt[Str] =
     instr.mnemonic.split('.').optionUnless(_.size == 1).map(_.head)
 
-object FuncInfo:
-  def apply(
-      sym: BlockMemberSymbol,
-      typeIdx: TypeIdx,
-      params: Seq[Local -> Str],
-      nResults: Int,
-      locals: Seq[Local -> Str],
-      body: FoldedInstr
-  ): FuncInfo = new FuncInfo(
-    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
-    typeIdx,
-    params,
-    nResults,
-    locals,
-    body
-  )
-
-private final case class FuncInfo(
+class FuncInfo(
     val id: Opt[SymIdx],
     val typeIdx: TypeIdx,
     val params: Seq[Local -> Str],
@@ -57,6 +41,23 @@ private final case class FuncInfo(
     val locals: Seq[Local -> Str],
     val body: FoldedInstr
 ) extends ToWat:
+  
+  def this(
+      sym: BlockMemberSymbol,
+      typeIdx: TypeIdx,
+      params: Seq[Local -> Str],
+      nResults: Int,
+      locals: Seq[Local -> Str],
+      body: FoldedInstr
+  ) = this(
+    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
+    typeIdx,
+    params,
+    nResults,
+    locals,
+    body
+  )
+  
   def getSignatureType: SignatureType = SignatureType(
     params = params.map((_, varNme) => WasmParam(S(varNme), RefType.anyref)),
     results = Seq.fill(nResults)(Result(RefType.anyref))
@@ -106,12 +107,12 @@ object Ctx:
       case idx: CtxIdx => s"type index `${idx.toWat.toString}`"
       case sym: Symbol => s"symbol `sym.toString`"
 
-private final case class Ctx(
-    private val types: ArrayBuf[TypeInfo],
-    private val namedTypes: MutMap[Symbol, NumIdx],
-    private val funcs: ArrayBuf[FuncInfo],
-    private val namedFuncs: MutMap[Symbol, NumIdx],
-    private var locals: Ls[MutMap[Local, NumIdx]]
+class Ctx(
+    types: ArrayBuf[TypeInfo],
+    namedTypes: MutMap[Symbol, NumIdx],
+    funcs: ArrayBuf[FuncInfo],
+    namedFuncs: MutMap[Symbol, NumIdx],
+    var locals: Ls[MutMap[Local, NumIdx]],
 ) extends ToWat:
 
   import Ctx.prettyString
@@ -204,7 +205,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def warnExpr(warnMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
     warnExpr(warnMsg :: Nil)
 
-  def warnExpr(warnMsgs: Ls[Message -> Opt[Loc]])(using Ctx, Raise): Expr =
+  def warnExpr(warnMsgs: Ls[Message -> Opt[Loc]])(using Ctx, Raise)(using Line): Expr =
     raise(
       WarningReport(warnMsgs, source = Diagnostic.Source.Compilation)
     )
@@ -213,9 +214,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def errExpr(errMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
     errExpr(errMsg :: Nil)
 
-  def errExpr(errMsgs: Ls[Message -> Opt[Loc]])(using Ctx, Raise): Expr =
+  def errExpr(errMsgs: Ls[Message -> Opt[Loc]], extraInfo: => Opt[Any] = N)(using Ctx, Raise): Expr =
     raise(
-      ErrorReport(errMsgs, source = Diagnostic.Source.Compilation)
+      ErrorReport(errMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo)
     )
     unreachable
 
@@ -467,10 +468,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     ))
                 case clsLikeDefn: ClsLikeDefn =>
                   // Guard against unsupported features
-                  def warnUnimplExpr(cond: Str): Nothing = break(warnExpr(Ls(
-                    msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> clsLikeDefn.sym.toLoc,
-                    msg"Note: Block IR of definition is `${defn.toString}`" -> N
-                  )))
+                  def warnUnimplExpr(cond: Str): Nothing = break(errExpr(Ls(
+                    msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> clsLikeDefn.sym.toLoc
+                  ), extraInfo = S(defn.showAsTree)))
                   if clsLikeDefn.owner.nonEmpty then
                     break(warnUnimplExpr("owner.nonEmpty"))
                   if !(clsLikeDefn.k is syntax.Cls) then
@@ -633,7 +633,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
       locals = entryFnLocals.map(l => l -> scope.lookup_!(l, l.toLoc)),
-      entryFnExpr
+      body = entryFnExpr
     )
     ctx.addFunc(S(entrySym), entryFnInfo)
 
