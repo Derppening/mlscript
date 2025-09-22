@@ -3,7 +3,6 @@ package codegen
 package wasm
 package text
 
-import sourcecode.Line
 import mlscript.utils.*, shorthands.*
 import hkmc2.utils.*
 
@@ -20,6 +19,7 @@ import Value.Lam
 import scala.collection.Map
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 import scala.util.boundary, boundary.break
+import sourcecode.Line
 
 extension (doc: Document)
   private def surroundUnlessEmpty(
@@ -41,7 +41,7 @@ class FuncInfo(
     val locals: Seq[Local -> Str],
     val body: FoldedInstr
 ) extends ToWat:
-  
+
   def this(
       sym: BlockMemberSymbol,
       typeIdx: TypeIdx,
@@ -57,7 +57,7 @@ class FuncInfo(
     locals,
     body
   )
-  
+
   def getSignatureType: SignatureType = SignatureType(
     params = params.map((_, varNme) => WasmParam(S(varNme), RefType.anyref)),
     results = Seq.fill(nResults)(Result(RefType.anyref))
@@ -112,7 +112,7 @@ class Ctx(
     namedTypes: MutMap[Symbol, NumIdx],
     funcs: ArrayBuf[FuncInfo],
     namedFuncs: MutMap[Symbol, NumIdx],
-    var locals: Ls[MutMap[Local, NumIdx]],
+    var locals: Ls[MutMap[Local, NumIdx]]
 ) extends ToWat:
 
   import Ctx.prettyString
@@ -202,61 +202,62 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   type Context = Unit
   type Expr = FoldedInstr
 
-  def warnExpr(warnMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
-    warnExpr(warnMsg :: Nil)
-
-  def warnExpr(warnMsgs: Ls[Message -> Opt[Loc]])(using Ctx, Raise)(using Line): Expr =
-    raise(
-      WarningReport(warnMsgs, source = Diagnostic.Source.Compilation)
-    )
+  def warnExpr(warnMsgs: Ls[Message -> Opt[Loc]], extraInfo: Opt[Any] = N)(using
+      Ctx,
+      Raise
+  )(using Line): Expr =
+    raise(WarningReport(warnMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
     unreachable
 
-  def errExpr(errMsg: Message -> Opt[Loc])(using Ctx, Raise): Expr =
-    errExpr(errMsg :: Nil)
-
-  def errExpr(errMsgs: Ls[Message -> Opt[Loc]], extraInfo: => Opt[Any] = N)(using Ctx, Raise): Expr =
-    raise(
-      ErrorReport(errMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo)
-    )
+  def errExpr(errMsgs: Ls[Message -> Opt[Loc]], extraInfo: => Opt[Any] = N)(using
+      Ctx,
+      Raise
+  )(using Line): Expr =
+    raise(ErrorReport(errMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
     unreachable
 
   def getVar(l: Local, loc: Opt[Loc])(using Ctx, Raise, Scope): Expr = l match
     case ts: semantics.TermSymbol =>
-      warnExpr(Ls(
-        msg"WatBuilder::getVar for TermSymbol not implemented yet" -> l.toLoc,
-        msg"Note: Block IR of expression is `${l.toString}`" -> N
-      ))
+      errExpr(
+        Ls(msg"WatBuilder::getVar for TermSymbol not implemented yet" -> l.toLoc),
+        extraInfo = S(ts.toString)
+      )
     case ts: semantics.ModuleOrObjectSymbol if ts.asMod.isDefined =>
-      warnExpr(Ls(
-        msg"WatBuilder::getVar for ModuleOrObjectSymbol (`ts.asMod.isDefined`) not implemented yet" -> l.toLoc,
-        msg"Note: Block IR of expression is `${l.toString}`" -> N
-      ))
+      errExpr(
+        Ls(
+          msg"WatBuilder::getVar for ModuleOrObjectSymbol (`ts.asMod.isDefined`) not implemented yet" -> l.toLoc
+        ),
+        extraInfo = S(ts.toString)
+      )
     case ts: semantics.InnerSymbol =>
       if !ctx.containsLocal(l) then
-        return warnExpr(Ls(
-          msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" -> ts.toLoc,
-          msg"Note: Block IR of expression is `${ts.toString}`" -> N,
-          msg"Note: Scope is ${scope.toString}" -> N,
-          msg"Note: Locals is ${ctx.getLocals.toString}" -> N
-        ))
+        return errExpr(
+          Ls(
+            msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" -> ts.toLoc
+          ),
+          extraInfo = S(
+            s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nLocals: ${ctx.getLocals.toString}"
+          )
+        )
       local.get(LocalIdx(SymIdx(scope.findThis_!(ts))), RefType.anyref)
     case l =>
       if !ctx.containsLocal(l) then
-        return warnExpr(Ls(
-          msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc,
-          msg"Note: Block IR of expression is `${l.toString}`" -> N,
-          msg"Note: Scope is ${scope.toString}" -> N,
-          msg"Note: Locals is ${ctx.getLocals.toString}" -> N
-        ))
+        return errExpr(
+          Ls(
+            msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc
+          ),
+          extraInfo = S(
+            s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nLocals: ${ctx.getLocals.toString}"
+          )
+        )
       local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
 
   def argument(a: Arg)(using Ctx, Raise, Scope): Expr =
     if a.spread.nonEmpty then
-      warnExpr(Ls(
-        msg"WatBackend::argument for spread expression not implemented yet" -> a.value.toLoc,
-        msg"Note: Block IR of expression is `${a.toString}`" -> N
-      ))
-      unreachable
+      errExpr(
+        Ls(msg"WatBackend::argument for spread expression not implemented yet" -> a.value.toLoc),
+        extraInfo = S(a.showAsTree)
+      )
     else result(a.value)
 
   def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
@@ -264,10 +265,10 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   def subexpression(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
     case r: Value.Lam =>
-      warnExpr(Ls(
-        msg"WatBuilder::subexpression for Value.Lam not implemented yet" -> r.toLoc,
-        msg"Note: Block IR of expression is `${r.toString}`" -> N
-      ))
+      errExpr(
+        Ls(msg"WatBuilder::subexpression for Value.Lam not implemented yet" -> r.toLoc),
+        extraInfo = S(r.showAsTree)
+      )
     case r => result(r)
 
   def result(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
@@ -298,11 +299,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 case RefType(HeapType.I31, _) => i31.get(expr, true)
                 case I32Type => expr
                 case ty =>
-                  warnExpr(Ls(
-                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.toWat.toString}) not implemented yet" -> r.toLoc,
-                    msg"Note: Block IR of expression is `${r.toString}`" -> N
-                  ))
-                  unreachable
+                  errExpr(
+                    Ls(
+                      msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.toWat.toString}) not implemented yet" -> r.toLoc
+                    ),
+                    extraInfo = S(r.toString)
+                  )
 
             val lhsOp = castOperand(operand(lhs), "lhs")
             val rhsOp = castOperand(operand(rhs), "rhs")
@@ -322,9 +324,9 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               msg"Note: Block IR of expression is `${r.toString}`" -> N
             ))
       else
-        errExpr(
+        errExpr(Ls(
           msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
-        )
+        ))
     case Call(fun, args) =>
       val base = subexpression(fun)
       if base.exprType is UnreachableType then return base
@@ -381,7 +383,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr = t match
     case _: HandleBlock =>
       errExpr(
-        msg"This code requires effect handler instrumentation but was compiled without it." -> N
+        Ls(msg"This code requires effect handler instrumentation but was compiled without it." -> N)
       )
     case Assign(l, r, rst) =>
       val lExpr = getVar(l, l.toLoc)
@@ -468,9 +470,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     ))
                 case clsLikeDefn: ClsLikeDefn =>
                   // Guard against unsupported features
-                  def warnUnimplExpr(cond: Str): Nothing = break(errExpr(Ls(
-                    msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> clsLikeDefn.sym.toLoc
-                  ), extraInfo = S(defn.showAsTree)))
+                  def warnUnimplExpr(cond: Str): Nothing = break(errExpr(
+                    Ls(
+                      msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> clsLikeDefn.sym.toLoc
+                    ),
+                    extraInfo = S(defn.showAsTree)
+                  ))
                   if clsLikeDefn.owner.nonEmpty then
                     break(warnUnimplExpr("owner.nonEmpty"))
                   if !(clsLikeDefn.k is syntax.Cls) then
@@ -597,10 +602,10 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       resWat.exprType match
         case RefType(heapType, _) => heapType match
             case HeapType.Func =>
-              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+              errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case typeidx: TypeIdx
                 if ctx.getTypeInfo_!(typeidx).compType.isInstanceOf[FunctionType] =>
-              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+              errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case _ => ()
         case _ => ()
 
@@ -610,10 +615,10 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       resWat.exprType match
         case RefType(heapType, _) => heapType match
             case HeapType.Func =>
-              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+              errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case typeidx: TypeIdx
                 if ctx.getTypeInfo_!(typeidx).compType.isInstanceOf[FunctionType] =>
-              errExpr(msg"Returning function instances is not supported" -> res.toLoc)
+              errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case _ => ()
         case _ => ()
 

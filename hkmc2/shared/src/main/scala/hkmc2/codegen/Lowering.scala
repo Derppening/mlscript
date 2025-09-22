@@ -1045,7 +1045,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
       (using Subst): (List[ParamList], Block) =
     (paramLists, returnedTerm(bodyTerm))
   
-  def reportAnnotations(target: Statement, annotations: Ls[Annot])(using Line): Unit =
+  def reportAnnotations(target: Statement, annotations: Ls[Annot]): Unit =
     annotations.foreach:
       case Annot.Untyped => ()
       case annot => raise:
