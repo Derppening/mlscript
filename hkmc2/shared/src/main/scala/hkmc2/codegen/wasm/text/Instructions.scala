@@ -191,7 +191,7 @@ object Instructions:
       stackargs = Seq(ref, value),
       resultType = if value.exprType is UnreachableType then S(UnreachableType) else N
     )
-    
+
     def get(index: FieldIdx, ref: FoldedInstr, ty: WasmType): FoldedInstr = FoldedInstr(
       mnemonic = "struct.get",
       instrargs = Seq(ref.exprType.asInstanceOf[RefType].heapType, index),

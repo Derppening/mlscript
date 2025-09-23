@@ -350,6 +350,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         errExpr(Ls(
           msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
         ))
+
     case Call(fun, args) =>
       val base = subexpression(fun)
       if base.exprType is UnreachableType then return base
@@ -373,6 +374,28 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         operands = wasmArgs.toSeq,
         typeIdx = baseTypeIdx,
         funcType = baseTypeInfo.compType.asInstanceOf[FunctionType]
+      )
+
+    case sel @ Select(qual, id) =>
+      val qualRes = result(qual)
+      val selSym = sel.symbol getOrElse:
+        lastWords(s"Symbol for Select(...) expression must be resolved")
+      val selTrmSym = selSym match
+        case termSym: TermSymbol => termSym
+        case sym => lastWords(
+            s"Expected resolved Select(...) expression to be a TermSymbol, but got $sym (${sym.getClass.getName})"
+          )
+      val selOwner = selTrmSym.owner getOrElse:
+        lastWords(s"Expected resolved Select(...) expression `$selSym` to have an owner")
+      val selCls = selOwner.asBlkMember getOrElse:
+        lastWords(
+          s"Expected resolved class for Select(...) expression to be a BlockMemberSymbol, but got $selOwner (${selOwner.getClass.getName})"
+        )
+      val fieldidx = fieldSelect(selCls, selSym)
+      struct.get(
+        fieldidx,
+        ref = ref.cast(qualRes, RefType(ctx.getType_!(selCls), nullable = false)),
+        ty = RefType.anyref
       )
 
     case Instantiate(_, cls, as) =>
