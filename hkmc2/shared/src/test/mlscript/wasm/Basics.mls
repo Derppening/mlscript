@@ -239,35 +239,38 @@ foo(41)
 
 
 :wasm
+:ewat
 class Foo(val x)
 new Foo(0)
 //│ Wat:
 //│ (module
 //│   (type $Foo (struct (field $x (mut (ref null any)))))
-//│   (type $_0 (func (param (ref null any)) (result (ref $Foo))))
-//│   (type $_1 (func (result (ref null $Foo))))
-//│   (func $Foo::<constructor> (param (ref null any)) (result (ref $Foo)) 
-//│     (local (ref $Foo))
+//│   (type (func (param $x (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $Foo (type 1) (param $x (ref null any)) (result (ref null any))
+//│     (local $this (ref null any))
 //│     (block (result (ref $Foo))
-//│       (local.set 1
+//│       (local.set $this
 //│         (struct.new_default $Foo))
 //│       (block
 //│         (struct.set $Foo 0
-//│           (local.get 1)
-//│           (local.get 0))
+//│           (ref.cast (ref $Foo)
+//│             (local.get $this))
+//│           (local.get $x))
 //│         (nop))
 //│       (return
-//│         (local.get 1))))
-//│   (func $main (result (ref null $Foo)) 
-//│     (block (result (ref null $Foo))
+//│         (local.get $this))))
+//│   (export "Foo" (func $Foo))
+//│   (elem declare func $Foo)
+//│   (func $entry (type 2) (result (ref null any))
+//│     (local $Foo (ref null any))
+//│     (block (result (ref $Foo))
 //│       (nop)
-//│       (call $Foo::<constructor>
+//│       (call $Foo
 //│         (ref.i31
 //│           (i32.const 0)))))
-//│   (global $0 (mut (ref null any)) (ref.null any))
-//│   (export "main" (func $main))
-//│   (elem declare func $Foo::<constructor>)
-//│   (elem declare func $main))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
 //│ rwasm: Running
 //│ [Object: null prototype] {}
 

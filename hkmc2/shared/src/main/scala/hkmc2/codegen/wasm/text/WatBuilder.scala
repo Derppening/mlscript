@@ -104,7 +104,7 @@ object Ctx:
   extension (ref: CtxIdx | Symbol)
     private def prettyString: Str = ref match
       case idx: CtxIdx => s"type index `${idx.toWat.toString}`"
-      case sym: Symbol => s"symbol `sym.toString`"
+      case sym: Symbol => s"symbol `${sym.toString}`"
 
 class Ctx(
     types: ArrayBuf[TypeInfo],
@@ -270,7 +270,21 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case r => result(r)
 
+  def fieldSelect(thisSym: BlockMemberSymbol, sym: BlockMemberSymbol)(using Ctx, Raise): FieldIdx =
+    val structInfo = ctx.getTypeInfo_!(thisSym)
+    val symToField = structInfo.compType match
+      case ty: StructType => ty.symToField
+      case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.compType.toWat}")
+    val fieldIdx = symToField.get.unapply(sym) match
+      case S(idx) => idx
+      case N => lastWords(
+          s"Missing field `${sym.toString}` in struct `${thisSym.toString}` with type `${structInfo.toWat.toString}`"
+        )
+    FieldIdx(fieldIdx)
+
   def result(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
+    case Value.This(sym) =>
+      local.get(LocalIdx(SymIdx(scope.findThis_!(sym))), RefType.anyref)
     case Value.Lit(BoolLit(value)) =>
       ref.i31(i32.const(if value then 1 else 0))
     case Value.Lit(IntLit(value)) =>
@@ -428,6 +442,36 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case Define(defn, rst) =>
       def mkThis(sym: InnerSymbol): Expr = result(Value.This(sym))
       defn match
+        case ValDefn(tsym, sym, p) =>
+          val sym = defn.sym
+          // * Currently we allow `val` outside of object/module scopes,
+          // * in which case it has no owner and is just a glorified local variable rather than a field
+          tsym.owner match
+            case N => errExpr(
+                Ls(
+                  msg"WatBuilder::returningTerm for ValDefn(...) where `tsym.owner.isEmpty` not implemented yet" -> sym.toLoc
+                ),
+                extraInfo = S(
+                  s"Block IR of `defn`: ${defn.toString}\nBlock IR of `defn.tsym`: ${tsym.toString}"
+                )
+              )
+            case S(owner) =>
+              // TODO(Derppening): Add type tracking and refinement for locals
+              val ownerBlkMem = owner.asBlkMember.get
+              val rstWat = returningTerm(rst)
+              Instructions.block(
+                label = N,
+                children = Seq(
+                  struct.set(
+                    fieldSelect(ownerBlkMem, sym),
+                    ref.cast(mkThis(owner), RefType(ctx.getType_!(ownerBlkMem), nullable = false)),
+                    result(p)
+                  ),
+                  rstWat
+                ),
+                resultTypes = rstWat.resultTypes.map(r => Result(r.asInstanceOf[ValType]))
+              )
+
         case defn: (FunDefn | ClsLikeDefn) =>
           val outerScope = scope
           val (thisProxy, res) = scope.nestRebindThis(
@@ -511,9 +555,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
                   val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
                   val ctorParams = clsParams.map: p =>
+                    ctx.addLocal(p)
                     p -> scope.allocateName(p)
                   val ctorAuxParams = clsLikeDefn.auxParams.map: ps =>
                     ps.params.map: p =>
+                      ctx.addLocal(p.sym)
                       p -> scope.allocateName(p.sym)
 
                   val typeref = ctx.addType(
@@ -525,7 +571,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                           (clsLikeDefn.publicFields.map(
                             _._2
                           ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
-                            f -> (NumIdx(index) -> Field(
+                            f.asBlkMember.get -> (NumIdx(index) -> Field(
                               RefType.anyref,
                               mutable = true,
                               id = S(f.nme)
@@ -544,17 +590,12 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
                   ctx.addLocal(clsLikeDefn.isym)
                   val thisVar = getVar(clsLikeDefn.isym, N).instrargs(0).asInstanceOf[LocalIdx]
+                  val (ctorWat, ctorLocals) = block(clsLikeDefn.ctor)
                   val ctorCode = Instructions.block(
                     label = N,
                     Seq(
                       local.set(thisVar, struct.new_default(typeref)),
-                      // TODO(Derppening): block(ctor)
-                      warnExpr(
-                        Ls(
-                          msg"Constructor body generation not implemented yet" -> clsLikeDefn.sym.toLoc
-                        ),
-                        extraInfo = S(s"Constructor Body:\n${clsLikeDefn.ctor.showAsTree}")
-                      ),
+                      ctorWat,
                       `return`(S(local.get(thisVar, RefType(typeref, nullable = false))))
                     ),
                     resultTypes = Seq(Result(RefType(typeref, nullable = false)))
@@ -583,7 +624,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       typeIdx = funcTy,
                       params = ctorParams,
                       nResults = ctorCode.exprType.toSeq.length,
-                      locals = Seq(clsLikeDefn.isym -> scope.findThis_!(clsLikeDefn.isym)),
+                      locals =
+                        (clsLikeDefn.isym -> scope.findThis_!(clsLikeDefn.isym)) +: ctorLocals.map:
+                          l =>
+                            l -> scope.lookup_!(l, l.toLoc)
+                      ,
                       body = ctorAux
                     )
                   )
@@ -618,13 +663,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   case ty => Seq(Result(ty.asInstanceOf[ValType]))
               )
 
-        case defn =>
-          errExpr(
-            Ls(
-              msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc
-            ),
-            extraInfo = S(defn.toString)
-          )
     case Return(res, true) =>
       val resWat = result(res)
       resWat.exprType match
@@ -651,6 +689,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         case _ => ()
 
       `return`(S(resWat))
+
+    case End(_) => nop
+
     case t =>
       errExpr(
         Ls(

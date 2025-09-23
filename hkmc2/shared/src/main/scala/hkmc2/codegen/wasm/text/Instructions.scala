@@ -184,6 +184,13 @@ object Instructions:
       stackargs = Seq.empty,
       resultType = S(RefType(ty, nullable = false))
     )
+
+    def set(index: FieldIdx, ref: FoldedInstr, value: FoldedInstr): FoldedInstr = FoldedInstr(
+      mnemonic = "struct.set",
+      instrargs = Seq(ref.exprType.asInstanceOf[RefType].heapType, index),
+      stackargs = Seq(ref, value),
+      resultType = if value.exprType is UnreachableType then S(UnreachableType) else N
+    )
   end struct
 
 end Instructions
