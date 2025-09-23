@@ -270,15 +270,15 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case r => result(r)
 
-  def fieldSelect(thisSym: BlockMemberSymbol, sym: BlockMemberSymbol)(using Ctx, Raise): FieldIdx =
+  def fieldSelect(thisSym: BlockMemberSymbol, sym: FieldSymbol)(using Ctx, Raise): FieldIdx =
     val structInfo = ctx.getTypeInfo_!(thisSym)
     val symToField = structInfo.compType match
       case ty: StructType => ty.symToField
       case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.compType.toWat}")
-    val fieldIdx = symToField.get.unapply(sym) match
-      case S(idx) => idx
+    val fieldIdx = symToField.get.find((field, idx) => field.nme == sym.nme) match
+      case S((_, idx)) => idx
       case N => lastWords(
-          s"Missing field `${sym.toString}` in struct `${thisSym.toString}` with type `${structInfo.toWat.toString}`"
+          s"Missing field `${sym.toString}` in struct `${thisSym.toString}` with type `${structInfo.toWat.toString}`}"
         )
     FieldIdx(fieldIdx)
 
@@ -577,7 +577,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                           (clsLikeDefn.publicFields.map(
                             _._2
                           ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
-                            f.asBlkMember.get -> (NumIdx(index) -> Field(
+                            f -> (NumIdx(index) -> Field(
                               RefType.anyref,
                               mutable = true,
                               id = S(f.nme)
