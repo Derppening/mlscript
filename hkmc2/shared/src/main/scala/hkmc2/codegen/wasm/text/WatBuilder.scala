@@ -284,7 +284,14 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   def result(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
     case Value.This(sym) =>
-      local.get(LocalIdx(SymIdx(scope.findThis_!(sym))), RefType.anyref)
+      // TODO(Derppening): Add type tracking and refinement for locals, remove the `ref.cast`
+      ref.cast(
+        local.get(LocalIdx(SymIdx(scope.findThis_!(sym))), RefType.anyref),
+        RefType(
+          ctx.getType_!(sym.asBlkMember.get),
+          nullable = false
+        )
+      )
     case Value.Lit(BoolLit(value)) =>
       ref.i31(i32.const(if value then 1 else 0))
     case Value.Lit(IntLit(value)) =>
@@ -456,7 +463,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 )
               )
             case S(owner) =>
-              // TODO(Derppening): Add type tracking and refinement for locals
               val ownerBlkMem = owner.asBlkMember.get
               val rstWat = returningTerm(rst)
               Instructions.block(
@@ -464,7 +470,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 children = Seq(
                   struct.set(
                     fieldSelect(ownerBlkMem, sym),
-                    ref.cast(mkThis(owner), RefType(ctx.getType_!(ownerBlkMem), nullable = false)),
+                    mkThis(owner),
                     result(p)
                   ),
                   rstWat
