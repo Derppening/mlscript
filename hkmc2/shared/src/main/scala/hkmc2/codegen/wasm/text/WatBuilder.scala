@@ -76,16 +76,15 @@ class FuncInfo(
       }"""
 end FuncInfo
 
-object TypeInfo:
-  def apply(sym: BlockMemberSymbol, compType: CompType): TypeInfo = new TypeInfo(
-    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
-    compType
-  )
-
-private final case class TypeInfo(
+class TypeInfo(
     val id: Opt[SymIdx],
     val compType: CompType
 ) extends ToWat:
+
+  def this(sym: BlockMemberSymbol, compType: CompType) = this(
+    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
+    compType
+  )
 
   def toWat: Document =
     doc"(type ${id.fold(doc"")(_.toWat).surroundUnlessEmpty(postfix = doc" ")}${compType.toWat})"
@@ -195,7 +194,7 @@ class Ctx(
 
 end Ctx
 
-final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
+class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   import Ctx.ctx
   import Instructions.*
 
@@ -313,16 +312,19 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               case (I32Type, I32Type) =>
                 ref.i31(i32.add(lhsOp, rhsOp))
               case (lhsType, rhsType) =>
-                warnExpr(Ls(
-                  msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.toWat.toString}, ${rhsType.toWat.toString}) not implemented yet" -> r.toLoc,
-                  msg"Note: Block IR of expression is `${r.toString}`" -> N
-                ))
-                unreachable
+                errExpr(
+                  Ls(
+                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.toWat.toString}, ${rhsType.toWat.toString}) not implemented yet" -> r.toLoc
+                  ),
+                  extraInfo = S(r.toString)
+                )
           case lNme =>
-            warnExpr(Ls(
-              msg"WatBuilder::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> r.toLoc,
-              msg"Note: Block IR of expression is `${r.toString}`" -> N
-            ))
+            errExpr(
+              Ls(
+                msg"WatBuilder::result for binary builtin symbol '${lNme.toString}' not implemented yet" -> r.toLoc
+              ),
+              extraInfo = S(r.toString)
+            )
       else
         errExpr(Ls(
           msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
@@ -334,12 +336,15 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
       val baseTypeIdx = base.exprType match
         case RefType(idx: TypeIdx, _) => idx
-        case ty => return errExpr(Ls(
-            msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>)` type" -> r.toLoc,
-            msg"Note: Block IR of `fun` expression is `${fun.toString}`" -> N,
-            msg"Note: WAT of `fun` expression is `${base.toWat.toString}`" -> N,
-            msg"      ... which has an expression type of `${ty.toWat.toString}`" -> N
-          ))
+        case ty =>
+          return errExpr(
+            Ls(
+              msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>)` type" -> r.toLoc
+            ),
+            extraInfo = S(
+              s"Block IR: `${fun.toString}`\nCompiled WAT: `${base.toWat.toString}`\n... which has type `${ty.toWat.toString}`"
+            )
+          )
       val baseTypeInfo = ctx.getTypeInfo_!(baseTypeIdx)
 
       call_ref(
@@ -352,16 +357,20 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case Instantiate(_, cls, as) =>
       val ctorClsPath = cls match
         case sel: Select => sel
-        case cls => return warnExpr(Ls(
-            msg"WatBuilder::result for Instantiate(...) where `cls` is not a Select(...) path not implemented yet " -> cls.toLoc,
-            msg"Note: Block IR of `cls` expression is `${cls.toString}`" -> N
-          ))
+        case cls => return errExpr(
+            Ls(
+              msg"WatBuilder::result for Instantiate(...) where `cls` is not a Select(...) path not implemented yet " -> cls.toLoc
+            ),
+            extraInfo = S(s"Block IR of `cls` expression: ${cls.toString}")
+          )
       val ctorClsSym = ctorClsPath.symbol match
         case S(sym) => sym
-        case N => return errExpr(Ls(
-            msg"Class path for an Instantiate(...) expression must be resolved" -> cls.toLoc,
-            msg"Note: Block IR of `cls` expression is `${cls.toString}`" -> N
-          ))
+        case N => return errExpr(
+            Ls(
+              msg"Class path for an Instantiate(...) expression must be resolved" -> cls.toLoc
+            ),
+            extraInfo = S(s"Block IR of `cls` expression: ${cls.toString}")
+          )
       val ctorClsBlkSym = ctorClsSym.asBlkMember match
         case S(sym) => sym
         case N => lastWords(
@@ -375,10 +384,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       call(funcidx = ctorFuncIdx, as.map(argument), Seq(Result(objType.asInstanceOf[ValType])))
 
     case r =>
-      warnExpr(Ls(
-        msg"WatBackend::result for expression not implemented yet" -> r.toLoc,
-        msg"Note: Block IR of expression is `${r.toString}`" -> N
-      ))
+      errExpr(
+        Ls(
+          msg"WatBackend::result for expression not implemented yet" -> r.toLoc
+        ),
+        extraInfo = S(s"Block IR: `${r.toString}`")
+      )
 
   def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr = t match
     case _: HandleBlock =>
@@ -392,10 +403,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val idx = lExpr.instrargs(0).asInstanceOf[LocalIdx]
       val assignExpr = lExpr.mnemonicPrefix match
         case S("global") =>
-          warnExpr(Ls(
-            msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> l.toLoc,
-            msg"Note: Block IR of expression is `${t.toString}`" -> N
-          ))
+          errExpr(
+            Ls(
+              msg"WatBuilder::returningTerm for Assign(...) to global variable not implemented yet" -> l.toLoc
+            ),
+            extraInfo = S(s"Block IR: ${t.showAsTree}")
+          )
         case S("local") => local.set(idx, rExpr)
         case _ =>
           lastWords(
@@ -429,10 +442,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   lastWords("cannot generate function with no parameter list")
                 case FunDefn(own, sym, ps :: pss, bod) =>
                   if own.nonEmpty then
-                    break(warnExpr(Ls(
-                      msg"WatBuilder::returningTerm for Define(...) with `owner.nonEmpty` not implemented yet" -> defn.sym.toLoc,
-                      msg"Note: Block IR of definition is `${defn.toString}`" -> N
-                    )))
+                    break(errExpr(
+                      Ls(
+                        msg"WatBuilder::returningTerm for Define(...) with `owner.nonEmpty` not implemented yet" -> defn.sym.toLoc
+                      ),
+                      extraInfo = S(defn.showAsTree)
+                    ))
 
                   val result = pss.foldRight(bod):
                     case (ps, block) =>
@@ -464,33 +479,35 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
                     nop
                   else
-                    warnExpr(Ls(
-                      msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> defn.sym.toLoc,
-                      msg"Note: Block IR of definition is `${defn.toString}`" -> N
-                    ))
+                    errExpr(
+                      Ls(
+                        msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" -> defn.sym.toLoc
+                      ),
+                      extraInfo = S(defn.showAsTree)
+                    )
                 case clsLikeDefn: ClsLikeDefn =>
                   // Guard against unsupported features
-                  def warnUnimplExpr(cond: Str): Nothing = break(errExpr(
+                  def errUnimplExpr(cond: Str): Nothing = break(errExpr(
                     Ls(
                       msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" -> clsLikeDefn.sym.toLoc
                     ),
                     extraInfo = S(defn.showAsTree)
                   ))
                   if clsLikeDefn.owner.nonEmpty then
-                    break(warnUnimplExpr("owner.nonEmpty"))
+                    break(errUnimplExpr("owner.nonEmpty"))
                   if !(clsLikeDefn.k is syntax.Cls) then
-                    break(warnUnimplExpr("!(k is Cls)"))
+                    break(errUnimplExpr("!(k is Cls)"))
                   if clsLikeDefn.auxParams.nonEmpty then
-                    break(warnUnimplExpr("auxParams.nonEmpty"))
+                    break(errUnimplExpr("auxParams.nonEmpty"))
                   if clsLikeDefn.parentPath.nonEmpty then
-                    break(warnUnimplExpr("parentPath.nonEmpty"))
+                    break(errUnimplExpr("parentPath.nonEmpty"))
                   if clsLikeDefn.methods.nonEmpty then
-                    break(warnUnimplExpr("methods.nonEmpty"))
+                    break(errUnimplExpr("methods.nonEmpty"))
                   clsLikeDefn.preCtor match
                     case End(_) => ()
-                    case _ => break(warnUnimplExpr("preCtor is not End"))
+                    case _ => break(errUnimplExpr("preCtor is not End"))
                   if clsLikeDefn.companion.isDefined then
-                    break(warnUnimplExpr("companion.isDefined"))
+                    break(errUnimplExpr("companion.isDefined"))
 
                   val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
                   val ctorParams = clsParams.map: p =>
@@ -532,7 +549,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     Seq(
                       local.set(thisVar, struct.new_default(typeref)),
                       // TODO(Derppening): block(ctor)
-                      nop,
+                      warnExpr(
+                        Ls(
+                          msg"Constructor body generation not implemented yet" -> clsLikeDefn.sym.toLoc
+                        ),
+                        extraInfo = S(s"Constructor Body:\n${clsLikeDefn.ctor.showAsTree}")
+                      ),
                       `return`(S(local.get(thisVar, RefType(typeref, nullable = false))))
                     ),
                     resultTypes = Seq(Result(RefType(typeref, nullable = false)))
@@ -541,7 +563,7 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val ctorAux = if newCtorAuxParams.isEmpty then
                     ctorCode
                   else
-                    break(warnUnimplExpr("newCtorAuxParams.nonEmpty"))
+                    break(errUnimplExpr("newCtorAuxParams.nonEmpty"))
 
                   val funcTy = ctx.addType(
                     sym = N,
@@ -569,20 +591,24 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   nop
 
                 case defn =>
-                  warnExpr(Ls(
-                    msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc,
-                    msg"Note: Block IR of definition is `${defn.toString}`" -> N
-                  ))
+                  errExpr(
+                    Ls(
+                      msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc
+                    ),
+                    extraInfo = S(defn.showAsTree)
+                  )
           end val
 
           val rstBlk = returningTerm(rst)
           thisProxy match
             case S(proxy) if !scope.thisProxyDefined =>
               scope.thisProxyDefined = true
-              warnExpr(Ls(
-                msg"WatBuilder::returningTerm for Define(...) where `!scope.thisProxyDefined` not implemented yet" -> defn.sym.toLoc,
-                msg"Note: Block IR of definition is `${defn.toString}`" -> N
-              ))
+              errExpr(
+                Ls(
+                  msg"WatBuilder::returningTerm for Define(...) where `!scope.thisProxyDefined` not implemented yet" -> defn.sym.toLoc
+                ),
+                extraInfo = S(defn.showAsTree)
+              )
             case _ => Instructions.block(
                 label = N,
                 children = Seq(res, rstBlk),
@@ -593,10 +619,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               )
 
         case defn =>
-          warnExpr(Ls(
-            msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc,
-            msg"Note: Block IR of expression is `${t.toString}`" -> N
-          ))
+          errExpr(
+            Ls(
+              msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc
+            ),
+            extraInfo = S(defn.toString)
+          )
     case Return(res, true) =>
       val resWat = result(res)
       resWat.exprType match
@@ -624,10 +652,12 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
       `return`(S(resWat))
     case t =>
-      warnExpr(Ls(
-        msg"WatBuilder::returningTerm for expression not implemented yet" -> N,
-        msg"Note: Block IR of expression is `${t.toString}`" -> N
-      ))
+      errExpr(
+        Ls(
+          msg"WatBuilder::returningTerm for expression not implemented yet" -> N
+        ),
+        extraInfo = S(t.showAsTree)
+      )
 
   def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: os.Path)(using
       Raise,
@@ -635,15 +665,17 @@ final class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   ): (Document, Str) =
     for imprt <- p.imports do
       raise(
-        WarningReport(
+        ErrorReport(
           msg"Import of symbol `${imprt._2}` not implemented yet" -> imprt._1.toLoc :: Nil,
+          extraInfo = S(imprt),
           source = Diagnostic.Source.Compilation
         )
       )
     exprt.foreach: exprt =>
       raise(
-        WarningReport(
+        ErrorReport(
           msg"Export of symbol `${exprt.nme}` not implemented yet" -> exprt.toLoc :: Nil,
+          extraInfo = S(exprt),
           source = Diagnostic.Source.Compilation
         )
       )
