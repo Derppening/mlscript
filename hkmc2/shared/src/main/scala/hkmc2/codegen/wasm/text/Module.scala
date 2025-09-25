@@ -17,12 +17,7 @@ trait ToWat:
 end ToWat
 
 /** Abstract base class for all Wasm types. */
-abstract class WasmType extends Type, ToWat:
-  def toSeq: Seq[WasmType] = this match
-    case MultiValueType(types) => types
-    case NoneType => Seq()
-    case ty => Seq(ty)
-end WasmType
+abstract class WasmType extends Type, ToWat
 
 private case object NoneType extends WasmType:
   def toWat: Document = throw UnsupportedOperationException(
@@ -49,11 +44,6 @@ private case object UnreachableType extends WasmType:
     s"${toString} is a compiler-internal type and cannot be converted to WAT"
   )
 end UnreachableType
-private case class MultiValueType(types: Seq[WasmType]) extends WasmType:
-  def toWat: Document = throw UnsupportedOperationException(
-    s"${toString} is a compiler-internal type and cannot be converted to WAT"
-  )
-end MultiValueType
 
 type NumType = I32Type.type | I64Type.type | F32Type.type | F64Type.type
 type VecType = V128Type.type
@@ -115,10 +105,6 @@ object HeapType:
   case object NoFunc extends ToWat:
     def toWat: Document = doc"nofunc"
   end NoFunc
-
-/** Abstract base class for all Wasm heap types. */
-// abstract class HeapType extends ToWat
-
 type ValType = NumType | VecType | RefType
 
 case class Param(id: Opt[Str], valtype: ValType) extends ToWat:
@@ -130,21 +116,12 @@ case class Result(valtype: ValType) extends ToWat:
   def toWat: Document = doc"(result ${valtype.toWat})"
 end Result
 
-object SignatureType:
-  def apply(params: WasmType, results: WasmType): SignatureType =
-    new SignatureType(
-      params = params.toSeq.map(p => Param(N, p.asInstanceOf[ValType])),
-      results = results.toSeq.map(r => Result(r.asInstanceOf[ValType]))
-    )
-
 /** A type representing a function signature. */
 case class SignatureType(params: Seq[Param], results: Seq[Result]) extends ToWat:
   def toWat: Document = (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
 end SignatureType
 
 object FunctionType:
-  def apply(params: WasmType, results: WasmType): FunctionType =
-    new FunctionType(SignatureType(params, results))
   def apply(params: Seq[Param], results: Seq[Result]): FunctionType =
     new FunctionType(SignatureType(params, results))
 
@@ -181,20 +158,10 @@ case class Field(
       })"
 end Field
 
-object StructType:
-  def apply(fields: Map[FieldSymbol, NumIdx -> Field]): StructType = new StructType(
-    fields.values.toSeq.sortBy(_._1.index).map(_._2),
-    S(fields.view.mapValues(_._1).toMap)
-  )
-
-  @deprecated
-  def apply(fields: Seq[Field]): StructType = new StructType(fields, N)
-
 /** A type representing a structure type. */
-case class StructType private (fields: Seq[Field], symToField: Opt[Map[FieldSymbol, NumIdx]])
-    extends ToWat:
+case class StructType(fields: Map[FieldSymbol, NumIdx -> Field]) extends ToWat:
 
-  def fieldSeq: Seq[Field] = fields
+  def fieldSeq: Seq[Field] = fields.values.toSeq.sortBy(_._1.index).map(_._2)
 
   def toWat: Document =
     doc"(struct${fieldSeq.map(_.toWat).mkDocument(doc" ").optionUnless(_.isEmpty).fold(doc"")(f =>
@@ -216,8 +183,7 @@ type AbsHeapType =
     | HeapType.None.type
     | HeapType.NoExt.type
     | HeapType.NoFunc.type
-// TODO(Derppening): Remove CompType from HeapType once WatBackend is removed
-type HeapType = AbsHeapType | CompType | TypeIdx
+type HeapType = AbsHeapType | TypeIdx
 
 abstract sealed class Index extends ToWat
 
@@ -253,9 +219,6 @@ abstract sealed class Instruction extends ToWat:
    * `Seq(42)`.
    */
   val instrargs: Seq[Any]
-
-  /** The result type of this expression. */
-  def exprType: WasmType
 end Instruction
 
 /** A WebAssembly stack instruction. */
@@ -275,17 +238,6 @@ object FoldedInstr:
    * instructions.
    */
   val unsupportedToStackMnemonics = Set("if", "then", "else")
-
-  @deprecated(
-    "Use the overload with Opt[WasmType] or Seq[WasmType] to explicitly handle multi-value types"
-  )
-  def apply(
-      mnemonic: Str,
-      instrargs: Seq[ToWat | Document],
-      stackargs: Seq[Expr],
-      exprType: WasmType
-  ): FoldedInstr =
-    new FoldedInstr(mnemonic, instrargs, stackargs, exprType.toSeq)
 
   def apply(
       mnemonic: Str,
@@ -308,30 +260,14 @@ case class FoldedInstr(
     stackargs: Seq[Expr],
     val resultTypes: Seq[WasmType]
 ) extends Instruction:
-  /** Converts this folded instruction into a sequence of stack instructions. */
-  def toStack: Ls[StackInstr] =
-    if FoldedInstr.unsupportedToStackMnemonics contains mnemonic then
-      TODO(
-        s"Lowering of `${mnemonic}` to stack instruction not implemented"
-      )
 
-    stackargs
-      .flatMap: arg =>
-        arg match
-          case stackInstrs: Ls[StackInstr] => stackInstrs
-          case foldedInstr: Opt[FoldedInstr] =>
-            foldedInstr.map(_.toStack).getOrElse(Ls())
-      .toList :+ StackInstr(mnemonic, instrargs, exprType)
+  def resultType: Opt[WasmType] = resultTypes.length match
+    case 0 => N
+    case 1 => S(resultTypes.head)
+    case _ => lastWords(s"resultType_! called on instruction with multi-value result type: $this")
 
-  def exprType = resultTypes match
-    case Seq() => NoneType
-    case Seq(ty) => ty
-    case _ => MultiValueType(resultTypes)
-
-  def resultType_! = resultTypes match
-    case Seq() => N
-    case Seq(ty) => S(ty)
-    case _ => lastWords(s"exptype_! called on instruction with multi-value result type: $this")
+  def `resultType_!`: WasmType = resultType.getOrElse:
+    lastWords(s"resultType_! called on instruction with a non-unique result type: $this")
 
   def toWat: Document = doc"($mnemonic${
       instrargs

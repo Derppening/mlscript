@@ -16,7 +16,9 @@ object Instructions:
     FoldedInstr(
       mnemonic = "block",
       instrargs =
-        labelWat.toSeq ++ resultTypes.map(resTy => SignatureType(NoneType, resTy.valtype)),
+        labelWat.toSeq ++ resultTypes.map(resTy =>
+          SignatureType(params = Seq.empty, results = Seq(resTy))
+        ),
       stackargs = children.map(S(_)),
       resultTypes = resultTypes.map(_.valtype)
     )
@@ -27,8 +29,9 @@ object Instructions:
       ifFalse: Opt[FoldedInstr]
   ): FoldedInstr =
     // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
+    // TODO(Derppening): Stop propagation of UnreachableType
     val resultTypes =
-      (condition.resultType_!, ifTrue.resultTypes, ifFalse.map(_.resultTypes)) match
+      (condition.resultType, ifTrue.resultTypes, ifFalse.map(_.resultTypes)) match
         case (S(UnreachableType), _, _) => Seq(UnreachableType)
         case (_, thenTy, elseTy) if thenTy == elseTy => thenTy
         case (_, thenTy, S(Seq(UnreachableType))) => thenTy
@@ -51,7 +54,9 @@ object Instructions:
 
     FoldedInstr(
       mnemonic = "if",
-      instrargs = resultTypes.map(SignatureType(NoneType, _).toWat),
+      instrargs = resultTypes.map(resTy =>
+        SignatureType(params = Seq.empty, results = Seq(Result(resTy.asInstanceOf[ValType]))).toWat
+      ),
       stackargs = Seq(S(condition), S(thenInstr)) ++ elseInstr.map(S(_)).toSeq,
       resultTypes
     )
@@ -60,12 +65,13 @@ object Instructions:
       funcidx: FuncIdx,
       operands: Seq[FoldedInstr],
       returnTypes: Seq[Result]
-  ): FoldedInstr = FoldedInstr(
-    mnemonic = "call",
-    instrargs = Seq(funcidx.toWat),
-    stackargs = operands.map(S(_)),
-    resultTypes = returnTypes.map(_.valtype)
-  )
+  ): FoldedInstr = 
+    FoldedInstr(
+      mnemonic = "call",
+      instrargs = Seq(funcidx.toWat),
+      stackargs = operands.map(S(_)),
+      resultTypes = returnTypes.map(_.valtype)
+    )
 
   def call_ref(
       target: FoldedInstr,
@@ -113,7 +119,7 @@ object Instructions:
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
       resultType = S(
-        (lhs.exprType, rhs.exprType) match
+        (lhs.resultType, rhs.resultType) match
           case (UnreachableType, _) | (_, UnreachableType) => UnreachableType
           case _ => I32Type
       )
@@ -132,21 +138,22 @@ object Instructions:
       mnemonic = "ref.i31",
       instrargs = Seq.empty,
       stackargs = Seq(value),
-      resultType = S(if value.exprType is UnreachableType then UnreachableType else RefType.i31ref)
+      resultType =
+        S(if value.resultType is UnreachableType then UnreachableType else RefType.i31ref)
     )
 
     def test(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.test",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(value),
-      resultType = S(if value.exprType is UnreachableType then UnreachableType else I32Type)
+      resultType = S(if value.resultType is UnreachableType then UnreachableType else I32Type)
     )
 
     def cast(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.cast",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(value),
-      resultType = S(if value.exprType is UnreachableType then UnreachableType else castType)
+      resultType = S(if value.resultType is UnreachableType then UnreachableType else castType)
     )
   end ref
 
@@ -155,7 +162,7 @@ object Instructions:
       mnemonic = s"i31.get_${if signed then 's' else 'u'}",
       instrargs = Seq.empty,
       stackargs = Seq(i31),
-      resultType = S(if i31.exprType is UnreachableType then UnreachableType else I32Type)
+      resultType = S(if i31.resultType is UnreachableType then UnreachableType else I32Type)
     )
 
     def get_s(i31: FoldedInstr): FoldedInstr = get(i31, true)
@@ -173,7 +180,7 @@ object Instructions:
       mnemonic = "local.set",
       instrargs = Seq(index),
       stackargs = Seq(value),
-      resultType = if value.exprType is UnreachableType then S(UnreachableType) else N
+      resultType = if value.resultType is UnreachableType then S(UnreachableType) else N
     )
   end local
 
@@ -187,16 +194,16 @@ object Instructions:
 
     def set(index: FieldIdx, ref: FoldedInstr, value: FoldedInstr): FoldedInstr = FoldedInstr(
       mnemonic = "struct.set",
-      instrargs = Seq(ref.exprType.asInstanceOf[RefType].heapType, index),
+      instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref, value),
-      resultType = if value.exprType is UnreachableType then S(UnreachableType) else N
+      resultType = if value.resultType is UnreachableType then S(UnreachableType) else N
     )
 
     def get(index: FieldIdx, ref: FoldedInstr, ty: WasmType): FoldedInstr = FoldedInstr(
       mnemonic = "struct.get",
-      instrargs = Seq(ref.exprType.asInstanceOf[RefType].heapType, index),
+      instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref),
-      resultType = S(if ref.exprType is UnreachableType then UnreachableType else ty)
+      resultType = S(if ref.resultType is UnreachableType then UnreachableType else ty)
     )
 
   end struct

@@ -273,14 +273,16 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def fieldSelect(thisSym: BlockMemberSymbol, sym: FieldSymbol)(using Ctx, Raise): FieldIdx =
     val structInfo = ctx.getTypeInfo_!(thisSym)
     val symToField = structInfo.compType match
-      case ty: StructType => ty.symToField
+      case ty: StructType => ty.fields
       case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.compType.toWat}")
-    val fieldIdx = symToField.get.get(sym).orElse:
-      // Workaround: TermSymbols are not correctly resolved, so match the fields by name instead
-      sym match
-        case trmSym: TermSymbol if trmSym.owner.exists(_.asBlkMember.get == thisSym) =>
-          symToField.get.find(_._1.nme == sym.nme).map(_._2)
-        case _ => N
+    val fieldIdx = symToField.get(sym)
+      .orElse:
+        // Workaround: TermSymbols are not correctly resolved, so match the fields by name instead
+        sym match
+          case trmSym: TermSymbol if trmSym.owner.flatMap(_.asBlkMember).exists(_ == thisSym) =>
+            symToField.find((fieldSym, _) => fieldSym.nme == sym.nme).map((_, v) => v)
+          case _ => N
+      .map((fieldidx, _) => fieldidx)
     FieldIdx(
       fieldIdx getOrElse:
         lastWords(
@@ -315,19 +317,19 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           case "+" =>
             // TODO(Derppening): Refactor to lower to `Call(plus_impl, ...)`
             def castOperand(expr: FoldedInstr, opSide: Str): FoldedInstr =
-              expr.exprType match
-                case RefType(HeapType.Any, _) => `if`(
+              expr.resultType match
+                case S(RefType(HeapType.Any, _)) => `if`(
                     ref.test(expr, RefType.i31ref),
                     ifTrue =
                       castOperand(ref.cast(expr, RefType.i31ref), opSide),
                     ifFalse = S(unreachable)
                   )
-                case RefType(HeapType.I31, _) => i31.get(expr, true)
-                case I32Type => expr
+                case S(RefType(HeapType.I31, _)) => i31.get(expr, true)
+                case S(I32Type) => expr
                 case ty =>
                   errExpr(
                     Ls(
-                      msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.toWat.toString}) not implemented yet" -> r.toLoc
+                      msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.fold("(none)")(_.toWat.toString)}) not implemented yet" -> r.toLoc
                     ),
                     extraInfo = S(r.toString)
                   )
@@ -335,13 +337,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             val lhsOp = castOperand(operand(lhs), "lhs")
             val rhsOp = castOperand(operand(rhs), "rhs")
 
-            (lhsOp.exprType, rhsOp.exprType) match
-              case (I32Type, I32Type) =>
+            (lhsOp.resultType, rhsOp.resultType) match
+              case (S(I32Type), S(I32Type)) =>
                 ref.i31(i32.add(lhsOp, rhsOp))
               case (lhsType, rhsType) =>
                 errExpr(
                   Ls(
-                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.toWat.toString}, ${rhsType.toWat.toString}) not implemented yet" -> r.toLoc
+                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.fold("(none)")(_.toWat.toString)}, ${rhsType.fold("(none)")(_.toWat.toString)}) not implemented yet" -> r.toLoc
                   ),
                   extraInfo = S(r.toString)
                 )
@@ -359,18 +361,18 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     case Call(fun, args) =>
       val base = subexpression(fun)
-      if base.exprType is UnreachableType then return base
+      if base.resultType is UnreachableType then return base
       val wasmArgs = args.map(argument)
 
-      val baseTypeIdx = base.exprType match
-        case RefType(idx: TypeIdx, _) => idx
+      val baseTypeIdx = base.resultType match
+        case S(RefType(idx: TypeIdx, _)) => idx
         case ty =>
           return errExpr(
             Ls(
               msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>)` type" -> r.toLoc
             ),
             extraInfo = S(
-              s"Block IR: `${fun.toString}`\nCompiled WAT: `${base.toWat.toString}`\n... which has type `${ty.toWat.toString}`"
+              s"Block IR: `${fun.toString}`\nCompiled WAT: `${base.toWat.toString}`\n... which has type `${ty.fold("(none)")(_.toWat.toString)}`"
             )
           )
       val baseTypeInfo = ctx.getTypeInfo_!(baseTypeIdx)
@@ -430,7 +432,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         case S(idx) => idx
         case N => lastWords(s"Missing constructor definition for class ${ctorClsBlkSym.toString}")
 
-      val objType = ctx.getFuncInfo_!(ctorFuncIdx).body.exprType
+      val objType = ctx.getFuncInfo_!(ctorFuncIdx).body.resultType_!
       call(funcidx = ctorFuncIdx, as.map(argument), Seq(Result(objType.asInstanceOf[ValType])))
 
     case r =>
@@ -448,7 +450,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case Assign(l, r, rst) =>
       val lExpr = getVar(l, l.toLoc)
-      if lExpr.exprType is UnreachableType then return lExpr
+      if lExpr.resultType is UnreachableType then return lExpr
       val rExpr = result(r)
       val idx = lExpr.instrargs(0).asInstanceOf[LocalIdx]
       val assignExpr = lExpr.mnemonicPrefix match
@@ -469,10 +471,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Instructions.block(
         label = N,
         children = Seq(assignExpr, rstBlk),
-        resultTypes = rstBlk.exprType match
-          case NoneType => Seq.empty
-          case MultiValueType(tys) => tys.map(ty => Result(ty.asInstanceOf[ValType]))
-          case ty => Seq(Result(ty.asInstanceOf[ValType]))
+        resultTypes = rstBlk.resultTypes match
+          case Seq() => Seq.empty
+          case ty :: Seq() => Seq(Result(ty.asInstanceOf[ValType]))
+          case tys => tys.map(ty => Result(ty.asInstanceOf[ValType]))
       )
 
     case Define(defn, rst) =>
@@ -539,7 +541,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         id = N,
                         FunctionType(
                           params = params.map(_._1),
-                          results = Seq.fill(bodyWat.exprType.toSeq.length)(Result(RefType.anyref))
+                          results = Seq.fill(bodyWat.resultTypes.length)(Result(RefType.anyref))
                         )
                       )
                     )
@@ -549,7 +551,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         sym,
                         funcTy,
                         ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
-                        bodyWat.exprType.toSeq.length,
+                        bodyWat.resultTypes.length,
                         locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
                         bodyWat
                       )
@@ -657,7 +659,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       sym = clsLikeDefn.sym,
                       typeIdx = funcTy,
                       params = ctorParams,
-                      nResults = ctorCode.exprType.toSeq.length,
+                      nResults = ctorCode.resultTypes.length,
                       locals =
                         (clsLikeDefn.isym -> scope.findThis_!(clsLikeDefn.isym)) +: ctorLocals.map:
                           l =>
@@ -691,16 +693,16 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             case _ => Instructions.block(
                 label = N,
                 children = Seq(res, rstBlk),
-                resultTypes = rstBlk.exprType match
-                  case NoneType => Seq.empty
-                  case MultiValueType(tys) => tys.map(ty => Result(ty.asInstanceOf[ValType]))
-                  case ty => Seq(Result(ty.asInstanceOf[ValType]))
+                resultTypes = rstBlk.resultTypes match
+                  case Seq() => Seq.empty
+                  case ty :: Seq() => Seq(Result(ty.asInstanceOf[ValType]))
+                  case tys => tys.map(ty => Result(ty.asInstanceOf[ValType]))
               )
 
     case Return(res, true) =>
       val resWat = result(res)
-      resWat.exprType match
-        case RefType(heapType, _) => heapType match
+      resWat.resultType match
+        case S(RefType(heapType, _)) => heapType match
             case HeapType.Func =>
               errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case typeidx: TypeIdx
@@ -712,8 +714,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       resWat
     case Return(res, false) =>
       val resWat = result(res)
-      resWat.exprType match
-        case RefType(heapType, _) => heapType match
+      resWat.resultType match
+        case S(RefType(heapType, _)) => heapType match
             case HeapType.Func =>
               errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case typeidx: TypeIdx
