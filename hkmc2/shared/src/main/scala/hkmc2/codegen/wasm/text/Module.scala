@@ -17,7 +17,16 @@ trait ToWat:
 end ToWat
 
 /** Abstract base class for all Wasm types. */
-abstract class WasmType extends Type, ToWat
+abstract sealed class WasmType extends Type, ToWat:
+
+  def asValType: Opt[ValType] = this match
+    case ty: ValType => S(ty)
+    case _ => N
+
+  def asValType_! : ValType = asValType.getOrElse:
+    lastWords(s"asValType_! called on non-ValType: `$toWat` (${getClass.getName})")
+
+end WasmType
 
 private case object NoneType extends WasmType:
   def toWat: Document = throw UnsupportedOperationException(
@@ -261,12 +270,12 @@ case class FoldedInstr(
     val resultTypes: Seq[WasmType]
 ) extends Instruction:
 
-  def resultType: Opt[WasmType] = resultTypes.length match
-    case 0 => N
-    case 1 => S(resultTypes.head)
+  def resultType: Opt[WasmType] = resultTypes match
+    case Seq() => N
+    case ty :: Seq() => S(ty)
     case _ => lastWords(s"resultType_! called on instruction with multi-value result type: $this")
 
-  def `resultType_!`: WasmType = resultType.getOrElse:
+  def resultType_! : WasmType = resultType.getOrElse:
     lastWords(s"resultType_! called on instruction with a non-unique result type: $this")
 
   def toWat: Document = doc"($mnemonic${

@@ -55,7 +55,7 @@ object Instructions:
     FoldedInstr(
       mnemonic = "if",
       instrargs = resultTypes.map(resTy =>
-        SignatureType(params = Seq.empty, results = Seq(Result(resTy.asInstanceOf[ValType]))).toWat
+        SignatureType(params = Seq.empty, results = Seq(Result(resTy.asValType_!))).toWat
       ),
       stackargs = Seq(S(condition), S(thenInstr)) ++ elseInstr.map(S(_)).toSeq,
       resultTypes

@@ -361,7 +361,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     case Call(fun, args) =>
       val base = subexpression(fun)
-      if base.resultType is UnreachableType then return base
+      if base.resultTypes.exists(_ is UnreachableType) then return base
       val wasmArgs = args.map(argument)
 
       val baseTypeIdx = base.resultType match
@@ -433,7 +433,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         case N => lastWords(s"Missing constructor definition for class ${ctorClsBlkSym.toString}")
 
       val objType = ctx.getFuncInfo_!(ctorFuncIdx).body.resultType_!
-      call(funcidx = ctorFuncIdx, as.map(argument), Seq(Result(objType.asInstanceOf[ValType])))
+      call(funcidx = ctorFuncIdx, as.map(argument), Seq(Result(objType.asValType_!)))
 
     case r =>
       errExpr(
@@ -450,7 +450,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case Assign(l, r, rst) =>
       val lExpr = getVar(l, l.toLoc)
-      if lExpr.resultType is UnreachableType then return lExpr
+      if lExpr.resultTypes.exists(_ is UnreachableType) then return lExpr
       val rExpr = result(r)
       val idx = lExpr.instrargs(0).asInstanceOf[LocalIdx]
       val assignExpr = lExpr.mnemonicPrefix match
@@ -473,8 +473,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         children = Seq(assignExpr, rstBlk),
         resultTypes = rstBlk.resultTypes match
           case Seq() => Seq.empty
-          case ty :: Seq() => Seq(Result(ty.asInstanceOf[ValType]))
-          case tys => tys.map(ty => Result(ty.asInstanceOf[ValType]))
+          case ty :: Seq() => Seq(Result(ty.asValType_!))
+          case tys => tys.map(ty => Result(ty.asValType_!))
       )
 
     case Define(defn, rst) =>
@@ -505,7 +505,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   ),
                   rstWat
                 ),
-                resultTypes = rstWat.resultTypes.map(r => Result(r.asInstanceOf[ValType]))
+                resultTypes = rstWat.resultTypes.map(r => Result(r.asValType_!))
               )
 
         case defn: (FunDefn | ClsLikeDefn) =>
@@ -695,8 +695,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 children = Seq(res, rstBlk),
                 resultTypes = rstBlk.resultTypes match
                   case Seq() => Seq.empty
-                  case ty :: Seq() => Seq(Result(ty.asInstanceOf[ValType]))
-                  case tys => tys.map(ty => Result(ty.asInstanceOf[ValType]))
+                  case ty :: Seq() => Seq(Result(ty.asValType_!))
+                  case tys => tys.map(ty => Result(ty.asValType_!))
               )
 
     case Return(res, true) =>
