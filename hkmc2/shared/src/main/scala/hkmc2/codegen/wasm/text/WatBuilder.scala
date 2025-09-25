@@ -386,7 +386,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             s"Expected resolved Select(...) expression to be a TermSymbol, but got $sym (${sym.getClass.getName})"
           )
       val selOwner = selTrmSym.owner getOrElse:
-        lastWords(s"Expected resolved Select(...) expression `$selSym` to have an owner")
+        lastWords(s"Expected resolved Select(...) expression `$selTrmSym` to have an owner")
       val selCls = selOwner.asBlkMember getOrElse:
         lastWords(
           s"Expected resolved class for Select(...) expression to be a BlockMemberSymbol, but got $selOwner (${selOwner.getClass.getName})"
