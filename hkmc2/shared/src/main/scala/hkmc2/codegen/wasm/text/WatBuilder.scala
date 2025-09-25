@@ -275,12 +275,18 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val symToField = structInfo.compType match
       case ty: StructType => ty.symToField
       case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.compType.toWat}")
-    val fieldIdx = symToField.get.find((field, idx) => field.nme == sym.nme) match
-      case S((_, idx)) => idx
-      case N => lastWords(
-          s"Missing field `${sym.toString}` in struct `${thisSym.toString}` with type `${structInfo.toWat.toString}`}"
+    val fieldIdx = symToField.get.get(sym).orElse:
+      // Workaround: TermSymbols are not correctly resolved, so match the fields by name instead
+      sym match
+        case trmSym: TermSymbol if trmSym.owner.exists(_.asBlkMember.get == thisSym) =>
+          symToField.get.find(_._1.nme == sym.nme).map(_._2)
+        case _ => N
+    FieldIdx(
+      fieldIdx getOrElse:
+        lastWords(
+          s"Missing field `${sym.toString}` in struct `${thisSym.toString}` with type `${structInfo.toWat.toString}`"
         )
-    FieldIdx(fieldIdx)
+    )
 
   def result(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
     case Value.This(sym) =>
@@ -473,7 +479,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       def mkThis(sym: InnerSymbol): Expr = result(Value.This(sym))
       defn match
         case ValDefn(tsym, sym, p) =>
-          val sym = defn.sym
           // * Currently we allow `val` outside of object/module scopes,
           // * in which case it has no owner and is just a glorified local variable rather than a field
           tsym.owner match
@@ -492,7 +497,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 label = N,
                 children = Seq(
                   struct.set(
-                    fieldSelect(ownerBlkMem, sym),
+                    fieldSelect(ownerBlkMem, tsym),
                     mkThis(owner),
                     result(p)
                   ),
