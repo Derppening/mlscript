@@ -1,10 +1,7 @@
-:lot
-:slot
 :wat
 :rwasm
 
 :wasm
-:ewat
 false
 //│ Wat:
 //│ (module
@@ -18,7 +15,6 @@ false
 //│ 0
 
 :wasm
-:ewat
 true
 //│ Wat:
 //│ (module
@@ -33,7 +29,6 @@ true
 
 
 :wasm
-:ewat
 2
 //│ Wat:
 //│ (module
@@ -48,7 +43,6 @@ true
 
 
 :wasm
-:ewat
 1 + 1
 //│ Wat:
 //│ (module
@@ -69,7 +63,6 @@ true
 
 
 :wasm
-:ewat
 let x = 0
 x
 //│ Wat:
@@ -89,12 +82,11 @@ x
 
 
 :wasm
-:ewat
 :ge
 fun foo() = 42
 foo
 //│ ╔══[COMPILATION ERROR] Returning function instances is not supported
-//│ ║  l.95: 	foo
+//│ ║  l.87: 	foo
 //│ ╙──      	^^^
 //│ Wat:
 //│ (module
@@ -119,7 +111,6 @@ foo
 
 
 :wasm
-:ewat
 fun foo() = 42
 foo()
 //│ Wat:
@@ -145,7 +136,6 @@ foo()
 
 
 :wasm
-:ewat
 fun foo() = 42
 foo() + foo()
 //│ Wat:
@@ -199,7 +189,6 @@ foo() + foo()
 
 
 :wasm
-:ewat
 fun foo(x) = x + 1
 foo(41)
 //│ Wat:
@@ -239,7 +228,6 @@ foo(41)
 
 
 :wasm
-:ewat
 class Foo(val x)
 new Foo(0)
 //│ Wat:
@@ -276,7 +264,6 @@ new Foo(0)
 
 
 :wasm
-:ewat
 class Foo(val a)
 (new Foo(42)).Foo#a
 //│ Wat:

@@ -5,7 +5,7 @@ import mlscript.utils.*, shorthands.*
 import codegen.wasm.*
 import semantics.Elaborator
 import semantics.Term.Blk
-import text.{WatBackend, WatBuilder}
+import text.WatBuilder
 import hkmc2.codegen.CompilationTarget
 import Diagnostic.Source
 
@@ -21,9 +21,6 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
    * Outputs the compiled module as [[WasmGenerator]] implementation-defined text.
    */
   val wat = NullaryCommand("wat")
-
-  /** Overrides and uses the WIP [[WatBuilder]] backend for WAT generation instead. */
-  val ewat = NullaryCommand("ewat")
 
   /** Outputs the compiled module as stack-based text. */
   val swat = NullaryCommand("swat")
@@ -79,11 +76,8 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
         codegen.Lowering()
       val le = low.program(trm, CompilationTarget.Wasm)
       val (modWat, mainFnNme) = ltl.givenIn:
-        if ewat.isSet then
-          baseScp.nest.givenIn:
-            WatBuilder().program(le, N, wd)
-        else
-          (WatBackend().program(le, N).toWat, "main")
+        baseScp.nest.givenIn:
+          WatBuilder().program(le, N, wd)
 
       if wat.isSet then
         output("Wat:")
