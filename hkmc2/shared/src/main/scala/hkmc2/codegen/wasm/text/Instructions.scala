@@ -6,6 +6,7 @@ import mlscript.utils.*, shorthands.*
 import document.*
 
 object Instructions:
+  /** Creates a `block` instruction. */
   def block(
       label: Opt[Str],
       children: Seq[Expr],
@@ -23,21 +24,13 @@ object Instructions:
       resultTypes = resultTypes.map(_.valtype)
     )
 
+  /** Creates an `if` instruction. */
   def `if`(
       condition: Expr,
       ifTrue: Expr,
-      ifFalse: Opt[Expr]
+      ifFalse: Opt[Expr],
+      resultTypes: Seq[Result]
   ): FoldedInstr =
-    // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
-    // TODO(Derppening): Stop propagation of UnreachableType
-    val resultTypes =
-      (condition.resultType, ifTrue.resultTypes, ifFalse.map(_.resultTypes)) match
-        case (S(UnreachableType), _, _) => Seq(UnreachableType)
-        case (_, thenTy, elseTy) if thenTy == elseTy => thenTy
-        case (_, thenTy, S(Seq(UnreachableType))) => thenTy
-        case (_, UnreachableType, S(elseTy)) => elseTy
-        case _ => Seq.empty
-
     val thenInstr = FoldedInstr(
       mnemonic = "then",
       instrargs = Seq.empty,
@@ -54,13 +47,12 @@ object Instructions:
 
     FoldedInstr(
       mnemonic = "if",
-      instrargs = resultTypes.map(resTy =>
-        SignatureType(params = Seq.empty, results = Seq(Result(resTy.asValType_!))).toWat
-      ),
+      instrargs = resultTypes,
       stackargs = Seq(condition, thenInstr) ++ elseInstr.toSeq,
-      resultTypes
+      resultTypes = resultTypes.map(_.valtype)
     )
 
+  /** Creates a `call` instruction. */
   def call(
       funcidx: FuncIdx,
       operands: Seq[Expr],
@@ -73,6 +65,7 @@ object Instructions:
       resultTypes = returnTypes.map(_.valtype)
     )
 
+  /** Creates a `call_ref` instruction. */
   def call_ref(
       target: Expr,
       operands: Seq[Expr],
@@ -85,6 +78,7 @@ object Instructions:
     resultTypes = funcType.sigType.results.map(_.valtype)
   )
 
+  /** Creates a `nop` instruction. */
   def nop: FoldedInstr = FoldedInstr(
     mnemonic = "nop",
     instrargs = Seq.empty,
@@ -92,6 +86,7 @@ object Instructions:
     resultType = N
   )
 
+  /** Creates a `return` instruction with an optional return value. */
   def `return`(value: Opt[Expr]): FoldedInstr = FoldedInstr(
     mnemonic = "return",
     instrargs = Seq.empty,
@@ -99,6 +94,7 @@ object Instructions:
     resultTypes = value.fold(Seq.empty)(_.resultTypes)
   )
 
+  /** Creates an `unreachable` instruction. */
   def unreachable: FoldedInstr = FoldedInstr(
     mnemonic = "unreachable",
     instrargs = Seq.empty,
@@ -107,6 +103,7 @@ object Instructions:
   )
 
   object i32:
+    /** Creates an `i32.const` instruction. */
     def const(value: Int): FoldedInstr = FoldedInstr(
       mnemonic = "i32.const",
       instrargs = Seq(doc"$value"),
@@ -114,6 +111,7 @@ object Instructions:
       resultType = S(I32Type)
     )
 
+    /** Creates an `i32.add` instruction. */
     def add(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "i32.add",
       instrargs = Seq.empty,
@@ -127,6 +125,7 @@ object Instructions:
   end i32
 
   object ref:
+    /** Creates a `ref.func` instruction. */
     def func(idx: FuncIdx, ty: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.func",
       instrargs = Seq(idx.toWat),
@@ -134,6 +133,7 @@ object Instructions:
       resultType = S(ty)
     )
 
+    /** Creates a `ref.i31` instruction. */
     def i31(value: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "ref.i31",
       instrargs = Seq.empty,
@@ -142,6 +142,7 @@ object Instructions:
         S(if value.resultType is UnreachableType then UnreachableType else RefType.i31ref)
     )
 
+    /** Creates a `ref.test` instruction. */
     def test(value: Expr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.test",
       instrargs = Seq(castType.toWat),
@@ -149,6 +150,7 @@ object Instructions:
       resultType = S(if value.resultType is UnreachableType then UnreachableType else I32Type)
     )
 
+    /** Creates a `ref.cast` instruction. */
     def cast(value: Expr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.cast",
       instrargs = Seq(castType.toWat),
@@ -165,10 +167,12 @@ object Instructions:
       resultType = S(if i31.resultType is UnreachableType then UnreachableType else I32Type)
     )
 
+    /** Creates an `i31.get_s` instruction. */
     def get_s(i31: Expr): FoldedInstr = get(i31, true)
   end i31
 
   object local:
+    /** Creates a `local.get` instruction. */
     def get(index: LocalIdx, ty: WasmType): FoldedInstr = FoldedInstr(
       mnemonic = "local.get",
       instrargs = Seq(index),
@@ -176,6 +180,7 @@ object Instructions:
       resultType = S(ty)
     )
 
+    /** Creates a `local.set` instruction. */
     def set(index: LocalIdx, value: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "local.set",
       instrargs = Seq(index),
@@ -185,6 +190,7 @@ object Instructions:
   end local
 
   object struct:
+    /** Creates a `struct.new_default` instruction. */
     def new_default(ty: TypeIdx): FoldedInstr = FoldedInstr(
       mnemonic = "struct.new_default",
       instrargs = Seq(ty.toWat),
@@ -192,6 +198,7 @@ object Instructions:
       resultType = S(RefType(ty, nullable = false))
     )
 
+    /** Creates a `struct.set` instruction. */
     def set(index: FieldIdx, ref: Expr, value: FoldedInstr): FoldedInstr = FoldedInstr(
       mnemonic = "struct.set",
       instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),
@@ -199,6 +206,7 @@ object Instructions:
       resultType = if value.resultType is UnreachableType then S(UnreachableType) else N
     )
 
+    /** Creates a `struct.get` instruction. */
     def get(index: FieldIdx, ref: Expr, ty: WasmType): FoldedInstr = FoldedInstr(
       mnemonic = "struct.get",
       instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),

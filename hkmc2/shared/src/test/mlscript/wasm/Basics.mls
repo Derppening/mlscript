@@ -14,6 +14,7 @@ false
 //│ rwasm: Running
 //│ 0
 
+
 :wasm
 true
 //│ Wat:
@@ -86,7 +87,7 @@ x
 fun foo() = 42
 foo
 //│ ╔══[COMPILATION ERROR] Returning function instances is not supported
-//│ ║  l.87: 	foo
+//│ ║  l.88: 	foo
 //│ ╙──      	^^^
 //│ Wat:
 //│ (module

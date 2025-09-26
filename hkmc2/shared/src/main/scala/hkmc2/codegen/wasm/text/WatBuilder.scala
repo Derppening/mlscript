@@ -21,6 +21,11 @@ import scala.util.boundary, boundary.break
 import sourcecode.Line
 
 extension (instr: FoldedInstr)
+  /**
+   * Returns the mneomic prefix of this instruction.
+   *
+   * For example, for `local.get` it returns `Some("local")`, and for `nop` it returns `None`.
+   */
   private def mnemonicPrefix: Opt[Str] =
     instr.mnemonic.split('.').optionUnless(_.size == 1).map(_.head)
 
@@ -30,6 +35,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   type Context = Ctx
 
+  /**
+   * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits an
+   * `unreachable` instruction.
+   */
   def warnExpr(warnMsgs: Ls[Message -> Opt[Loc]], extraInfo: Opt[Any] = N)(using
       Ctx,
       Raise
@@ -37,6 +46,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     raise(WarningReport(warnMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
     unreachable
 
+  /**
+    * Raises an [[ErrorReport]] with the given `warnMsgs` and `extraInfo`, and emits an
+    * `unreachable` instruction.
+    */
   def errExpr(errMsgs: Ls[Message -> Opt[Loc]], extraInfo: => Opt[Any] = N)(using
       Ctx,
       Raise
@@ -150,9 +163,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               expr.resultType match
                 case S(RefType(HeapType.Any, _)) => `if`(
                     ref.test(expr, RefType.i31ref),
-                    ifTrue =
-                      castOperand(ref.cast(expr, RefType.i31ref), opSide),
-                    ifFalse = S(unreachable)
+                    ifTrue = castOperand(ref.cast(expr, RefType.i31ref), opSide),
+                    ifFalse = S(unreachable),
+                    resultTypes = Seq(Result(I32Type))
                   )
                 case S(RefType(HeapType.I31, _)) => i31.get(expr, true)
                 case S(I32Type) => expr

@@ -10,6 +10,7 @@ import semantics.FieldSymbol
 import scala.collection.Map
 
 extension (doc: Document)
+  /** Surrounds a document by the given `prefix` and `suffix`, unless the document is empty. */
   private def surroundUnlessEmpty(
       prefix: Document = Document.empty,
       postfix: Document = Document.empty
@@ -25,10 +26,12 @@ trait ToWat:
 /** Abstract base class for all Wasm types. */
 abstract sealed class WasmType extends Type, ToWat:
 
+  /** Attempts to convert this type to a [[`ValType`]]. */
   def asValType: Opt[ValType] = this match
     case ty: ValType => S(ty)
     case _ => N
 
+  /** Same as [[`asValType`]], except throws an exception if this type is not a `ValType`. */
   def asValType_! : ValType = asValType.getOrElse:
     lastWords(s"asValType_! called on non-ValType: `$toWat` (${getClass.getName})")
 end WasmType
@@ -84,14 +87,20 @@ object HeapType:
     def toWat: Document = doc"nofunc"
 type ValType = NumType | VecType | RefType
 
+/** A Wasm parameter clause. Appears in function signatures. */
 case class Param(id: Opt[Str], valtype: ValType) extends ToWat:
   def toWat: Document =
     doc"(param${id.fold(doc"")(id => doc" $$$id")} ${valtype.toWat})"
 
+/** A Wasm result clause. Appears in function signatures and some instructions. */
 case class Result(valtype: ValType) extends ToWat:
   def toWat: Document = doc"(result ${valtype.toWat})"
 
-/** A type representing a function signature. */
+/**
+ * A type representing a function signature.
+ *
+ * Function signatures differ from [[FunctionType]] in that they do not include the `func` keyword.
+ */
 case class SignatureType(params: Seq[Param], results: Seq[Result]) extends ToWat:
   def toWat: Document = (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
 
@@ -99,12 +108,13 @@ object FunctionType:
   def apply(params: Seq[Param], results: Seq[Result]): FunctionType =
     new FunctionType(SignatureType(params, results))
 
+/** A type representing a function type. */
 case class FunctionType(sigType: SignatureType) extends ToWat:
   def toWat: Document =
     doc"(func${sigType.toWat.surroundUnlessEmpty(doc" ")})"
 end FunctionType
 
-/** A type represening a struct field. */
+/** A type representing a struct field. */
 case class Field(
     ty: WasmType,
     mutable: Bool,
@@ -142,18 +152,28 @@ type HeapType = AbsHeapType | TypeIdx
 
 abstract sealed class Index extends ToWat
 
+/** A numeric index. */
 case class NumIdx(val index: Int) extends Index:
   def toWat: Document = doc"${index.toString}"
 
+/** A symbolic identifier. */
 case class SymIdx(val id: Str) extends Index:
   def toWat: Document = doc"$$$id"
 
+/** An index that is bound to an index space. */
 abstract sealed class CtxIdx(idx: Index) extends ToWat:
   def toWat: Document = idx.toWat
 
+/** An index bound to the ''types'' index space. */
 case class TypeIdx(idx: Index) extends CtxIdx(idx)
+
+/** An index bound to the ''funcs'' index space. */
 case class FuncIdx(idx: Index) extends CtxIdx(idx)
+
+/** An index bound to the ''locals'' index space. */
 case class LocalIdx(idx: Index) extends CtxIdx(idx)
+
+/** An index bound to the ''fields'' index space. */
 case class FieldIdx(idx: Index) extends CtxIdx(idx)
 
 /**
@@ -195,11 +215,13 @@ case class FoldedInstr(
     resultTypes: Seq[WasmType]
 ) extends Instruction:
 
+  /** Returns the result type of this instruction if this instruction only has 0-1 result values. */
   def resultType: Opt[WasmType] = resultTypes match
     case Seq() => N
     case ty :: Seq() => S(ty)
     case _ => lastWords(s"resultType_! called on instruction with multi-value result type: $this")
 
+    /** Returns the singular result type of this instruction, otherwise throws an exception. */
   def resultType_! : WasmType = resultType.getOrElse:
     lastWords(s"resultType_! called on instruction with a non-unique result type: $this")
 
@@ -219,6 +241,6 @@ case class FoldedInstr(
 end FoldedInstr
 
 /**
- * A WebAssembly expression, comprised of zero of more instructions that generate a result value.
+ * A WebAssembly expression, comprised of one or more instructions that generate a result value.
  */
 type Expr = FoldedInstr
