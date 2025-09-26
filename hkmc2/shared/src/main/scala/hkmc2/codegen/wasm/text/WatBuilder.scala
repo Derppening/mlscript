@@ -14,7 +14,6 @@ import syntax.Tree.{BoolLit, IntLit}
 import text.Param as WasmParam
 import Message.MessageContext
 import Scope.scope
-import Value.Lam
 
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 import scala.util.boundary, boundary.break
@@ -106,9 +105,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     if a.spread.nonEmpty then die else subexpression(a.value)
 
   def subexpression(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
-    case r: Value.Lam =>
+    case r: Lambda =>
       errExpr(
-        Ls(msg"WatBuilder::subexpression for Value.Lam not implemented yet" -> r.toLoc),
+        Ls(msg"WatBuilder::subexpression for Lambda not implemented yet" -> r.toLoc),
         extraInfo = S(r.showAsTree)
       )
     case r => result(r)
@@ -368,7 +367,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
                   val result = pss.foldRight(bod):
                     case (ps, block) =>
-                      Return(Lam(ps, block), false)
+                      Return(Lambda(ps, block), false)
                   val name = if sym.nameIsMeaningful then S(sym.nme) else N
                   val (params, bodyWat, locals) = setupFunction(name, ps, result)
                   if sym.nameIsMeaningful then
