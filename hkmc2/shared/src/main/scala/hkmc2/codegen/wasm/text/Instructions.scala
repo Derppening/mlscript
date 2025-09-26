@@ -8,7 +8,7 @@ import document.*
 object Instructions:
   def block(
       label: Opt[Str],
-      children: Seq[FoldedInstr],
+      children: Seq[Expr],
       resultTypes: Seq[Result]
   ): FoldedInstr =
     val labelWat = label.map(lbl => doc"$$$lbl")
@@ -19,14 +19,14 @@ object Instructions:
         labelWat.toSeq ++ resultTypes.map(resTy =>
           SignatureType(params = Seq.empty, results = Seq(resTy))
         ),
-      stackargs = children.map(S(_)),
+      stackargs = children,
       resultTypes = resultTypes.map(_.valtype)
     )
 
   def `if`(
-      condition: FoldedInstr,
-      ifTrue: FoldedInstr,
-      ifFalse: Opt[FoldedInstr]
+      condition: Expr,
+      ifTrue: Expr,
+      ifFalse: Opt[Expr]
   ): FoldedInstr =
     // TODO(Derppening): Add support for subtyping relation between value of ifTrue/ifFalse
     // TODO(Derppening): Stop propagation of UnreachableType
@@ -41,14 +41,14 @@ object Instructions:
     val thenInstr = FoldedInstr(
       mnemonic = "then",
       instrargs = Seq.empty,
-      stackargs = Seq(S(ifTrue)),
+      stackargs = Seq(ifTrue),
       resultTypes = ifTrue.resultTypes
     )
     val elseInstr = ifFalse.map: elseExpr =>
       FoldedInstr(
         mnemonic = "else",
         instrargs = Seq.empty,
-        stackargs = Seq(S(elseExpr)),
+        stackargs = Seq(elseExpr),
         resultTypes = elseExpr.resultTypes
       )
 
@@ -57,31 +57,31 @@ object Instructions:
       instrargs = resultTypes.map(resTy =>
         SignatureType(params = Seq.empty, results = Seq(Result(resTy.asValType_!))).toWat
       ),
-      stackargs = Seq(S(condition), S(thenInstr)) ++ elseInstr.map(S(_)).toSeq,
+      stackargs = Seq(condition, thenInstr) ++ elseInstr.toSeq,
       resultTypes
     )
 
   def call(
       funcidx: FuncIdx,
-      operands: Seq[FoldedInstr],
+      operands: Seq[Expr],
       returnTypes: Seq[Result]
-  ): FoldedInstr = 
+  ): FoldedInstr =
     FoldedInstr(
       mnemonic = "call",
       instrargs = Seq(funcidx.toWat),
-      stackargs = operands.map(S(_)),
+      stackargs = operands,
       resultTypes = returnTypes.map(_.valtype)
     )
 
   def call_ref(
-      target: FoldedInstr,
-      operands: Seq[FoldedInstr],
+      target: Expr,
+      operands: Seq[Expr],
       typeIdx: TypeIdx,
       funcType: FunctionType
   ): FoldedInstr = FoldedInstr(
     mnemonic = "call_ref",
     instrargs = Seq(typeIdx.toWat),
-    stackargs = operands.map(S(_)) :+ S(target),
+    stackargs = operands :+ target,
     resultTypes = funcType.sigType.results.map(_.valtype)
   )
 
@@ -89,13 +89,13 @@ object Instructions:
     mnemonic = "nop",
     instrargs = Seq.empty,
     stackargs = Seq.empty,
-    resultType = None
+    resultType = N
   )
 
-  def `return`(value: Opt[FoldedInstr]): FoldedInstr = FoldedInstr(
+  def `return`(value: Opt[Expr]): FoldedInstr = FoldedInstr(
     mnemonic = "return",
     instrargs = Seq.empty,
-    stackargs = Seq(value),
+    stackargs = value.toSeq,
     resultTypes = value.fold(Seq.empty)(_.resultTypes)
   )
 
@@ -114,7 +114,7 @@ object Instructions:
       resultType = S(I32Type)
     )
 
-    def add(lhs: FoldedInstr, rhs: FoldedInstr): FoldedInstr = FoldedInstr(
+    def add(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "i32.add",
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
@@ -134,7 +134,7 @@ object Instructions:
       resultType = S(ty)
     )
 
-    def i31(value: FoldedInstr): FoldedInstr = FoldedInstr(
+    def i31(value: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "ref.i31",
       instrargs = Seq.empty,
       stackargs = Seq(value),
@@ -142,14 +142,14 @@ object Instructions:
         S(if value.resultType is UnreachableType then UnreachableType else RefType.i31ref)
     )
 
-    def test(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
+    def test(value: Expr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.test",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(value),
       resultType = S(if value.resultType is UnreachableType then UnreachableType else I32Type)
     )
 
-    def cast(value: FoldedInstr, castType: RefType): FoldedInstr = FoldedInstr(
+    def cast(value: Expr, castType: RefType): FoldedInstr = FoldedInstr(
       mnemonic = "ref.cast",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(value),
@@ -158,14 +158,14 @@ object Instructions:
   end ref
 
   object i31:
-    def get(i31: FoldedInstr, signed: Bool): FoldedInstr = FoldedInstr(
+    def get(i31: Expr, signed: Bool): FoldedInstr = FoldedInstr(
       mnemonic = s"i31.get_${if signed then 's' else 'u'}",
       instrargs = Seq.empty,
       stackargs = Seq(i31),
       resultType = S(if i31.resultType is UnreachableType then UnreachableType else I32Type)
     )
 
-    def get_s(i31: FoldedInstr): FoldedInstr = get(i31, true)
+    def get_s(i31: Expr): FoldedInstr = get(i31, true)
   end i31
 
   object local:
@@ -176,7 +176,7 @@ object Instructions:
       resultType = S(ty)
     )
 
-    def set(index: LocalIdx, value: FoldedInstr): FoldedInstr = FoldedInstr(
+    def set(index: LocalIdx, value: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "local.set",
       instrargs = Seq(index),
       stackargs = Seq(value),
@@ -192,14 +192,14 @@ object Instructions:
       resultType = S(RefType(ty, nullable = false))
     )
 
-    def set(index: FieldIdx, ref: FoldedInstr, value: FoldedInstr): FoldedInstr = FoldedInstr(
+    def set(index: FieldIdx, ref: Expr, value: FoldedInstr): FoldedInstr = FoldedInstr(
       mnemonic = "struct.set",
       instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref, value),
       resultType = if value.resultType is UnreachableType then S(UnreachableType) else N
     )
 
-    def get(index: FieldIdx, ref: FoldedInstr, ty: WasmType): FoldedInstr = FoldedInstr(
+    def get(index: FieldIdx, ref: Expr, ty: WasmType): FoldedInstr = FoldedInstr(
       mnemonic = "struct.get",
       instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref),

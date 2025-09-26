@@ -9,12 +9,18 @@ import semantics.FieldSymbol
 
 import scala.collection.Map
 
+extension (doc: Document)
+  private def surroundUnlessEmpty(
+      prefix: Document = Document.empty,
+      postfix: Document = Document.empty
+  ): Document =
+    doc.optionUnless(_.isEmpty).fold(doc):
+      prefix :: _ :: postfix
+
 /** Trait indicating a WAT representation is available. */
 trait ToWat:
-
   /** Converts this object into a WAT representation. */
   def toWat: Document
-end ToWat
 
 /** Abstract base class for all Wasm types. */
 abstract sealed class WasmType extends Type, ToWat:
@@ -25,52 +31,25 @@ abstract sealed class WasmType extends Type, ToWat:
 
   def asValType_! : ValType = asValType.getOrElse:
     lastWords(s"asValType_! called on non-ValType: `$toWat` (${getClass.getName})")
-
 end WasmType
 
-private case object NoneType extends WasmType:
-  def toWat: Document = throw UnsupportedOperationException(
-    s"${toString} is a compiler-internal type and cannot be converted to WAT"
-  )
-end NoneType
 private case object I32Type extends WasmType:
   def toWat: Document = doc"i32"
-end I32Type
 private case object I64Type extends WasmType:
   def toWat: Document = doc"i64"
-end I64Type
 private case object F32Type extends WasmType:
   def toWat: Document = doc"f32"
-end F32Type
 private case object F64Type extends WasmType:
   def toWat: Document = doc"f64"
-end F64Type
 private case object V128Type extends WasmType:
   def toWat: Document = doc"v128"
-end V128Type
 private case object UnreachableType extends WasmType:
   def toWat: Document = throw UnsupportedOperationException(
     s"${toString} is a compiler-internal type and cannot be converted to WAT"
   )
-end UnreachableType
 
 type NumType = I32Type.type | I64Type.type | F32Type.type | F64Type.type
 type VecType = V128Type.type
-
-/** Enumeration of all Wasm packed types. */
-enum WasmPackedType extends PackedType, ToWat:
-  case NotPacked
-  case I8
-  case I16
-
-  def toWat: Document = this match
-    case WasmPackedType.I8 => doc"i8"
-    case WasmPackedType.I16 => doc"i16"
-    case _ => throw IllegalArgumentException(
-        "WasmPackedType.NotPacked cannot be converted to Wat"
-      )
-  end toWat
-end WasmPackedType
 
 object RefType:
   def anyref: RefType = RefType(HeapType.Any, nullable = true)
@@ -81,54 +60,40 @@ object RefType:
 case class RefType(heapType: HeapType, nullable: Bool) extends WasmType:
   def toWat: Document =
     doc"(ref${if nullable then " null" else ""} ${heapType.toWat})"
-end RefType
 
 object HeapType:
   case object Func extends ToWat:
     def toWat: Document = doc"func"
-  end Func
   case object Ext extends ToWat:
     def toWat: Document = doc"extern"
-  end Ext
   case object Any extends ToWat:
     def toWat: Document = doc"any"
-  end Any
   case object Eq extends ToWat:
     def toWat: Document = doc"eq"
-  end Eq
   case object I31 extends ToWat:
     def toWat: Document = doc"i31"
-  end I31
   case object Struct extends ToWat:
     def toWat: Document = doc"struct"
-  end Struct
   case object Array extends ToWat:
     def toWat: Document = doc"array"
-  end Array
   case object None extends ToWat:
     def toWat: Document = doc"none"
-  end None
   case object NoExt extends ToWat:
     def toWat: Document = doc"noextern"
-  end NoExt
   case object NoFunc extends ToWat:
     def toWat: Document = doc"nofunc"
-  end NoFunc
 type ValType = NumType | VecType | RefType
 
 case class Param(id: Opt[Str], valtype: ValType) extends ToWat:
   def toWat: Document =
     doc"(param${id.fold(doc"")(id => doc" $$$id")} ${valtype.toWat})"
-end Param
 
 case class Result(valtype: ValType) extends ToWat:
   def toWat: Document = doc"(result ${valtype.toWat})"
-end Result
 
 /** A type representing a function signature. */
 case class SignatureType(params: Seq[Param], results: Seq[Result]) extends ToWat:
   def toWat: Document = (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
-end SignatureType
 
 object FunctionType:
   def apply(params: Seq[Param], results: Seq[Result]): FunctionType =
@@ -136,36 +101,19 @@ object FunctionType:
 
 case class FunctionType(sigType: SignatureType) extends ToWat:
   def toWat: Document =
-    doc"(func${sigType.toWat.optionUnless(_.isEmpty).fold(doc"")(sig => doc" $sig")})"
+    doc"(func${sigType.toWat.surroundUnlessEmpty(doc" ")})"
 end FunctionType
-
-object Field:
-  /** Creates a field from a [[WasmType]]. */
-  def apply(ty: WasmType, mutable: Bool, id: Opt[Str]) =
-    new Field(ty, WasmPackedType.NotPacked, mutable, id)
-
-  /** Creates a field from a [[WasmPackedType]]. */
-  def apply(packedType: WasmPackedType, mutable: Bool, id: Opt[Str]) =
-    assert(
-      packedType != WasmPackedType.NotPacked,
-      "Packed type must not be 'notPacked'"
-    )
-    new Field(I32Type, packedType, mutable, id)
 
 /** A type represening a struct field. */
 case class Field(
     ty: WasmType,
-    packedType: WasmPackedType,
     mutable: Bool,
     id: Opt[Str]
 ) extends ToWat:
   def toWat: Document =
-    val tyWat = if packedType != WasmPackedType.NotPacked then packedType.toWat
-    else ty.toWat
     doc"(field ${id.fold(doc"")(id => doc"$$$id ")}${
-        if mutable then doc"(mut ${tyWat})" else tyWat
+        if mutable then doc"(mut ${ty.toWat})" else ty.toWat
       })"
-end Field
 
 /** A type representing a structure type. */
 case class StructType(fields: Map[FieldSymbol, NumIdx -> Field]) extends ToWat:
@@ -173,9 +121,7 @@ case class StructType(fields: Map[FieldSymbol, NumIdx -> Field]) extends ToWat:
   def fieldSeq: Seq[Field] = fields.values.toSeq.sortBy(_._1.index).map(_._2)
 
   def toWat: Document =
-    doc"(struct${fieldSeq.map(_.toWat).mkDocument(doc" ").optionUnless(_.isEmpty).fold(doc"")(f =>
-        doc" $f"
-      )})"
+    doc"(struct${fieldSeq.map(_.toWat).mkDocument(doc" ").surroundUnlessEmpty(doc" ")})"
 end StructType
 
 /** A composite type. */
@@ -198,15 +144,12 @@ abstract sealed class Index extends ToWat
 
 case class NumIdx(val index: Int) extends Index:
   def toWat: Document = doc"${index.toString}"
-end NumIdx
 
 case class SymIdx(val id: Str) extends Index:
   def toWat: Document = doc"$$$id"
-end SymIdx
 
 abstract sealed class CtxIdx(idx: Index) extends ToWat:
   def toWat: Document = idx.toWat
-end CtxIdx
 
 case class TypeIdx(idx: Index) extends CtxIdx(idx)
 case class FuncIdx(idx: Index) extends CtxIdx(idx)
@@ -225,36 +168,19 @@ abstract sealed class Instruction extends ToWat:
    * of the instruction, not the stack arguments.
    *
    * For example, for `i32.add` this would be empty, but for `i32.const 42`, this would be
-   * `Seq(42)`.
+   * `Seq(doc"42")`.
    */
-  val instrargs: Seq[Any]
+  val instrargs: Seq[ToWat | Document]
 end Instruction
 
-/** A WebAssembly stack instruction. */
-case class StackInstr(
-    val mnemonic: Str,
-    val instrargs: Seq[Any],
-    val exprType: WasmType
-) extends Instruction:
-  def toWat: Document = doc"$mnemonic${instrargs
-      .optionIf(_.nonEmpty)
-      .fold(doc"")(_.map(_.toString).mkDocument(doc" ", doc" ", doc""))}"
-end StackInstr
-
 object FoldedInstr:
-  /**
-   * Instruction mnemonics that do not (yet) support lowering from folded instructions to stack
-   * instructions.
-   */
-  val unsupportedToStackMnemonics = Set("if", "then", "else")
-
   def apply(
       mnemonic: Str,
       instrargs: Seq[ToWat | Document],
       stackargs: Seq[FoldedInstr],
       resultType: Opt[WasmType]
   ): FoldedInstr =
-    new FoldedInstr(mnemonic, instrargs, stackargs.map(S(_)), resultType.toSeq)
+    new FoldedInstr(mnemonic, instrargs, stackargs, resultType.toSeq)
 
 /**
  * A WebAssembly folded instruction.
@@ -263,11 +189,10 @@ object FoldedInstr:
  *   The stack arguments of the instruction.
  */
 case class FoldedInstr(
-    val mnemonic: Str,
-    val instrargs: Seq[ToWat | Document],
-    // TODO(Derppening): Change to Seq[FoldedInstr] once WatBackend is removed
+    mnemonic: Str,
+    instrargs: Seq[ToWat | Document],
     stackargs: Seq[Expr],
-    val resultTypes: Seq[WasmType]
+    resultTypes: Seq[WasmType]
 ) extends Instruction:
 
   def resultType: Opt[WasmType] = resultTypes match
@@ -279,117 +204,21 @@ case class FoldedInstr(
     lastWords(s"resultType_! called on instruction with a non-unique result type: $this")
 
   def toWat: Document = doc"($mnemonic${
-      instrargs
-        .optionIf(_.nonEmpty)
-        .fold(doc""):
-          _.map: a =>
-            a match
-              case a: ToWat => a.toWat
-              case a: Document => a
-          .mkDocument(doc" ", doc" ", doc"")
+      instrargs.map: a =>
+        a match
+          case a: ToWat => a.toWat
+          case a: Document => a
+      .mkDocument(doc" ").surroundUnlessEmpty(doc" ")
     }${
       stackargs
+        .map(_.toWat)
         .optionIf(_.nonEmpty)
-        .fold(doc""): stackarg =>
-          doc" #{  # ${stackarg
-              .map: sarg =>
-                doc"${sarg match
-                    case stackInstr: Ls[StackInstr] => stackInstr.map(_.toWat).mkDocument(" # ")
-                    case S(foldedInstr) => foldedInstr.toWat
-                    case N => doc""
-                  }"
-              .mkDocument(doc" # ")} #} "
+        .map(_.mkDocument(doc" # "))
+        .fold(doc"")(stackarg => doc" #{  # $stackarg #} ")
     })"
 end FoldedInstr
 
 /**
  * A WebAssembly expression, comprised of zero of more instructions that generate a result value.
  */
-type Expr = Opt[FoldedInstr] | Ls[StackInstr]
-
-/**
- * A module type.
- *
- * @param defn
- *   The definition of the `type` declaration.
- * @param doc
- *   The content of the module type.
- */
-case class ModType(val defn: CompType, val doc: Document) extends ToWat:
-  def toWat: Document = doc
-end ModType
-
-/**
- * A module function.
- *
- * @param typeId
- *   The identifier of the function type in the module's `type` section.
- * @param paramTypes
- *   The parameter type(s) of this function, without the `(param)` construct.
- * @param resultTypes
- *   The result type(s) of this function, without the `(result)` construct.
- * @param doc
- *   The content of the module function.
- */
-case class ModFunc(
-    val typeId: TypeIdx,
-    val paramTypes: WasmType,
-    val resultTypes: WasmType,
-    val doc: Document
-) extends ToWat:
-  def toWat: Document = doc
-end ModFunc
-
-/**
- * A WebAssembly module definition.
- *
- * @param id
- *   The identifier of the module, if any.
- * @param ty
- *   The types defined in the module.
- * @param im
- *   The imports defined in the module.
- * @param fn
- *   The functions defined in the module.
- * @param ta
- *   The tables defined in the module.
- * @param me
- *   The memories defined in the module.
- * @param gl
- *   The globals defined in the module.
- * @param ex
- *   The exports defined in the module.
- * @param st
- *   The start function of the module, if any.
- * @param el
- *   The element segments defined in the module.
- * @param da
- *   The data segments defined in the module.
- */
-case class Module(
-    id: Opt[Str] = N,
-    ty: Seq[Str -> ModType] = Seq(),
-    im: Seq[Str -> Document] = Seq(),
-    fn: Seq[Str -> ModFunc] = Seq(),
-    ta: Seq[Str -> Document] = Seq(),
-    me: Seq[Str -> Document] = Seq(),
-    gl: Seq[Str -> Document] = Seq(),
-    ex: Seq[Str -> Document] = Seq(),
-    st: Opt[Str] = N,
-    el: Seq[Str -> Document] = Seq(),
-    da: Seq[Str -> Document] = Seq()
-) extends ToWat:
-  def toWat: Document =
-    doc"(module${id.fold(doc"")(id => doc" $id")} #{  # ${Seq(
-        ty.map(_._2.toWat),
-        im.map(_._2),
-        fn.map(_._2.toWat),
-        ta.map(_._2),
-        me.map(_._2),
-        gl.map(_._2),
-        ex.map(_._2),
-        st.map(st => doc"(start $$$st)").toSeq,
-        el.map(_._2),
-        da.map(_._2)
-      ).flatten.mkDocument(Document.forceBreak)} #} )"
-end Module
+type Expr = FoldedInstr
