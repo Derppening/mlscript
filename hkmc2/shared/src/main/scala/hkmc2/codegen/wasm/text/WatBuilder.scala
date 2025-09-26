@@ -47,9 +47,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     unreachable
 
   /**
-    * Raises an [[ErrorReport]] with the given `warnMsgs` and `extraInfo`, and emits an
-    * `unreachable` instruction.
-    */
+   * Raises an [[ErrorReport]] with the given `warnMsgs` and `extraInfo`, and emits an `unreachable`
+   * instruction.
+   */
   def errExpr(errMsgs: Ls[Message -> Opt[Loc]], extraInfo: => Opt[Any] = N)(using
       Ctx,
       Raise
@@ -153,8 +153,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           ref.func(funcIdx, RefType(ctx.getFuncInfo_!(l).typeIdx, nullable = false))
         case N => getVar(l, r.toLoc)
 
-    case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil)
-        if !l.functionLike =>
+    case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil) if !l.functionLike =>
       if l.binary then
         l.nme match
           case "+" =>
@@ -280,9 +279,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     case r =>
       errExpr(
-        Ls(
-          msg"WatBackend::result for expression not implemented yet" -> r.toLoc
-        ),
+        Ls(msg"WatBackend::result for expression not implemented yet" -> r.toLoc),
         extraInfo = S(s"Block IR: `${r.toString}`")
       )
   end result
@@ -294,7 +291,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case Assign(l, r, rst) =>
       val lExpr = getVar(l, l.toLoc)
-      if lExpr.resultTypes.exists(_ is UnreachableType) then return lExpr
       val rExpr = result(r)
       val idx = lExpr.instrargs(0).asInstanceOf[LocalIdx]
       val assignExpr = lExpr.mnemonicPrefix match
@@ -315,10 +311,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Instructions.block(
         label = N,
         children = Seq(assignExpr, rstBlk),
-        resultTypes = rstBlk.resultTypes match
-          case Seq() => Seq.empty
-          case ty :: Seq() => Seq(Result(ty.asValType_!))
-          case tys => tys.map(ty => Result(ty.asValType_!))
+        resultTypes = rstBlk.resultTypes.map(ty => Result(ty.asValType_!))
       )
 
     case Define(defn, rst) =>
@@ -343,9 +336,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 label = N,
                 children = Seq(
                   struct.set(
-                    fieldSelect(ownerBlkMem, tsym),
-                    mkThis(owner),
-                    result(p)
+                    index = fieldSelect(ownerBlkMem, tsym),
+                    ref = mkThis(owner),
+                    value = result(p)
                   ),
                   rstWat
                 ),
@@ -393,11 +386,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     val funcInfo =
                       FuncInfo(
                         sym,
-                        funcTy,
-                        ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
-                        bodyWat.resultTypes.length,
-                        locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
-                        bodyWat
+                        typeIdx = funcTy,
+                        params = ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
+                        nResults = bodyWat.resultTypes.length,
+                        locals = locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
+                        body = bodyWat
                       )
                     val func = ctx.addFunc(S(defn.sym), funcInfo)
 
@@ -537,10 +530,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             case _ => Instructions.block(
                 label = N,
                 children = Seq(res, rstBlk),
-                resultTypes = rstBlk.resultTypes match
-                  case Seq() => Seq.empty
-                  case ty :: Seq() => Seq(Result(ty.asValType_!))
-                  case tys => tys.map(ty => Result(ty.asValType_!))
+                resultTypes = rstBlk.resultTypes.map(ty => Result(ty.asValType_!))
               )
 
     case Return(res, true) =>
@@ -574,9 +564,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     case t =>
       errExpr(
-        Ls(
-          msg"WatBuilder::returningTerm for expression not implemented yet" -> N
-        ),
+        Ls(msg"WatBuilder::returningTerm for expression not implemented yet" -> N),
         extraInfo = S(t.showAsTree)
       )
   end returningTerm

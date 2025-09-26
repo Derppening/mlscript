@@ -35,8 +35,7 @@ end VarId
  * @param varId
  *   The identifier of the module in JavaScript code.
  */
-case class ModRef(gen: BinaryenJSBackend, varId: VarId)
-    extends Module[TypeRef, ExprRef]
+case class ModRef(gen: BinaryenJSBackend, varId: VarId) extends Module[TypeRef, ExprRef]
     with ToJSRepr:
   type Exprt = ExportRef
   type Func = FuncRef
@@ -51,9 +50,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       body: ExprRef
   ): Func =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunction($name, ${params.toJSRepr}, ${results.toJSRepr}, ${vars
-          .map(_.toJSRepr)
-          .mkString("[", ", ", "]")}, ${body.toJSRepr});"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunction($name, ${params.toJSRepr}, ${results.toJSRepr}, ${vars.map(_.toJSRepr).mkString("[", ", ", "]")}, ${body.toJSRepr});"
       new Func(freshId)
 
   /**
@@ -78,17 +75,9 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       results: TypeRef
   ): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.addFunctionImport($internalName, $externalModuleName, $externalBaseName, ${params.toJSRepr}, ${results.toJSRepr});"
-  def addTableImport(
-      internalName: Str,
-      externalModuleName: Str,
-      externalBaseName: Str
-  ): Unit =
+  def addTableImport(internalName: Str, externalModuleName: Str, externalBaseName: Str): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.addTableImport($internalName, $externalModuleName, $externalBaseName);"
-  def addMemoryImport(
-      internalName: Str,
-      externalModuleName: Str,
-      externalBaseName: Str
-  ): Unit =
+  def addMemoryImport(internalName: Str, externalModuleName: Str, externalBaseName: Str): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.addMemoryImport($internalName, $externalModuleName, $externalBaseName);"
   def addGlobalImport(
       internalName: Str,
@@ -98,10 +87,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   ): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.addGlobalImport($internalName, $externalModuleName, $externalBaseName, ${globalType.toJSRepr});"
 
-  def addFunctionExport(
-      internalName: Str,
-      externalName: Str
-  ): Exprt =
+  def addFunctionExport(internalName: Str, externalName: Str): Exprt =
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addFunctionExport($internalName, $externalName);"
       new Exprt(freshId)
@@ -109,27 +95,16 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addTableExport($internalName, $externalName);"
       new Exprt(freshId)
-  def addMemoryExport(
-      internalName: Str,
-      externalName: Str
-  ): Exprt =
+  def addMemoryExport(internalName: Str, externalName: Str): Exprt =
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addMemoryExport($internalName, $externalName);"
       new Exprt(freshId)
-  def addGlobalExport(
-      internalName: Str,
-      externalName: Str
-  ): Exprt =
+  def addGlobalExport(internalName: Str, externalName: Str): Exprt =
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addGlobalExport($internalName, $externalName);"
       new Exprt(freshId)
 
-  def addGlobal(
-      name: Str,
-      ty: TypeRef,
-      mutable: Bool,
-      value: ExprRef
-  ): Glob =
+  def addGlobal(name: Str, ty: TypeRef, mutable: Bool, value: ExprRef): Glob =
     gen.withFreshVarId: freshId =>
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.addGlobal($name, ${ty.toJSRepr}, ${
           if mutable then 1 else 0
@@ -145,12 +120,10 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       segments: Seq[MemorySegment[ExprRef]],
       shared: Bool
   ): Unit =
-    gen.db +=\\
-      doc"${this.toJSRepr}.setMemory(${initial.toString}, ${maximum.toString}, ${exportName.orNull}, ${segments
-          .map(s =>
-            s"{offset: ${s.offset.toJSRepr}, data: new Uint8Array(${s.data.mkString("[", ", ", "]")}), passive: ${s.passive}"
-          )
-          .mkString("[", ", ", "]")}, ${shared.toString});"
+    gen.db +=\\ doc"${this.toJSRepr}.setMemory(${initial.toString}, ${maximum.toString}, ${exportName.orNull}, ${segments.map(
+        s =>
+          s"{offset: ${s.offset.toJSRepr}, data: new Uint8Array(${s.data.mkString("[", ", ", "]")}), passive: ${s.passive}"
+      ).mkString("[", ", ", "]")}, ${shared.toString});"
 
   def setStart(start: Func): Unit =
     gen.db +=\\ doc"${this.toJSRepr}.setStart(${start.toJSRepr});"
@@ -160,65 +133,43 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
       gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.getFunctionInfo(${ftype.toJSRepr});"
       new FuncInfo(freshId)
 
-  def block(
-      label: Opt[Str],
-      children: Seq[ExprRef],
-      resultType: Opt[TypeRef]
-  ): ExprRef =
+  def block(label: Opt[Str], children: Seq[ExprRef], resultType: Opt[TypeRef]): ExprRef =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.block(${label.orNull}, ${children
-            .map(_.toJSRepr)
-            .mkDocument(pre = "[", ", ", post = "]")}${resultType
-            .map(resTy => s", ${resTy.toJSRepr}")
-            .getOrElse("")});"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.block(${label.orNull}, ${children.map(
+          _.toJSRepr
+        ).mkDocument(pre = "[", ", ", post = "]")}${resultType.map(resTy => s", ${resTy.toJSRepr}").getOrElse("")});"
       new ExprRef(freshId)
 
-  def `if`(
-      condition: ExprRef,
-      ifTrue: ExprRef,
-      ifFalse: Opt[ExprRef]
-  ): ExprRef =
+  def `if`(condition: ExprRef, ifTrue: ExprRef, ifFalse: Opt[ExprRef]): ExprRef =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.if(${condition.toJSRepr}, ${ifTrue.toJSRepr}${ifFalse
-            .dlof(iff => doc", ${iff.toJSRepr}")(doc"")});"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.if(${condition.toJSRepr}, ${ifTrue.toJSRepr}${ifFalse.fold(
+          doc""
+        )(iff => doc", ${iff.toJSRepr}")});"
       new ExprRef(freshId)
 
   def nop(): ExprRef =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.nop();"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.nop();"
       new ExprRef(freshId)
 
   def `return`(value: Opt[ExprRef]): ExprRef =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.return(${value.map(_.toJSRepr).getOrElse("")});"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.return(${value.map(_.toJSRepr).getOrElse("")});"
       new ExprRef(freshId)
 
   def unreachable(): ExprRef =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.unreachable();"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.unreachable();"
       new ExprRef(freshId)
 
   def drop(value: ExprRef): ExprRef =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.drop(${value.toJSRepr});"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.drop(${value.toJSRepr});"
       new ExprRef(freshId)
 
-  def call(
-      name: Str,
-      operands: Seq[ExprRef],
-      returnType: TypeRef
-  ): ExprRef =
+  def call(name: Str, operands: Seq[ExprRef], returnType: TypeRef): ExprRef =
     gen.withFreshVarId: freshId =>
-      gen.db +=\\
-        doc"${freshId.toJSRepr} = ${this.toJSRepr}.call($name, ${operands
-            .map(_.toJSRepr)
-            .mkDocument(doc"[", doc", ", doc"]")}, ${returnType.toJSRepr});"
+      gen.db +=\\ doc"${freshId.toJSRepr} = ${this.toJSRepr}.call($name, ${operands.map(_.toJSRepr).mkDocument(doc"[", doc", ", doc"]")}, ${returnType.toJSRepr});"
       new ExprRef(freshId)
 
   def call_ref(
@@ -280,9 +231,7 @@ case class ModRef(gen: BinaryenJSBackend, varId: VarId)
   def struct: Struct = new Struct:
     def `new`(operands: Seq[ExprRef], ty: TypeRef): ExprRef =
       gen.withFreshVarId: freshId =>
-        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.struct.new(${operands
-            .map(_.toJSRepr)
-            .mkDocument("[", ", ", "]")}, ${ty.toJSRepr});"
+        gen.db +=\\ doc"${freshId.toJSRepr} = ${ModRef.this.toJSRepr}.struct.new(${operands.map(_.toJSRepr).mkDocument("[", ", ", "]")}, ${ty.toJSRepr});"
         new ExprRef(freshId)
 
     def new_default(ty: TypeRef): ExprRef =
@@ -349,9 +298,7 @@ case class FuncRef(varId: VarId) extends Function[FuncRef] with ToJSRepr:
 end FuncRef
 
 /** A reference to a structure containing function information in Binaryen. */
-case class FuncInfoRef(varId: VarId)
-    extends FunctionInfo[TypeRef]
-    with ToJSRepr:
+case class FuncInfoRef(varId: VarId) extends FunctionInfo[TypeRef] with ToJSRepr:
   def toJSRepr: Document = varId.toJSRepr
 end FuncInfoRef
 
@@ -384,19 +331,11 @@ end GlobalRef
  *   The identifier of the type builder in JavaScript code.
  */
 case class TypeBuilder(gen: BinaryenJSBackend, varId: VarId)
-    extends wasm.TypeBuilder[TypeRef, PackedTypeRef]
-    with ToJSRepr:
-  def setSignatureType(
-      index: Int,
-      paramTypes: TypeRef,
-      resultTypes: TypeRef
-  ): Unit =
+    extends wasm.TypeBuilder[TypeRef, PackedTypeRef] with ToJSRepr:
+  def setSignatureType(index: Int, paramTypes: TypeRef, resultTypes: TypeRef): Unit =
     gen.db +=\\ doc"${varId.toJSRepr}.setSignatureType($index, ${paramTypes.toJSRepr}, ${resultTypes.toJSRepr});"
 
-  def setStructType(
-      index: Int,
-      fields: Seq[(TypeRef | PackedTypeRef, Bool)]
-  ): Unit =
+  def setStructType(index: Int, fields: Seq[(TypeRef | PackedTypeRef, Bool)]): Unit =
     def fieldToObj(field: (TypeRef | PackedTypeRef, Bool)): Document =
       field._1 match
         case ty: TypeRef =>
@@ -445,8 +384,7 @@ end PackedTypeRef
  *   The identifier of which the Binaryen module is loaded and referred to in the JavaScript code.
  */
 class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
-    extends WasmGenerator[TypeRef, PackedTypeRef, ModRef, TypeBuilder, ExprRef]
-    with AutoCloseable:
+    extends WasmGenerator[TypeRef, PackedTypeRef, ModRef, TypeBuilder, ExprRef] with AutoCloseable:
   type TypeRefs = VarId
 
   /**
@@ -550,16 +488,11 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
       db +=\\ doc"${freshId.toJSRepr} = $modId.getExpressionType(${expr.toJSRepr});"
       TypeRef(freshId)
 
-  def getExpressionWasmType(
-      expr: ExprRef,
-      expectsValue: Bool
-  ): TypeRef =
+  def getExpressionWasmType(expr: ExprRef, expectsValue: Bool): TypeRef =
     val exprType = getExpressionType(expr)
     withFreshVarId: freshId =>
       db +=\\ doc"""if (${exprType.toJSRepr} == $modId.unreachable) {
-        ${freshId.toJSRepr} = ${
-          if expectsValue then doc"$modId.anyref" else doc"$modId.none"
-        };
+        ${freshId.toJSRepr} = ${if expectsValue then doc"$modId.anyref" else doc"$modId.none"};
       } else {
         ${freshId.toJSRepr} = ${exprType.toJSRepr}
       }"""
@@ -570,9 +503,7 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
    *
    * This is used to simplify capturing intermediate Binaryen values.
    */
-  def withFreshVarId[T](block: VarId => T): T = block(
-    VarId(varCounter.getAndIncrement())
-  )
+  def withFreshVarId[T](block: VarId => T): T = block(VarId(varCounter.getAndIncrement()))
 
   def newModule: ModRef =
     withFreshVarId: freshId =>
@@ -594,9 +525,7 @@ class BinaryenJSBackend(private[binaryen] val modId: Str = "binaryen")
    * Converts all collected JavScript calls into a [[Document]] for execution.
    */
   def dumpJS: Document =
-    val prelude = (0L until varCounter.get())
-      .map(VarId(_).toJSRepr)
-      .mkDocument("let ", ", ", ";")
+    val prelude = (0L until varCounter.get()).map(VarId(_).toJSRepr).mkDocument("let ", ", ", ";")
     prelude :\\: db.toDoc
 
 end BinaryenJSBackend

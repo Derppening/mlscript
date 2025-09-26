@@ -232,11 +232,8 @@ case class FoldedInstr(
           case a: Document => a
       .mkDocument(doc" ").surroundUnlessEmpty(doc" ")
     }${
-      stackargs
-        .map(_.toWat)
-        .optionIf(_.nonEmpty)
-        .map(_.mkDocument(doc" # "))
-        .fold(doc"")(stackarg => doc" #{  # $stackarg #} ")
+      stackargs.map(_.toWat).optionIf(_.nonEmpty).map(_.mkDocument(doc" # ")).fold(doc""): args =>
+        doc" #{  # $args #} "
     })"
 end FoldedInstr
 

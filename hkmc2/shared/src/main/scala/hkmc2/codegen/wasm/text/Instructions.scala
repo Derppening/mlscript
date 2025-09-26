@@ -16,10 +16,7 @@ object Instructions:
 
     FoldedInstr(
       mnemonic = "block",
-      instrargs =
-        labelWat.toSeq ++ resultTypes.map(resTy =>
-          SignatureType(params = Seq.empty, results = Seq(resTy))
-        ),
+      instrargs = labelWat.toSeq ++ resultTypes,
       stackargs = children,
       resultTypes = resultTypes.map(_.valtype)
     )
@@ -201,17 +198,17 @@ object Instructions:
     /** Creates a `struct.set` instruction. */
     def set(index: FieldIdx, ref: Expr, value: FoldedInstr): FoldedInstr = FoldedInstr(
       mnemonic = "struct.set",
-      instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),
+      instrargs = Seq(ref.resultType_!.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref, value),
-      resultType = if value.resultType is UnreachableType then S(UnreachableType) else N
+      resultType = if value.resultType_! is UnreachableType then S(UnreachableType) else N
     )
 
     /** Creates a `struct.get` instruction. */
     def get(index: FieldIdx, ref: Expr, ty: WasmType): FoldedInstr = FoldedInstr(
       mnemonic = "struct.get",
-      instrargs = Seq(ref.resultType.get.asInstanceOf[RefType].heapType, index),
+      instrargs = Seq(ref.resultType_!.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref),
-      resultType = S(if ref.resultType is UnreachableType then UnreachableType else ty)
+      resultType = S(if ref.resultType_! is UnreachableType then UnreachableType else ty)
     )
 
   end struct

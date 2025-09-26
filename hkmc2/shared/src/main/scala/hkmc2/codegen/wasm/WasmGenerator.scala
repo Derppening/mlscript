@@ -34,11 +34,7 @@ abstract class Global[G <: Global[G]]
  * Represention of a data segment used to initialize Wasm memories. See
  * [[https://webassembly.github.io/gc/core/text/modules.html#data-segments]]
  */
-case class MemorySegment[E <: Expression[E]](
-    offset: E,
-    data: Seq[Byte],
-    passive: Bool
-)
+case class MemorySegment[E <: Expression[E]](offset: E, data: Seq[Byte], passive: Bool)
 
 /** Abstract class representing a Wasm type. */
 abstract class Type
@@ -162,13 +158,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   type Glob <: wasm.Global[Glob]
 
   /** Adds a function to this module. */
-  def addFunction(
-      name: Str,
-      params: Type,
-      results: Type,
-      vars: Seq[Type],
-      body: Expr
-  ): Func
+  def addFunction(name: Str, params: Type, results: Type, vars: Seq[Type], body: Expr): Func
 
   /**
    * Gets a function by name.
@@ -191,18 +181,10 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
   ): Unit
 
   /** Adds a table `import` section to this module. */
-  def addTableImport(
-      internalName: Str,
-      externalModuleName: Str,
-      externalBaseName: Str
-  ): Unit
+  def addTableImport(internalName: Str, externalModuleName: Str, externalBaseName: Str): Unit
 
   /** Adds a memory `import` section to this module. */
-  def addMemoryImport(
-      internalName: Str,
-      externalModuleName: Str,
-      externalBaseName: Str
-  ): Unit
+  def addMemoryImport(internalName: Str, externalModuleName: Str, externalBaseName: Str): Unit
 
   /** Adds a global `import` section to this module. */
   def addGlobalImport(
@@ -255,11 +237,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
    * @param resultType
    *   The result type of the block.
    */
-  def block(
-      label: Opt[Str],
-      children: Seq[Expr],
-      resultType: Opt[Type]
-  ): Expr
+  def block(label: Opt[Str], children: Seq[Expr], resultType: Opt[Type]): Expr
 
   /**
    * Creates an `if` instruction.
@@ -312,12 +290,7 @@ abstract class Module[Type <: wasm.Type, Expr <: Expression[Expr]]:
    * @param results
    *   The result types of the function.
    */
-  def call_ref(
-      target: Expr,
-      operands: Seq[Expr],
-      params: Type,
-      results: Type
-  ): Expr
+  def call_ref(target: Expr, operands: Seq[Expr], params: Type, results: Type): Expr
 
   /** Returns a handle to create `i32` instructions. */
   def i32: I32
@@ -355,11 +328,10 @@ end Module
  * @note
  *   The API of this class is based on the `binaryen.js` API.
  */
-abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[
+abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[
   T,
-  E
-], TB <: TypeBuilder[T, PT], E <: Expression[E]]
-    extends CodeBuilder:
+  PT
+], E <: Expression[E]] extends CodeBuilder:
 
   /** Type alias for representing multiple Wasm types. */
   type TypeRefs
@@ -447,12 +419,10 @@ abstract class WasmGenerator[T <: Type, PT <: PackedType, M <: Module[
 
 object WasmGenerator:
   /** Test function for creating a simple module. */
-  def mkSimpleModule[T <: Type, PT <: PackedType, M <: Module[
+  def mkSimpleModule[T <: Type, PT <: PackedType, M <: Module[T, E], TB <: TypeBuilder[
     T,
-    E
-  ], TB <: TypeBuilder[T, PT], E <: Expression[E]](
-      gen: WasmGenerator[T, PT, M, TB, E]
-  ): M =
+    PT
+  ], E <: Expression[E]](gen: WasmGenerator[T, PT, M, TB, E]): M =
     val mod = gen.newModule
     locally:
       import mod.*
