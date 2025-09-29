@@ -2,27 +2,22 @@
 :global
 :wasm
 
-:rwasm
 false
 //│ Wasm => 0
 
 
-:rwasm
 true
 //│ Wasm => 1
 
 
-:rwasm
 2
 //│ Wasm => 2
 
 
-:rwasm
 1 + 1
 //│ Wasm => 2
 
 
-:rwasm
 let x = 0
 x
 //│ Wasm => 0
@@ -32,35 +27,30 @@ x
 fun foo() = 42
 foo
 //│ ╔══[COMPILATION ERROR] Returning function instances is not supported
-//│ ║  l.33: 	foo
+//│ ║  l.28: 	foo
 //│ ╙──      	^^^
 
 
-:rwasm
 fun foo() = 42
 foo()
 //│ Wasm => 42
 
 
-:rwasm
 fun foo() = 42
 foo() + foo()
 //│ Wasm => 84
 
 
-:rwasm
 fun foo(x) = x + 1
 foo(41)
 //│ Wasm => 42
 
 
-:rwasm
 class Foo(val x)
 new Foo(0)
 //│ Wasm => [Object: null prototype] {}
 
 
-:rwasm
 class Foo(val a)
 (new Foo(42)).Foo#a
 //│ Wasm => 42

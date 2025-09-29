@@ -28,14 +28,6 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
   /** Outputs the compiled module as folded text (i.e. S-expression). */
   val fwat = NullaryCommand("fwat")
 
-  /**
-   * Compiles the Wasm text into a binary and executes it.
-   *
-   * This currently executes the `main` function of the Wasm module, regardless of what is defined
-   * in `startfunc`.
-   */
-  val rwasm = NullaryCommand("rwasm")
-
   private val baseScp: utils.Scope =
     utils.Scope.empty
 
@@ -108,13 +100,13 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
             output(s"Error: $err")
             return
 
-      if rwasm.isSet then
-        s"await wasm.binaryenRunFunc(`${modWat.toString}`, exports => exports.${mainFnNme}())"
-          .replace('\n', ' ') |> host.execute match
-          case ReplHost.Result(content) =>
-            output(s"Wasm => $content")
-          case err =>
-            output(s"Error while executing Wasm: $err")
-            return
+      s"await wasm.binaryenRunFunc(`${modWat.toString}`, exports => exports.${mainFnNme}())"
+        .replace('\n', ' ') |> host.execute match
+        case ReplHost.Result(content) =>
+          output(s"Wasm => $content")
+        case err =>
+          output(s"Error while executing Wasm: $err")
+          return
+    end if
   end processTerm
 end WasmDiffMaker
