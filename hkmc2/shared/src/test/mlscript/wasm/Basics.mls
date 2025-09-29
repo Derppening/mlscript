@@ -1,306 +1,64 @@
-:wat
+:wasm
+
 :rwasm
-
-:wasm
 false
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (func $entry (type 0) (result (ref null any))
-//│     (ref.i31
-//│       (i32.const 0)))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 0
+//│ Wasm => 0
 
 
-:wasm
+:rwasm
 true
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (func $entry (type 0) (result (ref null any))
-//│     (ref.i31
-//│       (i32.const 1)))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 1
+//│ Wasm => 1
 
 
-:wasm
+:rwasm
 2
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (func $entry (type 0) (result (ref null any))
-//│     (ref.i31
-//│       (i32.const 2)))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 2
+//│ Wasm => 2
 
 
-:wasm
+:rwasm
 1 + 1
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (func $entry (type 0) (result (ref null any))
-//│     (ref.i31
-//│       (i32.add
-//│         (i31.get_s
-//│           (ref.i31
-//│             (i32.const 1)))
-//│         (i31.get_s
-//│           (ref.i31
-//│             (i32.const 1))))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 2
+//│ Wasm => 2
 
 
-:wasm
+:rwasm
 let x = 0
 x
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (func $entry (type 0) (result (ref null any))
-//│     (local $x (ref null any))
-//│     (block (result (ref null any))
-//│       (local.set $x
-//│         (ref.i31
-//│           (i32.const 0)))
-//│       (local.get $x)))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 0
+//│ Wasm => 0
 
 
-:wasm
 :ge
 fun foo() = 42
 foo
 //│ ╔══[COMPILATION ERROR] Returning function instances is not supported
-//│ ║  l.88: 	foo
+//│ ║  l.31: 	foo
 //│ ╙──      	^^^
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $foo (type 0) (result (ref null any))
-//│     (return
-//│       (ref.i31
-//│         (i32.const 42))))
-//│   (export "foo" (func $foo))
-//│   (elem declare func $foo)
-//│   (func $entry (type 1) (result (ref null any))
-//│     (local $foo (ref null any))
-//│     (block (result (ref 0))
-//│       (nop)
-//│       (ref.func $foo)))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ Uncaught:
-//│ CompileError: WebAssembly.instantiate(): Compiling function #1 failed: type error in fallthru[0] (expected anyref, got (ref 0)) @+62
 
 
-:wasm
+:rwasm
 fun foo() = 42
 foo()
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $foo (type 0) (result (ref null any))
-//│     (return
-//│       (ref.i31
-//│         (i32.const 42))))
-//│   (export "foo" (func $foo))
-//│   (elem declare func $foo)
-//│   (func $entry (type 1) (result (ref null any))
-//│     (local $foo (ref null any))
-//│     (block (result (ref null any))
-//│       (nop)
-//│       (call_ref 0
-//│         (ref.func $foo))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 42
+//│ Wasm => 42
 
 
-:wasm
+:rwasm
 fun foo() = 42
 foo() + foo()
-//│ Wat:
-//│ (module
-//│   (type (func (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $foo (type 0) (result (ref null any))
-//│     (return
-//│       (ref.i31
-//│         (i32.const 42))))
-//│   (export "foo" (func $foo))
-//│   (elem declare func $foo)
-//│   (func $entry (type 1) (result (ref null any))
-//│     (local $foo (ref null any))
-//│     (local $tmp (ref null any))
-//│     (local $tmp1 (ref null any))
-//│     (block (result (ref null i31))
-//│       (nop)
-//│       (block (result (ref null i31))
-//│         (local.set $tmp
-//│           (call_ref 0
-//│             (ref.func $foo)))
-//│         (block (result (ref null i31))
-//│           (local.set $tmp1
-//│             (call_ref 0
-//│               (ref.func $foo)))
-//│           (ref.i31
-//│             (i32.add
-//│               (if (result i32)
-//│                 (ref.test (ref null i31)
-//│                   (local.get $tmp))
-//│                 (then
-//│                   (i31.get_s
-//│                     (ref.cast (ref null i31)
-//│                       (local.get $tmp))))
-//│                 (else
-//│                   (unreachable)))
-//│               (if (result i32)
-//│                 (ref.test (ref null i31)
-//│                   (local.get $tmp1))
-//│                 (then
-//│                   (i31.get_s
-//│                     (ref.cast (ref null i31)
-//│                       (local.get $tmp1))))
-//│                 (else
-//│                   (unreachable)))))))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 84
+//│ Wasm => 84
 
 
-:wasm
+:rwasm
 fun foo(x) = x + 1
 foo(41)
-//│ Wat:
-//│ (module
-//│   (type (func (param $x (ref null any)) (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $foo (type 0) (param $x (ref null any)) (result (ref null any))
-//│     (return
-//│       (ref.i31
-//│         (i32.add
-//│           (if (result i32)
-//│             (ref.test (ref null i31)
-//│               (local.get $x))
-//│             (then
-//│               (i31.get_s
-//│                 (ref.cast (ref null i31)
-//│                   (local.get $x))))
-//│             (else
-//│               (unreachable)))
-//│           (i31.get_s
-//│             (ref.i31
-//│               (i32.const 1)))))))
-//│   (export "foo" (func $foo))
-//│   (elem declare func $foo)
-//│   (func $entry (type 1) (result (ref null any))
-//│     (local $foo (ref null any))
-//│     (block (result (ref null any))
-//│       (nop)
-//│       (call_ref 0
-//│         (ref.i31
-//│           (i32.const 41))
-//│         (ref.func $foo))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 42
+//│ Wasm => 42
 
 
-:wasm
+:rwasm
 class Foo(val x)
 new Foo(0)
-//│ Wat:
-//│ (module
-//│   (type $Foo (struct (field $x (mut (ref null any)))))
-//│   (type (func (param $x (ref null any)) (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $Foo (type 1) (param $x (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
-//│     (block (result (ref $Foo))
-//│       (local.set $this
-//│         (struct.new_default $Foo))
-//│       (block
-//│         (struct.set $Foo 0
-//│           (ref.cast (ref $Foo)
-//│             (local.get $this))
-//│           (local.get $x))
-//│         (nop))
-//│       (return
-//│         (local.get $this))))
-//│   (export "Foo" (func $Foo))
-//│   (elem declare func $Foo)
-//│   (func $entry (type 2) (result (ref null any))
-//│     (local $Foo (ref null any))
-//│     (block (result (ref $Foo))
-//│       (nop)
-//│       (call $Foo
-//│         (ref.i31
-//│           (i32.const 0)))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ [Object: null prototype] {}
+//│ Wasm => [Object: null prototype] {}
 
 
-:wasm
+:rwasm
 class Foo(val a)
 (new Foo(42)).Foo#a
-//│ Wat:
-//│ (module
-//│   (type $Foo (struct (field $a (mut (ref null any)))))
-//│   (type (func (param $a (ref null any)) (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $Foo (type 1) (param $a (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
-//│     (block (result (ref $Foo))
-//│       (local.set $this
-//│         (struct.new_default $Foo))
-//│       (block
-//│         (struct.set $Foo 0
-//│           (ref.cast (ref $Foo)
-//│             (local.get $this))
-//│           (local.get $a))
-//│         (nop))
-//│       (return
-//│         (local.get $this))))
-//│   (export "Foo" (func $Foo))
-//│   (elem declare func $Foo)
-//│   (func $entry (type 2) (result (ref null any))
-//│     (local $Foo (ref null any))
-//│     (local $tmp (ref null any))
-//│     (block (result (ref null any))
-//│       (nop)
-//│       (block (result (ref null any))
-//│         (local.set $tmp
-//│           (call $Foo
-//│             (ref.i31
-//│               (i32.const 42))))
-//│         (struct.get $Foo 0
-//│           (ref.cast (ref $Foo)
-//│             (local.get $tmp))))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ rwasm: Running
-//│ 42
+//│ Wasm => 42

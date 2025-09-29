@@ -68,6 +68,9 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       loadWasm
 
       given Raise =
+        // Ignore error about importing symbols not implemented
+        case err @ ErrorReport(source = Source.Compilation)
+            if "Import of symbol `.*Predef.mjs` not implemented yet".r.matches(err.mainMsg) => ()
         case d @ ErrorReport(source = Source.Compilation) =>
           reportedMessages += d.mainMsg
           outerRaise(d)
@@ -103,12 +106,10 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
             return
 
       if rwasm.isSet then
-        output("rwasm: Running")
-
         s"await wasm.binaryenRunFunc(`${modWat.toString}`, exports => exports.${mainFnNme}())"
           .replace('\n', ' ') |> host.execute match
           case ReplHost.Result(content) =>
-            output(content)
+            output(s"Wasm => $content")
           case err =>
             output(s"Error while executing Wasm: $err")
             return
