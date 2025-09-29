@@ -170,7 +170,7 @@ object Instructions:
 
   object local:
     /** Creates a `local.get` instruction. */
-    def get(index: LocalIdx, ty: WasmType): FoldedInstr = FoldedInstr(
+    def get(index: LocalIdx, ty: Type): FoldedInstr = FoldedInstr(
       mnemonic = "local.get",
       instrargs = Seq(index),
       stackargs = Seq.empty,
@@ -204,7 +204,7 @@ object Instructions:
     )
 
     /** Creates a `struct.get` instruction. */
-    def get(index: FieldIdx, ref: Expr, ty: WasmType): FoldedInstr = FoldedInstr(
+    def get(index: FieldIdx, ref: Expr, ty: Type): FoldedInstr = FoldedInstr(
       mnemonic = "struct.get",
       instrargs = Seq(ref.resultType_!.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref),

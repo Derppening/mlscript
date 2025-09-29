@@ -24,7 +24,7 @@ trait ToWat:
   def toWat: Document
 
 /** Abstract base class for all Wasm types. */
-abstract sealed class WasmType extends Type, ToWat:
+abstract sealed class Type extends ToWat:
 
   /** Attempts to convert this type to a [[`ValType`]]. */
   def asValType: Opt[ValType] = this match
@@ -34,19 +34,19 @@ abstract sealed class WasmType extends Type, ToWat:
   /** Same as [[`asValType`]], except throws an exception if this type is not a `ValType`. */
   def asValType_! : ValType = asValType.getOrElse:
     lastWords(s"asValType_! called on non-ValType: `$toWat` (${getClass.getName})")
-end WasmType
+end Type
 
-private case object I32Type extends WasmType:
+private case object I32Type extends Type:
   def toWat: Document = doc"i32"
-private case object I64Type extends WasmType:
+private case object I64Type extends Type:
   def toWat: Document = doc"i64"
-private case object F32Type extends WasmType:
+private case object F32Type extends Type:
   def toWat: Document = doc"f32"
-private case object F64Type extends WasmType:
+private case object F64Type extends Type:
   def toWat: Document = doc"f64"
-private case object V128Type extends WasmType:
+private case object V128Type extends Type:
   def toWat: Document = doc"v128"
-private case object UnreachableType extends WasmType:
+private case object UnreachableType extends Type:
   def toWat: Document = throw UnsupportedOperationException(
     s"${toString} is a compiler-internal type and cannot be converted to WAT"
   )
@@ -60,7 +60,7 @@ object RefType:
   def funcref: RefType = RefType(HeapType.Func, nullable = true)
 
 /** Wasm type representing a reference to a [[HeapType]]. */
-case class RefType(heapType: HeapType, nullable: Bool) extends WasmType:
+case class RefType(heapType: HeapType, nullable: Bool) extends Type:
   def toWat: Document =
     doc"(ref${if nullable then " null" else ""} ${heapType.toWat})"
 
@@ -116,7 +116,7 @@ end FunctionType
 
 /** A type representing a struct field. */
 case class Field(
-    ty: WasmType,
+    ty: Type,
     mutable: Bool,
     id: Opt[Str]
 ) extends ToWat:
@@ -198,7 +198,7 @@ object FoldedInstr:
       mnemonic: Str,
       instrargs: Seq[ToWat | Document],
       stackargs: Seq[FoldedInstr],
-      resultType: Opt[WasmType]
+      resultType: Opt[Type]
   ): FoldedInstr =
     new FoldedInstr(mnemonic, instrargs, stackargs, resultType.toSeq)
 
@@ -212,17 +212,17 @@ case class FoldedInstr(
     mnemonic: Str,
     instrargs: Seq[ToWat | Document],
     stackargs: Seq[Expr],
-    resultTypes: Seq[WasmType]
+    resultTypes: Seq[Type]
 ) extends Instruction:
 
   /** Returns the result type of this instruction if this instruction only has 0-1 result values. */
-  def resultType: Opt[WasmType] = resultTypes match
+  def resultType: Opt[Type] = resultTypes match
     case Seq() => N
     case ty :: Seq() => S(ty)
     case _ => lastWords(s"resultType_! called on instruction with multi-value result type: $this")
 
     /** Returns the singular result type of this instruction, otherwise throws an exception. */
-  def resultType_! : WasmType = resultType.getOrElse:
+  def resultType_! : Type = resultType.getOrElse:
     lastWords(s"resultType_! called on instruction with a non-unique result type: $this")
 
   def toWat: Document = doc"($mnemonic${
