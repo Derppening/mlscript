@@ -100,10 +100,11 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
             output(s"Error: $err")
             return
 
+      output("Wasm result:")
       s"await wasm.binaryenRunFunc(`${modWat.toString}`, exports => exports.${mainFnNme}())"
         .replace('\n', ' ') |> host.execute match
         case ReplHost.Result(content) =>
-          output(s"Wasm result: $content")
+          output(s"= $content")
         case err =>
           output(s"Error while executing Wasm: $err")
           return

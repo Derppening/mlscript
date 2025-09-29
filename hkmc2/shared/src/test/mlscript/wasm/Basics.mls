@@ -3,54 +3,64 @@
 :wasm
 
 false
-//│ Wasm => 0
+//│ Wasm result:
+//│ = 0
 
 
 true
-//│ Wasm => 1
+//│ Wasm result:
+//│ = 1
 
 
 2
-//│ Wasm => 2
+//│ Wasm result:
+//│ = 2
 
 
 1 + 1
-//│ Wasm => 2
+//│ Wasm result:
+//│ = 2
 
 
 let x = 0
 x
-//│ Wasm => 0
+//│ Wasm result:
+//│ = 0
 
 
 :ge
 fun foo() = 42
 foo
 //│ ╔══[COMPILATION ERROR] Returning function instances is not supported
-//│ ║  l.28: 	foo
+//│ ║  l.33: 	foo
 //│ ╙──      	^^^
 
 
 fun foo() = 42
 foo()
-//│ Wasm => 42
+//│ Wasm result:
+//│ = 42
 
 
 fun foo() = 42
 foo() + foo()
-//│ Wasm => 84
+//│ Wasm result:
+//│ = 84
 
 
 fun foo(x) = x + 1
 foo(41)
-//│ Wasm => 42
+//│ Wasm result:
+//│ = 42
 
 
 class Foo(val x)
 new Foo(0)
-//│ Wasm => [Object: null prototype] {}
+//│ Wasm result:
+//│ = [Object: null prototype] {}
 
 
 class Foo(val a)
 (new Foo(42)).Foo#a
-//│ Wasm => 42
+//│ Wasm result:
+//│ = 42
