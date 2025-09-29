@@ -67,8 +67,10 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
     if wasm.isSet then
       loadWasm
 
+      var errored = false
       given Raise =
         case d @ ErrorReport(source = Source.Compilation) =>
+          errored = true
           reportedMessages += d.mainMsg
           outerRaise(d)
         case d => outerRaise(d)
@@ -82,6 +84,10 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       if wat.isSet then
         output("Wat:")
         output(modWat.toString)
+
+      // A program with errors may have a WAT that is worth inspecting, but anything that involves
+      // using Binaryen requires a valid WAT
+      if errored then return
 
       if fwat.isSet then
         output("Formatted Wat (Folded):")
