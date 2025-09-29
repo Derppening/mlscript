@@ -68,9 +68,6 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       loadWasm
 
       given Raise =
-        // Ignore error about importing symbols not implemented
-        case err @ ErrorReport(source = Source.Compilation)
-            if "Import of symbol `.*Predef.mjs` not implemented yet".r.matches(err.mainMsg) => ()
         case d @ ErrorReport(source = Source.Compilation) =>
           reportedMessages += d.mainMsg
           outerRaise(d)
