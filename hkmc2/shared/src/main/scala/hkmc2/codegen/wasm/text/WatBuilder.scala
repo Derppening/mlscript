@@ -76,21 +76,24 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" -> ts.toLoc
           ),
           extraInfo = S(
-            s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nLocals: ${ctx.getLocals.toString}"
+            s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nWasm Locals: ${ctx.getAllWasmLocals.toString}"
           )
         )
       local.get(LocalIdx(SymIdx(scope.findThis_!(ts))), RefType.anyref)
     case l =>
-      if !ctx.containsLocal(l) then
-        return errExpr(
+      if ctx.containsLocal(l) then
+        local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
+      else if ctx.containsGlobal(l) then
+        global.get(GlobalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
+      else
+        errExpr(
           Ls(
             msg"WatBuilder::getVar for ${l.getClass.getSimpleName} (symbol not in top-level scope) not implemented yet" -> l.toLoc
           ),
           extraInfo = S(
-            s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nLocals: ${ctx.getLocals.toString}"
+            s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nWasm Locals: ${ctx.getAllWasmLocals.toString}"
           )
         )
-      local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
   end getVar
 
   def argument(a: Arg)(using Ctx, Raise, Scope): Expr =

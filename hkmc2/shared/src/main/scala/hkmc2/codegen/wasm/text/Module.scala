@@ -26,12 +26,12 @@ trait ToWat:
 /** Abstract base class for all Wasm types. */
 abstract sealed class Type extends ToWat:
 
-  /** Attempts to convert this type to a [[`ValType`]]. */
+  /** Attempts to convert this type to a [[[ValType]]]. */
   def asValType: Opt[ValType] = this match
     case ty: ValType => S(ty)
     case _ => N
 
-  /** Same as [[`asValType`]], except throws an exception if this type is not a `ValType`. */
+  /** Same as [[[asValType]]], except throws an exception if this type is not a `ValType`. */
   def asValType_! : ValType = asValType.getOrElse:
     lastWords(s"asValType_! called on non-ValType: `$toWat` (${getClass.getName})")
 end Type
@@ -166,6 +166,9 @@ abstract sealed class CtxIdx(idx: Index) extends ToWat:
 
 /** An index bound to the ''types'' index space. */
 case class TypeIdx(idx: Index) extends CtxIdx(idx)
+
+/** An index bound to the ''global'' index space. */
+case class GlobalIdx(idx: Index) extends CtxIdx(idx)
 
 /** An index bound to the ''funcs'' index space. */
 case class FuncIdx(idx: Index) extends CtxIdx(idx)

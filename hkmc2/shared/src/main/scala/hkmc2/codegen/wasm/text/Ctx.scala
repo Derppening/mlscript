@@ -141,13 +141,13 @@ object Ctx:
  * @param types
  *   [[ArrayBuf]] containing all type definitions in the module.
  * @param namedTypes
- *   [`MutMap`] containing type symbols mapped to their corresponding Wasm type indices.
+ *   [[MutMap]] containing type symbols mapped to their corresponding Wasm type indices.
  * @param funcs
- *   [`ArrayBuf`] containing all function definitions in the module.
+ *   [[ArrayBuf]] containing all function definitions in the module.
  * @param namedFuncs
- *   [`MutMap`] containing function symbols mapped to their corresponding Wasm function indices.
+ *   [[MutMap]] containing function symbols mapped to their corresponding Wasm function indices.
  * @param locals
- *   Stack of [`MutMap`] from local variable symbols to their numeric indices within the current
+ *   Stack of [[MutMap]] from local variable symbols to their numeric indices within the current
  *   function scope.
  */
 class Ctx(
@@ -169,7 +169,7 @@ class Ctx(
     TypeIdx(typeInfo.id.getOrElse(numIdx))
 
   /**
-   * Returns the [`TypeIdx`] of the given `typeref`, optionally resolving the symbolic index into a
+   * Returns the [[TypeIdx]] of the given `typeref`, optionally resolving the symbolic index into a
    * numeric index.
    */
   def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): Opt[TypeIdx] =
@@ -182,19 +182,19 @@ class Ctx(
         getType(sym, resolveSymIdx = true).map: numIdx =>
           getTypeInfo(numIdx).flatMap(_.id).fold(numIdx)(TypeIdx(_))
 
-  /** Same as [`getType`] but throws an exception when the `typeref` is not found. */
+  /** Same as [[getType]] but throws an exception when the `typeref` is not found. */
   def getType_!(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): TypeIdx =
     getType(typeref, resolveSymIdx).getOrElse:
       lastWords(s"Missing type definition for ${typeref.prettyString}")
 
-  /** Returns the [`TypeInfo`] instance associated with the given `typeref`. */
+  /** Returns the [[TypeInfo]] instance associated with the given `typeref`. */
   def getTypeInfo(typeref: TypeIdx | BlockMemberSymbol): Opt[TypeInfo] = typeref match
     case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
     case TypeIdx(SymIdx(nme)) =>
       namedTypes.find(_._1.nme == nme).flatMap(t => getTypeInfo(TypeIdx(t._2)))
     case sym: BlockMemberSymbol => namedTypes.get(sym).flatMap(idx => getTypeInfo(TypeIdx(idx)))
 
-  /** Same as [`getTypeInfo`] but throws an exception when the `typeref` is not found. */
+  /** Same as [[getTypeInfo]] but throws an exception when the `typeref` is not found. */
   def getTypeInfo_!(typeref: TypeIdx | BlockMemberSymbol): TypeInfo =
     getTypeInfo(typeref).getOrElse:
       lastWords(s"Missing type definition for ${typeref.prettyString}")
@@ -208,7 +208,7 @@ class Ctx(
     FuncIdx(funcInfo.id.getOrElse(numIdx))
 
   /**
-   * Returns the [`FuncIdx`] of the given `funcref`, optionally resolving the symbolic index into a
+   * Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a
    * numeric index.
    */
   def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = funcref match
@@ -220,17 +220,17 @@ class Ctx(
       getFunc(sym, resolveSymIdx = true).map: numIdx =>
         getFuncInfo(numIdx).flatMap(_.id).fold(numIdx)(FuncIdx(_))
 
-  /** Same as [`getFunc`] but throws an exception when the `funcref` is not found. */
+  /** Same as [[getFunc]] but throws an exception when the `funcref` is not found. */
   def getFunc_!(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): FuncIdx =
     getFunc(funcref, resolveSymIdx).getOrElse:
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
-  /** Returns the [`FuncInfo`] instance associated with the given `funcref`. */
+  /** Returns the [[FuncInfo]] instance associated with the given `funcref`. */
   def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
     case FuncIdx(NumIdx(idx)) => funcs.unapply(idx.toInt)
     case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))
 
-  /** Same as [`getFuncInfo`] but throws an exception when the `funcref` is not found. */
+  /** Same as [[getFuncInfo]] but throws an exception when the `funcref` is not found. */
   def getFuncInfo_!(funcref: FuncIdx | Symbol): FuncInfo =
     getFuncInfo(funcref).getOrElse:
       lastWords(s"Missing function definition for ${funcref.prettyString}")
@@ -247,15 +247,42 @@ class Ctx(
     locals.head(sym) = numIdx
     LocalIdx(numIdx)
 
-  /** Adds a [`Seq`] of local variables into the top-most variable scope. */
+  /** Adds a [[Seq]] of local variables into the top-most variable scope. */
   def addLocals(syms: Seq[Local]): Seq[LocalIdx] =
     syms.map(addLocal)
 
   /** Checks whether the top-most level local variable scope contains the local variable `sym`. */
   def containsLocal(sym: Local): Bool = locals.head.contains(sym)
 
+  /** Adds a new variable into the global variable scope. */
+  def addGlobal(sym: Symbol): GlobalIdx =
+    val numIdx = NumIdx(locals.last.size)
+    locals.last(sym) = numIdx
+    GlobalIdx(numIdx)
+
+  /** Adds a [[Seq]] of variables into the global variable scope. */
+  def addGlobals(syms: Seq[Symbol]): Seq[GlobalIdx] =
+    syms.map(addGlobal)
+
+    /** Checks whether the global variable scope contains the variable `sym`. */
+  def containsGlobal(sym: Symbol): Bool = locals.last.contains(sym)
+
+  /**
+   * Converts a [[Map]] of symbols and their respective numeric identifiers into a [[Seq]] of
+   * symbols sorted by its numeric index.
+   */
+  private def wasmLocalsToSeq(scope: Map[Symbol, NumIdx]): Seq[Local] =
+    scope.toSeq.sortBy(_._2.index).map(_._1)
+
+  /**
+   * Returns a tuple containing the variables in the current `global` and `local` scopes
+   * respectively.
+   */
+  def getWasmLocals: Seq[Symbol] -> Opt[Seq[Local]] =
+    wasmLocalsToSeq(locals.last.toMap) -> locals.headOption.map(l => wasmLocalsToSeq(l.toMap))
+
   /** Returns all local variable scopes and their variables. */
-  def getLocals: Ls[Seq[Local]] = locals.map(_.toSeq.sortBy(_._2.index).map(_._1))
+  def getAllWasmLocals: Ls[Seq[Local]] = locals.map(l => wasmLocalsToSeq(l.toMap))
 
   def toWat: Document =
     doc"""(module #{  # ${(types.toSeq ++ funcs.toSeq).map(_.toWat).mkDocument(doc" # ")}) #} """

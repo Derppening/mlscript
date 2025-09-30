@@ -181,6 +181,24 @@ object Instructions:
     )
   end local
 
+  object global:
+    /** Creates a `global.get` instruction. */
+    def get(index: GlobalIdx, ty: Type): FoldedInstr = FoldedInstr(
+      mnemonic = "global.get",
+      instrargs = Seq(index),
+      stackargs = Seq.empty,
+      resultType = S(ty)
+    )
+
+    /** Creates a `global.set` instruction. */
+    def set(index: GlobalIdx, value: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "global.set",
+      instrargs = Seq(index),
+      stackargs = Seq(value),
+      resultType = N
+    )
+  end global
+
   object struct:
     /** Creates a `struct.new_default` instruction. */
     def new_default(ty: TypeIdx): FoldedInstr = FoldedInstr(
