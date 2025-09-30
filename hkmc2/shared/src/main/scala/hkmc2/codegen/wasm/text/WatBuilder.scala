@@ -310,7 +310,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Instructions.block(
         label = N,
         children = Seq(assignExpr, rstBlk),
-        resultTypes = rstBlk.resultTypes.map(ty => Result(ty.asValType_!))
+        resultTypes = rstBlk.resultTypes.map: ty =>
+          Result(if ty is UnreachableType then RefType.anyref else ty.asValType_!)
       )
 
     case Define(defn, rst) =>

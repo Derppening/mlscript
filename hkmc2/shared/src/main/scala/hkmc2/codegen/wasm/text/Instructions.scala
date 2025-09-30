@@ -113,11 +113,7 @@ object Instructions:
       mnemonic = "i32.add",
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
-      resultType = S(
-        (lhs.resultType, rhs.resultType) match
-          case (UnreachableType, _) | (_, UnreachableType) => UnreachableType
-          case _ => I32Type
-      )
+      resultType = S(I32Type)
     )
   end i32
 
@@ -135,8 +131,7 @@ object Instructions:
       mnemonic = "ref.i31",
       instrargs = Seq.empty,
       stackargs = Seq(value),
-      resultType =
-        S(if value.resultType is UnreachableType then UnreachableType else RefType.i31ref)
+      resultType = S(RefType.i31ref)
     )
 
     /** Creates a `ref.test` instruction. */
@@ -144,7 +139,7 @@ object Instructions:
       mnemonic = "ref.test",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(value),
-      resultType = S(if value.resultType is UnreachableType then UnreachableType else I32Type)
+      resultType = S(I32Type)
     )
 
     /** Creates a `ref.cast` instruction. */
@@ -152,7 +147,7 @@ object Instructions:
       mnemonic = "ref.cast",
       instrargs = Seq(castType.toWat),
       stackargs = Seq(value),
-      resultType = S(if value.resultType is UnreachableType then UnreachableType else castType)
+      resultType = S(castType)
     )
   end ref
 
@@ -161,7 +156,7 @@ object Instructions:
       mnemonic = s"i31.get_${if signed then 's' else 'u'}",
       instrargs = Seq.empty,
       stackargs = Seq(i31),
-      resultType = S(if i31.resultType is UnreachableType then UnreachableType else I32Type)
+      resultType = S(I32Type)
     )
 
     /** Creates an `i31.get_s` instruction. */
@@ -182,7 +177,7 @@ object Instructions:
       mnemonic = "local.set",
       instrargs = Seq(index),
       stackargs = Seq(value),
-      resultType = if value.resultType is UnreachableType then S(UnreachableType) else N
+      resultType = N
     )
   end local
 
@@ -200,7 +195,7 @@ object Instructions:
       mnemonic = "struct.set",
       instrargs = Seq(ref.resultType_!.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref, value),
-      resultType = if value.resultType_! is UnreachableType then S(UnreachableType) else N
+      resultType = N
     )
 
     /** Creates a `struct.get` instruction. */
@@ -208,7 +203,7 @@ object Instructions:
       mnemonic = "struct.get",
       instrargs = Seq(ref.resultType_!.asInstanceOf[RefType].heapType, index),
       stackargs = Seq(ref),
-      resultType = S(if ref.resultType_! is UnreachableType then UnreachableType else ty)
+      resultType = S(ty)
     )
 
   end struct
