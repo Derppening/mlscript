@@ -3,13 +3,8 @@ import "binaryen"
 module Wasm with ...
 
 // WebAssembly utilities
-fun loadWasmBinary(modBuf): Promise =
+fun loadWasmBinary(modBuf, importObject): Promise =
   console.assert of WebAssembly.validate of modBuf
-
-  val memory = new WebAssembly.Memory(initial: 100)
-  val importObject =
-    system:
-      mem: memory
 
   WebAssembly.instantiate of modBuf, importObject
 
@@ -28,7 +23,7 @@ fun binaryenFmtWat(wat, foldExprs): Promise =
   mod.dispose()
   Promise.resolve(fmtWat)
 
-fun binaryenCompileToModule(wat): Promise =
+fun binaryenCompileToModule(wat, importObject): Promise =
   val mod = binaryen.parseText of wat
   mod.setFeatures(binaryen.Features.All)
 
@@ -38,10 +33,10 @@ fun binaryenCompileToModule(wat): Promise =
   mod.dispose()
 
   Promise.resolve(modBuf).then(modBuf =>
-    loadWasmBinary of modBuf
+    loadWasmBinary of modBuf, importObject
   )
 
-fun binaryenRunFunc(wat, func): Promise =
-  binaryenCompileToModule(wat).then(wasmMod =>
+fun binaryenRunFunc(wat, importObject, func): Promise =
+  binaryenCompileToModule(wat, importObject).then(wasmMod =>
     func(wasmMod.instance.exports)
   )
