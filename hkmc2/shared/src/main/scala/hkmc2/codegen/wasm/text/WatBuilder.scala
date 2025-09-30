@@ -474,7 +474,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       ctorWat,
                       `return`(S(local.get(thisVar, RefType(typeref, nullable = false))))
                     ),
-                    resultTypes = Seq(Result(RefType(typeref, nullable = false)))
+                    resultTypes = Seq(Result(RefType.anyref))
                   )
 
                   val ctorAux = if newCtorAuxParams.isEmpty then
