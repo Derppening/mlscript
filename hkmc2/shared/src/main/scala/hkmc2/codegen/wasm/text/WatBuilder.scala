@@ -564,6 +564,120 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
       `return`(S(resWat))
 
+    case Match(scrut, arms, dflt, rst) =>
+      // Generate a unique label for the match block
+      val matchLabel = s"match_${scrut.hashCode.abs}"
+
+      // Evaluate scrutinee expression (will be re-evaluated in each arm)
+      // Note: This assumes the scrutinee is a pure expression (typically a variable reference)
+      // For more complex scrutinees, we would need to evaluate once and store in a local,
+      // but that requires tracking temp locals in the function's local declarations.
+      def getScrutExpr: Expr = result(scrut)
+      
+      // Compile each match arm
+      boundary:
+        val armExprs = arms.flatMap: (cse, body) =>
+          cse match
+            case Case.Lit(lit) =>
+              val testExpr: FoldedInstr = lit match
+                case BoolLit(value) =>
+                  val scrutAsI31 = ref.cast(getScrutExpr, RefType.i31ref)
+                  val scrutValue = i31.get(scrutAsI31, signed = true)
+                  i32.eq(scrutValue, i32.const(if value then 1 else 0))
+                case IntLit(value) =>
+                  val scrutAsI31 = ref.cast(getScrutExpr, RefType.i31ref)
+                  val scrutValue = i31.get(scrutAsI31, signed = true)
+                  i32.eq(scrutValue, i32.const(value.toInt))
+                case _ =>
+                  break(errExpr(Ls(msg"Pattern matching for unit literals not implemented yet" -> lit.toLoc)))
+
+              // Compile the body of this arm
+              val bodyExpr = returningTerm(body)
+
+              // Generate if-then
+              // The block contains bodyExpr (which produces a value) followed by br (which consumes it)
+              // We use a labeled block to ensure it's not optimized away by the printer
+              // The block has no result type because it ends with an unreachable br instruction
+              val armLabel = s"arm_${body.hashCode.abs}"
+              S(Instructions.`if`(
+                condition = testExpr,
+                ifTrue = Instructions.block(
+                  label = S(armLabel),
+                  children = Seq(bodyExpr, br(matchLabel)),
+                  resultTypes = Seq.empty
+                ),
+                ifFalse = N,
+                resultTypes = Seq.empty
+              ))
+            case Case.Cls(cls, _) =>
+              // For class pattern matching, we use ref.test to check if the scrutinee
+              // is an instance of the expected class type
+              // First, get the BlockMemberSymbol from the ClassLikeSymbol
+              val clsBlkMemberSym = cls.asBlkMember.getOrElse:
+                break(errExpr(
+                  Ls(msg"Could not resolve BlockMemberSymbol for class pattern" -> cls.toLoc),
+                  extraInfo = S(s"ClassLikeSymbol: ${cls.toString}")
+                ))
+              
+              val clsTypeIdx = ctx.getType_!(clsBlkMemberSym)
+              val clsRefType = RefType(clsTypeIdx, nullable = true)
+              
+              val testExpr: FoldedInstr = ref.test(getScrutExpr, clsRefType)
+              
+              // Compile the body of this arm
+              val bodyExpr = returningTerm(body)
+              
+              // Generate if-then with labeled block
+              val armLabel = s"arm_${body.hashCode.abs}"
+              S(Instructions.`if`(
+                condition = testExpr,
+                ifTrue = Instructions.block(
+                  label = S(armLabel),
+                  children = Seq(bodyExpr, br(matchLabel)),
+                  resultTypes = Seq.empty
+                ),
+                ifFalse = N,
+                resultTypes = Seq.empty
+              ))
+            case Case.Tup(len, inf) => 
+              break(errExpr(Ls(msg"Pattern matching for tuples not implemented yet" -> N)))
+            case _ =>
+              N
+        
+        // Compile the default case if present, otherwise use unreachable
+        val defaultExpr = dflt match
+          case S(defaultBody) => returningTerm(defaultBody)
+          case N => unreachable
+        
+        // Compile the rest of the block
+        val rstExpr = returningTerm(rst)
+        
+        // Determine the result type of the match from the default expression
+        // (all arms should produce the same type)
+        val matchResultTypes = defaultExpr.resultTypes.map(ty => Result(ty.asValType_!))
+        
+        // Generate the match block
+        val matchBlock = Instructions.block(
+          label = S(matchLabel),
+          children = armExprs :+ defaultExpr,
+          resultTypes = matchResultTypes
+        )
+        
+        // If rst is End (produces no value), the match block is the final result
+        // Otherwise, we need to handle the continuation
+        rst match
+          case End(_) =>
+            // No continuation, so the match block is the result
+            matchBlock
+          case _ =>
+            // There's a continuation, wrap in an outer block
+            // The outer block's result type should match rstExpr
+            Instructions.block(
+              label = N,
+              children = Seq(matchBlock, rstExpr),
+              resultTypes = rstExpr.resultTypes.map(ty => Result(ty.asValType_!))
+            )
+
     case End(_) => nop
 
     case t =>
