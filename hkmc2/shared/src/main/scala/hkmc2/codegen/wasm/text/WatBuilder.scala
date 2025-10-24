@@ -610,9 +610,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 resultTypes = Seq.empty
               ))
             case Case.Cls(cls, _) =>
-              // For class pattern matching, we use ref.test to check if the scrutinee
-              // is an instance of the expected class type
-              // First, get the BlockMemberSymbol from the ClassLikeSymbol
+              // Get BlockMemberSymbol to use getType_!
               val clsBlkMemberSym = cls.asBlkMember.getOrElse:
                 break(errExpr(
                   Ls(msg"Could not resolve BlockMemberSymbol for class pattern" -> cls.toLoc),
@@ -621,7 +619,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               
               val clsTypeIdx = ctx.getType_!(clsBlkMemberSym)
               val clsRefType = RefType(clsTypeIdx, nullable = true)
-              
+
+              // ref.test to check if the scrut is expected class
               val testExpr: FoldedInstr = ref.test(getScrutExpr, clsRefType)
               
               // Compile the body of this arm
@@ -652,9 +651,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         // Compile the rest of the block
         val rstExpr = returningTerm(rst)
         
-        // Determine the result type of the match from the default expression
-        // (all arms should produce the same type)
-        val matchResultTypes = defaultExpr.resultTypes.map(ty => Result(ty.asValType_!))
+        // Determine the result type of the match block
+        // We use (ref null any) as the common supertype for all arms
+        // since different arms may produce different types
+        val matchResultTypes = Seq(Result(RefType.anyref))
         
         // Generate the match block
         val matchBlock = Instructions.block(
