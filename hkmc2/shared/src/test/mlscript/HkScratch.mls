@@ -1,12 +1,105 @@
-:js
-// :de
-// :sjs
-// :pt
-// :elt
+:elt
+:wasm
+:wat
+:lot
 
-:global
-// :d
-// :todo
+//│ Elaborated tree:
+//│ Blk:
+//│   stats = Ls of 
+//│     Import:
+//│       sym = member:Predef
+//│       str = "/Users/bakhtiyartemirov/Desktop/FYP/mlscript/hkmc2/shared/src/test/mlscript-compile/Predef.mjs"
+//│       file = /Users/bakhtiyartemirov/Desktop/FYP/mlscript/hkmc2/shared/src/test/mlscript-compile/Predef.mjs
+//│   res = Lit of UnitLit of false
+//│ Error: hkmc2.ErrorReport: Import of symbol `/Users/bakhtiyartemirov/Desktop/FYP/mlscript/hkmc2/shared/src/test/mlscript-compile/Predef.mjs` not implemented yet
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (nop))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+while true do
+  42
+//│ Elaborated tree:
+//│ Blk:
+//│   stats = Nil
+//│   res = IfLike:
+//│     kw = keyword 'while'
+//│     desugared = Let:
+//│       sym = $scrut
+//│       term = Lit of BoolLit of true
+//│       tail = Cons: \
+//│       head = Branch:
+//│         scrutinee = Ref{sym=$scrut} of $scrut
+//│         pattern = Lit of BoolLit of true
+//│         continuation = Else of Lit of IntLit of 42
+//│       tail = Else of UnitVal
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:634)
+//│ FAILURE INFO: Match:
+//│   scrut = Ref of $scrut
+//│   arms = Ls of 
+//│     Tuple2:
+//│       _1 = Lit of BoolLit of true
+//│       _2 = Assign:
+//│         lhs = $tmp
+//│         rhs = Lit of IntLit of 42
+//│         rest = Continue of $tmp
+//│   dflt = S of Assign:
+//│     lhs = $tmp
+//│     rhs = Select{object:Unit}:
+//│       qual = Ref of $runtime
+//│       name = Ident of "Unit"
+//│     rest = End of ""
+//│   rest = End of ""
+//│ ═══[COMPILATION ERROR] WatBuilder::returningTerm for expression not implemented yet
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $scrut (ref null any))
+//│     (local $tmp (ref null any))
+//│     (block (result (ref null any))
+//│       (block $tmp
+//│         (loop $tmp_loop
+//│           (block (result (ref null any))
+//│             (local.set $scrut
+//│               (ref.i31
+//│                 (i32.const 1)))
+//│             (unreachable))))
+//│       (local.get $tmp)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
 
-
-
+1 + 1
+//│ Elaborated tree:
+//│ Blk:
+//│   stats = Nil
+//│   res = App:
+//│     lhs = Ref{sym=builtin:+} of builtin:+
+//│     rhs = Tup of Ls of 
+//│       Fld:
+//│         flags = ()
+//│         term = Lit of IntLit of 1
+//│         asc = N
+//│       Fld:
+//│         flags = ()
+//│         term = Lit of IntLit of 1
+//│         asc = N
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (ref.i31
+//│       (i32.add
+//│         (i31.get_s
+//│           (ref.i31
+//│             (i32.const 1)))
+//│         (i31.get_s
+//│           (ref.i31
+//│             (i32.const 1))))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 2

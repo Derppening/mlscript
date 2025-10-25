@@ -21,6 +21,21 @@ object Instructions:
       resultTypes = resultTypes.map(_.valtype)
     )
 
+  /** Creates a `loop` instruction. */
+  def loop(
+      label: Opt[Str],
+      children: Seq[Expr],
+      resultTypes: Seq[Result]
+  ): FoldedInstr =
+    val labelWat = label.map(lbl => doc"$$$lbl")
+
+    FoldedInstr(
+      mnemonic = "loop",
+      instrargs = labelWat.toSeq ++ resultTypes,
+      stackargs = children,
+      resultTypes = resultTypes.map(_.valtype)
+    )
+  
   /** Creates an `if` instruction. */
   def `if`(
       condition: Expr,
@@ -95,6 +110,14 @@ object Instructions:
   def unreachable: FoldedInstr = FoldedInstr(
     mnemonic = "unreachable",
     instrargs = Seq.empty,
+    stackargs = Seq.empty,
+    resultType = S(UnreachableType)
+  )
+
+  /** Creates a br (branch) instruction. */
+  def br(label: Str): FoldedInstr = FoldedInstr(
+    mnemonic = "br",
+    instrargs = Seq(doc"$$$label"),
     stackargs = Seq.empty,
     resultType = S(UnreachableType)
   )

@@ -564,6 +564,67 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
       `return`(S(resWat))
 
+    case Label(label, body, rest) =>
+      val bodyExpr = returningTerm(body)
+      val restExpr = returningTerm(rest)
+
+      def containsContinue(b: Block): Bool = b match
+        case Continue(lbl) if lbl == label => true
+        case Continue(_) => false
+        case Begin(sub, rst) => containsContinue(sub) || containsContinue(rst)
+        case Match(_, arms, dflt, rst) =>
+          arms.exists((_, body) => containsContinue(body)) ||
+          dflt.exists(containsContinue) ||
+          containsContinue(rst)
+        case Label(_, innerBody, innerRest) => containsContinue(innerRest)
+        case TryBlock(sub, finallyDo, rst) =>
+          containsContinue(sub) || containsContinue(finallyDo) || containsContinue(rst)
+        case Assign(_, _, rst) => containsContinue(rst)
+        case AssignField(_, _, _, rst) => containsContinue(rst)
+        case AssignDynField(_, _, _, _, rst) => containsContinue(rst)
+        case Define(_, rst) => containsContinue(rst)
+        case Return(_, _) | End(_) | Break(_) | Throw(_) | _: HandleBlock => false
+
+        if containsContinue(body) then
+          val loopLabel = s"${label.nme}_loop"
+          val breakLabel = label.nme
+          
+          Instructions.block(
+            label = N,
+            children = Seq(
+              Instructions.block(
+                label = S(breakLabel),
+                children = Seq(
+                  Instructions.loop(
+                    label = S(loopLabel),
+                    children = Seq(bodyExpr),
+                    resultTypes = Seq.empty 
+                  )
+                ),
+                resultTypes = Seq.empty
+              ),
+              restExpr
+            ),
+            resultTypes = restExpr.resultTypes.map(ty => Result(ty.asValType_!))
+          )
+        else
+          Instructions.block(
+            label = N,
+            children = Seq(
+              Instructions.block(
+                label = S(label.nme),
+                children = Seq(bodyExpr),
+                resultTypes = Seq.empty
+              ),
+              restExpr
+            ),
+            resultTypes = restExpr.resultTypes.map(ty => Result(ty.asValType_!))
+          )
+    case Break(label) =>
+      br(label.nme)
+    case Continue(label) =>
+      val loopLabel = s"${label.nme}_loop"
+      br(loopLabel)
     case End(_) => nop
 
     case t =>
