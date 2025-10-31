@@ -22,14 +22,6 @@ true
 //│ Wasm result:
 //│ = 2
 
-4
-//│ Wasm result:
-//│ = 4
-
-3
-//│ Wasm result:
-//│ = 3
-
 
 let x = 0
 x

@@ -565,12 +565,14 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       `return`(S(resWat))
 
     case Match(scrut, arms, dflt, rst) =>
-      val matchLabel = s"match_${scrut.hashCode.abs}"
+      val matchLabelSym = TempSymbol(N, "match")
+      val matchLabel = scope.allocateName(matchLabelSym)
+      
       def getScrutExpr: Expr = result(scrut)
       
       // Compile each match arm
       boundary:
-        val armExprs = arms.flatMap: (cse, body) =>
+        val armExprs = arms.zipWithIndex.flatMap { case ((cse, body), armIdx) =>
           cse match
             case Case.Lit(lit) =>
               val testExpr: FoldedInstr = lit match
@@ -586,7 +588,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   break(errExpr(Ls(msg"Pattern matching for unit literals not implemented yet" -> lit.toLoc)))
 
               val bodyExpr = returningTerm(body)
-              val armLabel = s"arm_${body.hashCode.abs}"
+              val armLabelSym = TempSymbol(N, "arm")
+              val armLabel = scope.allocateName(armLabelSym)
               S(Instructions.`if`(
                 condition = testExpr,
                 ifTrue = Instructions.block(
@@ -610,35 +613,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               // ref.test to check if the scrut is expected class
               val testExpr: FoldedInstr = ref.test(getScrutExpr, clsRefType)
               val bodyExpr = returningTerm(body)
-              val armLabel = s"arm_${body.hashCode.abs}"
-              S(Instructions.`if`(
-                condition = testExpr,
-                ifTrue = Instructions.block(
-                  label = S(armLabel),
-                  children = Seq(bodyExpr, br(matchLabel)),
-                  resultTypes = Seq.empty
-                ),
-                ifFalse = N,
-                resultTypes = Seq.empty
-              ))
-            case Case.Tup(len, inf) => 
-              // For now only length and type check is performed
-
-              // Type Check
-              val arrayRefType = RefType(HeapType.Array, nullable = true)
-              val isArrayTest = ref.test(getScrutExpr, arrayRefType)
-
-              // Length check
-              val scrutAsArray = ref.cast(getScrutExpr, arrayRefType)
-              val arrayLength = array.len(scrutAsArray)
-              val lengthTest = if inf then
-                i32.ge_u(arrayLength, i32.const(len))
-              else
-                i32.eq(arrayLength, i32.const(len))
-              
-              val testExpr = i32.and(isArrayTest, lengthTest)
-              val bodyExpr = returningTerm(body)
-              val armLabel = s"arm_${body.hashCode.abs}"
+              val armLabelSym = TempSymbol(N, "arm")
+              val armLabel = scope.allocateName(armLabelSym)
               S(Instructions.`if`(
                 condition = testExpr,
                 ifTrue = Instructions.block(
@@ -650,7 +626,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 resultTypes = Seq.empty
               ))
             case _ =>
-              N
+              break(errExpr(
+                Ls(
+                  msg"WatBuilder::returningTerm for Match(...) with case `${cse.toString}` not implemented yet" -> N
+                ),
+                extraInfo = S(cse.toString)
+              ))
+        }
         
 
         val defaultExpr = dflt match
