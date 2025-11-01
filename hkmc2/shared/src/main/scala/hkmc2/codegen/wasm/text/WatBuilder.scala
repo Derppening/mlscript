@@ -34,6 +34,21 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   type Context = Ctx
 
+  private case class LabelContext(symbol: Local, breakTarget: Str, continueTarget: Str)
+
+  private var labelContextStack: List[LabelContext] = Nil
+
+  private def pushLabelContext(ctx: LabelContext): Unit =
+    labelContextStack = ctx :: labelContextStack
+
+  private def popLabelContext(): Unit =
+    labelContextStack = labelContextStack match
+      case _ :: tail => tail
+      case Nil => Nil
+
+  private def lookupLabelContext(symbol: Local): Opt[LabelContext] =
+    labelContextStack.find(_.symbol == symbol)
+
   /**
    * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits an
    * `unreachable` instruction.
@@ -672,6 +687,55 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
       `return`(S(resWat))
 
+    case Label(label, body, rest) =>
+      val breakTarget = scope.allocateName(label)
+      val loopSym = TempSymbol(N, "loop")
+      val continueTarget = scope.allocateName(loopSym)
+
+      pushLabelContext(LabelContext(label, breakTarget, continueTarget))
+      val bodyExpr =
+        try returningTerm(body)
+        finally popLabelContext()
+      val restExpr = returningTerm(rest)
+
+      Instructions.block(
+        label = N,
+        children = Seq(
+          Instructions.block(
+            label = S(breakTarget),
+            children = Seq(
+              Instructions.loop(
+                label = S(continueTarget),
+                children = Seq(
+                  bodyExpr,
+                  br(breakTarget)
+                ),
+                resultTypes = Seq.empty
+              )
+            ),
+            resultTypes = Seq.empty
+          ),
+          restExpr
+        ),
+        resultTypes = restExpr.resultTypes.map(ty => Result(ty.asValType_!))
+      )
+    case Break(label) =>
+      lookupLabelContext(label) match
+        case S(ctx) => br(ctx.breakTarget)
+        case N =>
+          errExpr(
+            Ls(msg"WatBuilder::returningTerm encountered break to unknown label `${label.nme}`" -> label.toLoc),
+            extraInfo = S(label)
+          )
+    case Continue(label) =>
+      lookupLabelContext(label) match
+        case S(ctx) => br(ctx.continueTarget)
+        case N =>
+          errExpr(
+            Ls(msg"WatBuilder::returningTerm encountered continue to unknown label `${label.nme}`" -> label.toLoc),
+            extraInfo = S(label)
+          )
+    
     case End(_) => nop
 
     case t =>
