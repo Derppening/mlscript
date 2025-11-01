@@ -1,0 +1,160 @@
+:wat
+:wasm
+:elt
+:lot
+mut let i = 0
+while i < 10 do
+  set i = i + 1
+i
+//│ FAILURE: Unexpected type error
+//│ FAILURE LOCATION: subterm (Elaborator.scala:734)
+//│ ╔══[ERROR] Illegal position for 'mut' modifier.
+//│ ║  l.5: 	mut let i = 0
+//│ ╙──     	^^^
+//│ FAILURE: Unexpected type error
+//│ FAILURE LOCATION: subterm (Elaborator.scala:370)
+//│ ╔══[ERROR] Expected a body for let bindings in expression position
+//│ ║  l.5: 	mut let i = 0
+//│ ╙──     	        ^^^^^
+//│ FAILURE: Unexpected type error
+//│ FAILURE LOCATION: subterm (Elaborator.scala:443)
+//│ ╔══[ERROR] Name not found: i
+//│ ║  l.6: 	while i < 10 do
+//│ ╙──     	      ^
+//│ FAILURE: Unexpected type error
+//│ FAILURE LOCATION: subterm (Elaborator.scala:443)
+//│ ╔══[ERROR] Name not found: i
+//│ ║  l.7: 	  set i = i + 1
+//│ ╙──     	      ^
+//│ FAILURE: Unexpected type error
+//│ FAILURE LOCATION: subterm (Elaborator.scala:443)
+//│ ╔══[ERROR] Name not found: i
+//│ ║  l.7: 	  set i = i + 1
+//│ ╙──     	          ^
+//│ FAILURE: Unexpected type error
+//│ FAILURE LOCATION: subterm (Elaborator.scala:443)
+//│ ╔══[ERROR] Name not found: i
+//│ ║  l.8: 	i
+//│ ╙──     	^
+//│ Elaborated tree:
+//│ Blk:
+//│   stats = Ls of 
+//│     Blk:
+//│       stats = Ls of 
+//│         LetDecl:
+//│           sym = i
+//│           annotations = Nil
+//│         DefineVar:
+//│           sym = i
+//│           rhs = Lit of IntLit of 0
+//│       res = UnitVal
+//│     IfLike:
+//│       kw = keyword 'while'
+//│       desugared = Let:
+//│         sym = $scrut
+//│         term = App:
+//│           lhs = Ref{sym=builtin:<} of builtin:<
+//│           rhs = Tup of Ls of 
+//│             Fld:
+//│               flags = ()
+//│               term = Error
+//│               asc = N
+//│             Fld:
+//│               flags = ()
+//│               term = Lit of IntLit of 10
+//│               asc = N
+//│         tail = Cons: \
+//│         head = Branch:
+//│           scrutinee = Ref{sym=$scrut} of $scrut
+//│           pattern = Lit of BoolLit of true
+//│           continuation = Else of Assgn:
+//│             lhs = Error
+//│             rhs = App:
+//│               lhs = Ref{sym=builtin:+} of builtin:+
+//│               rhs = Tup of Ls of 
+//│                 Fld:
+//│                   flags = ()
+//│                   term = Error
+//│                   asc = N
+//│                 Fld:
+//│                   flags = ()
+//│                   term = Lit of IntLit of 1
+//│                   asc = N
+//│         tail = Else of UnitVal
+//│   res = Error
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $i (ref null any))
+//│     (block
+//│       (local.set $i
+//│         (ref.i31
+//│           (i32.const 0)))
+//│       (block
+//│         (block $tmp
+//│           (loop $loop
+//│             (nop)
+//│             (br $tmp)))
+//│         (nop))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ FAILURE: Unexpected runtime error
+//│ FAILURE LOCATION: mkQuery (WasmDiffMaker.scala:128)
+//│ ═══[RUNTIME ERROR] undefined
+//│ // Standard Error:
+//│ Fatal: 1:54: error: popping from empty stack
+//│ 
+//│ 
+
+//│ Elaborated tree:
+//│ Blk:
+//│   stats = Ls of 
+//│     Import:
+//│       sym = member:Predef
+//│       str = "/Users/bakhtiyartemirov/Desktop/FYP/mlscript/hkmc2/shared/src/test/mlscript-compile/Predef.mjs"
+//│       file = /Users/bakhtiyartemirov/Desktop/FYP/mlscript/hkmc2/shared/src/test/mlscript-compile/Predef.mjs
+//│   res = Lit of UnitLit of false
+//│ Error: hkmc2.ErrorReport: Import of symbol `/Users/bakhtiyartemirov/Desktop/FYP/mlscript/hkmc2/shared/src/test/mlscript-compile/Predef.mjs` not implemented yet
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (nop))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+while true do
+  1
+//│ Elaborated tree:
+//│ Blk:
+//│   stats = Nil
+//│   res = IfLike:
+//│     kw = keyword 'while'
+//│     desugared = Let:
+//│       sym = $scrut
+//│       term = Lit of BoolLit of true
+//│       tail = Cons: \
+//│       head = Branch:
+//│         scrutinee = Ref{sym=$scrut} of $scrut
+//│         pattern = Lit of BoolLit of true
+//│         continuation = Else of Lit of IntLit of 1
+//│       tail = Else of UnitVal
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:111)
+//│ FAILURE INFO: Block IR: `$runtime`
+//│ Scope: Scope(Some(Scope(None,Some(Some(globalThis:globalThis)),HashMap($wasm -> wasm))),None,HashMap($scrut -> scrut, $tmp -> tmp1, $tmp -> tmp, $loop -> loop, $match -> match, $arm -> arm))
+//│ Wasm Locals: List(List($scrut, $tmp))
+//│ ═══[COMPILATION ERROR] WatBuilder::getVar for TempSymbol (symbol not in top-level scope) not implemented yet
+//│ FAILURE: Unexpected exception
+//│ /!!!\ Uncaught error: java.lang.Exception: Internal Error: Expected resolved Select(...) expression to be a TermSymbol, but got object:Unit (hkmc2.semantics.ModuleOrObjectSymbol)
+//│ 	at: mlscript.utils.package$.lastWords(package.scala:230)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.result(WatBuilder.scala:362)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:420)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:812)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:435)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:697)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.block(WatBuilder.scala:904)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.program(WatBuilder.scala:868)
+//│ 	at: hkmc2.WasmDiffMaker.processTerm(WasmDiffMaker.scala:71)
+//│ 	at: hkmc2.MLsDiffMaker.processTrees(MLsDiffMaker.scala:260)

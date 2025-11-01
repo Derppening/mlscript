@@ -1,0 +1,517 @@
+:wasm
+:wat
+2 + 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $plus_lhs (ref null any))
+//│     (local $plus_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.add
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 3
+
+//│ Error: hkmc2.ErrorReport: Import of symbol `/Users/bakhtiyartemirov/Desktop/FYP/mlscript/hkmc2/shared/src/test/mlscript-compile/Predef.mjs` not implemented yet
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (nop))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+
+2 - 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $minus_lhs (ref null any))
+//│     (local $minus_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.sub
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 1
+
+2 * 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $mul_lhs (ref null any))
+//│     (local $mul_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.mul
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 2
+
+2 / 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $div_lhs (ref null any))
+//│     (local $div_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.div_s
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 2
+
+2 % 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $mod_lhs (ref null any))
+//│     (local $mod_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.rem_s
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 0
+
+2 == 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $eq_lhs (ref null any))
+//│     (local $eq_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.eq
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 0
+
+2 != 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $ne_lhs (ref null any))
+//│     (local $ne_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.ne
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 1
+
+2 < 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $lt_lhs (ref null any))
+//│     (local $lt_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.lt_s
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 0
+
+2 <= 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $le_lhs (ref null any))
+//│     (local $le_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.le_s
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 0
+
+2 > 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $gt_lhs (ref null any))
+//│     (local $gt_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.gt_s
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 1
+
+2 >= 1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $ge_lhs (ref null any))
+//│     (local $ge_rhs (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (local.set 1
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (i32.and
+//│           (ref.test (ref null i31)
+//│             (local.get 0))
+//│           (ref.test (ref null i31)
+//│             (local.get 1)))
+//│         (then
+//│           (ref.i31
+//│             (i32.ge_s
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0)))
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 1))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 1
+
+-1
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $minus_arg (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (if (result (ref null i31))
+//│         (ref.test (ref null i31)
+//│           (local.get 0))
+//│         (then
+//│           (ref.i31
+//│             (i32.sub
+//│               (i32.const 0)
+//│               (i31.get_s
+//│                 (ref.cast (ref null i31)
+//│                   (local.get 0))))))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = -1
+
++2
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (local $plus_arg (ref null any))
+//│     (block (result (ref null i31))
+//│       (local.set 0
+//│         (ref.i31
+//│           (i32.const 2)))
+//│       (if (result (ref null i31))
+//│         (ref.test (ref null i31)
+//│           (local.get 0))
+//│         (then
+//│           (ref.cast (ref null i31)
+//│             (local.get 0)))
+//│         (else
+//│           (unreachable)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 2
+
+!false
+//│ FAILURE: Unexpected parse error
+//│ FAILURE LOCATION: simpleExprImpl (Parser.scala:697)
+//│ ╔══[PARSE ERROR] Expected an expression; found dynamic selector instead
+//│ ║  l.458: 	!false
+//│ ╙──       	^^^^^^
+//│ FAILURE: Unexpected parse error
+//│ FAILURE LOCATION: parseAll (Parser.scala:248)
+//│ ╔══[PARSE ERROR] Expected end of input; found dynamic selector instead
+//│ ║  l.458: 	!false
+//│ ╙──       	^^^^^^
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (nop))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ FAILURE: Unexpected runtime error
+//│ FAILURE LOCATION: mkQuery (WasmDiffMaker.scala:128)
+//│ ═══[RUNTIME ERROR] undefined
+//│ // Standard Error:
+//│ Fatal: 1:54: error: popping from empty stack
+//│ 
+//│ 
+
+true && false
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:516)
+//│ FAILURE INFO: FunDefn:
+//│   owner = N
+//│   sym = member:lambda
+//│   params = Ls of 
+//│     ParamList:
+//│       flags = ()
+//│       params = Nil
+//│       restParam = N
+//│   body = Return:
+//│     res = Lit of BoolLit of false
+//│     implct = false
+//│ ═══[COMPILATION ERROR] WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:96)
+//│ FAILURE INFO: Block IR: `$runtime`
+//│ Scope: Scope(Some(Scope(None,Some(Some(globalThis:globalThis)),HashMap($wasm -> wasm))),None,HashMap(member:lambda -> lambda))
+//│ Wasm Locals: List(List(member:lambda))
+//│ ═══[COMPILATION ERROR] WatBuilder::getVar for TempSymbol (symbol not in top-level scope) not implemented yet
+//│ FAILURE: Unexpected exception
+//│ /!!!\ Uncaught error: java.lang.Exception: Internal Error: Symbol for Select(...) expression must be resolved
+//│ 	at: mlscript.utils.package$.lastWords(package.scala:230)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.$anonfun$5(WatBuilder.scala:343)
+//│ 	at: scala.Option.getOrElse(Option.scala:201)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.result(WatBuilder.scala:343)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.subexpression(WatBuilder.scala:208)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.result(WatBuilder.scala:316)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:649)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.returningTerm(WatBuilder.scala:632)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.block(WatBuilder.scala:743)
+//│ 	at: hkmc2.codegen.wasm.text.WatBuilder.program(WatBuilder.scala:707)

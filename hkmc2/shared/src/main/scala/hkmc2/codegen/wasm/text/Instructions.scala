@@ -21,6 +21,21 @@ object Instructions:
       resultTypes = resultTypes.map(_.valtype)
     )
 
+  /** Creates a `loop` instruction. */
+  def loop(
+      label: Opt[Str],
+      children: Seq[Expr],
+      resultTypes: Seq[Result]
+  ): FoldedInstr =
+    val labelWat = label.map(lbl => doc"$$$lbl")
+
+    FoldedInstr(
+      mnemonic = "loop",
+      instrargs = labelWat.toSeq ++ resultTypes,
+      stackargs = children,
+      resultTypes = resultTypes.map(_.valtype)
+    )
+  
   /** Creates an `if` instruction. */
   def `if`(
       condition: Expr,
@@ -99,7 +114,7 @@ object Instructions:
     resultType = S(UnreachableType)
   )
 
-  /** Creates a `br` (branch) instruction. */
+  /** Creates a br (branch) instruction. */
   def br(label: Str): FoldedInstr = FoldedInstr(
     mnemonic = "br",
     instrargs = Seq(doc"$$$label"),
@@ -124,21 +139,33 @@ object Instructions:
       resultType = S(I32Type)
     )
 
-    /** Creates an `i32.add` instruction. */
-    def eq(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
-      mnemonic = "i32.eq",
+    /** Creates an `i32.sub` instruction. */
+    def sub(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.sub",
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
-      resultType = S(
-        (lhs.resultType, rhs.resultType) match
-          case (UnreachableType, _) | (_, UnreachableType) => UnreachableType
-          case _ => I32Type
-      )
+      resultType = S(I32Type)
     )
 
-    /** Creates an `i32.ge_u` instruction (greater than or equal, unsigned). */
-    def ge_u(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
-      mnemonic = "i32.ge_u",
+    /** Creates an `i32.mul` instruction. */
+    def mul(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.mul",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.div_s` instruction. */
+    def div_s(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.div_s",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.rem_s` instruction. */
+    def rem_s(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.rem_s",
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
       resultType = S(I32Type)
@@ -147,6 +174,78 @@ object Instructions:
     /** Creates an `i32.and` instruction. */
     def and(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "i32.and",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.or` instruction. */
+    def or(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.or",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.eq` instruction. */
+    def eq(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.eq",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.ne` instruction. */
+    def ne(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.ne",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.lt_s` instruction. */
+    def lt_s(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.lt_s",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.le_s` instruction. */
+    def le_s(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.le_s",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.gt_s` instruction. */
+    def gt_s(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.gt_s",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.ge_s` instruction. */
+    def ge_s(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.ge_s",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.eqz` instruction. */
+    def eqz(value: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.eqz",
+      instrargs = Seq.empty,
+      stackargs = Seq(value),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.ge_u` instruction (greater than or equal, unsigned). */
+    def ge_u(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.ge_u",
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
       resultType = S(I32Type)

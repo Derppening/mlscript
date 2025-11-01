@@ -34,6 +34,21 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   type Context = Ctx
 
+  private case class LabelContext(symbol: Local, breakTarget: Str, continueTarget: Str)
+
+  private var labelContextStack: List[LabelContext] = Nil
+
+  private def pushLabelContext(ctx: LabelContext): Unit =
+    labelContextStack = ctx :: labelContextStack
+
+  private def popLabelContext(): Unit =
+    labelContextStack = labelContextStack match
+      case _ :: tail => tail
+      case Nil => Nil
+
+  private def lookupLabelContext(symbol: Local): Opt[LabelContext] =
+    labelContextStack.find(_.symbol == symbol)
+
   /**
    * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits an
    * `unreachable` instruction.
@@ -107,6 +122,98 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
     if a.spread.nonEmpty then die else subexpression(a.value)
 
+  private def opTempPrefix(op: Str): Str = op match
+    case "+" => "plus"
+    case "-" => "minus"
+    case "*" => "mul"
+    case "/" => "div"
+    case "%" => "mod"
+    case "==" => "eq"
+    case "!=" => "ne"
+    case "<" => "lt"
+    case "<=" => "le"
+    case ">" => "gt"
+    case ">=" => "ge"
+    case "&&" => "and"
+    case "||" => "or"
+    case "!" => "not"
+    case other => s"op_${other.flatMap(_.toString)}"
+
+  private def binaryI31Op(
+      lhs: Arg,
+      rhs: Arg,
+      opName: Str
+  )(
+      compute: (FoldedInstr, FoldedInstr) => FoldedInstr,
+      wrapResult: FoldedInstr => Expr = ref.i31
+  )(using Ctx, Raise, Scope): Expr =
+    val lhsExpr = operand(lhs)
+    val rhsExpr = operand(rhs)
+
+    val prefix = opTempPrefix(opName)
+    val lhsTmp = TempSymbol(N, s"${prefix}_lhs")
+    val rhsTmp = TempSymbol(N, s"${prefix}_rhs")
+    val lhsIdx = ctx.addLocal(lhsTmp)
+    val rhsIdx = ctx.addLocal(rhsTmp)
+    scope.allocateName(lhsTmp)
+    scope.allocateName(rhsTmp)
+
+    val bothI31 = i32.and(
+      ref.test(local.get(lhsIdx, RefType.anyref), RefType.i31ref),
+      ref.test(local.get(rhsIdx, RefType.anyref), RefType.i31ref)
+    )
+
+    val lhsI32 = i31.get(ref.cast(local.get(lhsIdx, RefType.anyref), RefType.i31ref), true)
+    val rhsI32 = i31.get(ref.cast(local.get(rhsIdx, RefType.anyref), RefType.i31ref), true)
+    val resultExpr = wrapResult(compute(lhsI32, rhsI32))
+
+    Instructions.block(
+      label = N,
+      children = Seq(
+        local.set(lhsIdx, lhsExpr),
+        local.set(rhsIdx, rhsExpr),
+        `if`(
+          condition = bothI31,
+          ifTrue = resultExpr,
+          ifFalse = S(unreachable),
+              resultTypes = Seq(Result(RefType.i31ref))
+            )
+          ),
+          resultTypes = Seq(Result(RefType.i31ref))
+        )
+
+  private def unaryI31Op(
+      arg: Arg,
+      opName: Str
+  )(
+      compute: (Expr, FoldedInstr) => Expr
+  )(using Ctx, Raise, Scope): Expr =
+    val argExpr = operand(arg)
+    val prefix = opTempPrefix(opName)
+    val argTmp = TempSymbol(N, s"${prefix}_arg")
+    val argIdx = ctx.addLocal(argTmp)
+    scope.allocateName(argTmp)
+
+    val isI31 = ref.test(local.get(argIdx, RefType.anyref), RefType.i31ref)
+    val casted = ref.cast(local.get(argIdx, RefType.anyref), RefType.i31ref)
+    val argI32 = i31.get(casted, true)
+    val resultExpr = compute(casted, argI32)
+    val resultTypes = Seq(Result(RefType.i31ref))
+
+    Instructions.block(
+      label = N,
+      children = Seq(
+        local.set(argIdx, argExpr),
+        `if`(
+          condition = isI31,
+          ifTrue = resultExpr,
+          ifFalse = S(unreachable),
+          resultTypes = resultTypes
+        )
+      ),
+      resultTypes = resultTypes
+    )
+
   def subexpression(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
     case r: Lambda =>
       errExpr(
@@ -160,38 +267,31 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       if l.binary then
         l.nme match
           case "+" =>
-            // TODO(Derppening): Refactor to lower to `Call(plus_impl, ...)`
-            def castOperand(expr: Expr, opSide: Str): Expr =
-              expr.resultType match
-                case S(RefType(HeapType.Any, _)) => `if`(
-                    ref.test(expr, RefType.i31ref),
-                    ifTrue = castOperand(ref.cast(expr, RefType.i31ref), opSide),
-                    ifFalse = S(unreachable),
-                    resultTypes = Seq(Result(I32Type))
-                  )
-                case S(RefType(HeapType.I31, _)) => i31.get(expr, true)
-                case S(I32Type) => expr
-                case ty =>
-                  errExpr(
-                    Ls(
-                      msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.fold("(none)")(_.toWat.mkString())}) not implemented yet" -> r.toLoc
-                    ),
-                    extraInfo = S(r.toString)
-                  )
-
-            val lhsOp = castOperand(operand(lhs), "lhs")
-            val rhsOp = castOperand(operand(rhs), "rhs")
-
-            (lhsOp.resultType, rhsOp.resultType) match
-              case (S(I32Type), S(I32Type)) =>
-                ref.i31(i32.add(lhsOp, rhsOp))
-              case (lhsType, rhsType) =>
-                errExpr(
-                  Ls(
-                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.fold("(none)")(_.toWat.mkString())}, ${rhsType.fold("(none)")(_.toWat.mkString())}) not implemented yet" -> r.toLoc
-                  ),
-                  extraInfo = S(r.toString)
-                )
+            binaryI31Op(lhs, rhs, "+")((lhsI32, rhsI32) => i32.add(lhsI32, rhsI32))
+          case "-" =>
+            binaryI31Op(lhs, rhs, "-")((lhsI32, rhsI32) => i32.sub(lhsI32, rhsI32))
+          case "*" =>
+            binaryI31Op(lhs, rhs, "*")((lhsI32, rhsI32) => i32.mul(lhsI32, rhsI32))
+          case "/" =>
+            binaryI31Op(lhs, rhs, "/")((lhsI32, rhsI32) => i32.div_s(lhsI32, rhsI32))
+          case "%" =>
+            binaryI31Op(lhs, rhs, "%")((lhsI32, rhsI32) => i32.rem_s(lhsI32, rhsI32))
+          case "==" =>
+            binaryI31Op(lhs, rhs, "==")((lhsI32, rhsI32) => i32.eq(lhsI32, rhsI32))
+          case "!=" =>
+            binaryI31Op(lhs, rhs, "!=")((lhsI32, rhsI32) => i32.ne(lhsI32, rhsI32))
+          case "<" =>
+            binaryI31Op(lhs, rhs, "<")((lhsI32, rhsI32) => i32.lt_s(lhsI32, rhsI32))
+          case "<=" =>
+            binaryI31Op(lhs, rhs, "<=")((lhsI32, rhsI32) => i32.le_s(lhsI32, rhsI32))
+          case ">" =>
+            binaryI31Op(lhs, rhs, ">")((lhsI32, rhsI32) => i32.gt_s(lhsI32, rhsI32))
+          case ">=" =>
+            binaryI31Op(lhs, rhs, ">=")((lhsI32, rhsI32) => i32.ge_s(lhsI32, rhsI32))
+          case "&&" =>
+            binaryI31Op(lhs, rhs, "&&")((lhsI32, rhsI32) => i32.and(lhsI32, rhsI32))
+          case "||" =>
+            binaryI31Op(lhs, rhs, "||")((lhsI32, rhsI32) => i32.or(lhsI32, rhsI32))
           case lNme =>
             errExpr(
               Ls(
@@ -202,6 +302,29 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       else
         errExpr(Ls(
           msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
+        ))
+
+    case Call(Value.Ref(l: BuiltinSymbol), arg :: Nil) if !l.functionLike =>
+      if l.unary then
+        l.nme match
+          case "-" =>
+            unaryI31Op(arg, "-")((_, value) =>
+              ref.i31(i32.sub(i32.const(0), value))
+            )
+          case "+" =>
+            unaryI31Op(arg, "+")((casted, _) => casted)
+          case "!" =>
+            unaryI31Op(arg, "!")((_, value) => ref.i31(i32.eqz(value)))
+          case lNme =>
+            errExpr(
+              Ls(
+                msg"WatBuilder::result for unary builtin symbol '${lNme.toString}' not implemented yet" -> r.toLoc
+              ),
+              extraInfo = S(r.toString)
+            )
+      else
+        errExpr(Ls(
+          msg"Cannot call non-unary builtin symbol '${l.nme}'" -> r.toLoc
         ))
 
     case Call(fun, args) =>
@@ -564,6 +687,56 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
       `return`(S(resWat))
 
+    case Label(label, body, rest) =>
+      val breakTarget = scope.allocateName(label)
+      val loopSym = TempSymbol(N, "loop")
+      val continueTarget = scope.allocateName(loopSym)
+
+      pushLabelContext(LabelContext(label, breakTarget, continueTarget))
+      val bodyExpr =
+        try returningTerm(body)
+        finally popLabelContext()
+      val restExpr = returningTerm(rest)
+
+      Instructions.block(
+        label = N,
+        children = Seq(
+          Instructions.block(
+            label = S(breakTarget),
+            children = Seq(
+              Instructions.loop(
+                label = S(continueTarget),
+                children = Seq(
+                  bodyExpr,
+                  br(breakTarget)
+                ),
+                resultTypes = Seq.empty
+              )
+            ),
+            resultTypes = Seq.empty
+          ),
+          restExpr
+        ),
+        resultTypes = restExpr.resultTypes.map(ty => Result(ty.asValType_!))
+      )
+    case Break(label) =>
+      lookupLabelContext(label) match
+        case S(ctx) => br(ctx.breakTarget)
+        case N =>
+          errExpr(
+            Ls(msg"WatBuilder::returningTerm encountered break to unknown label `${label.nme}`" -> label.toLoc),
+            extraInfo = S(label)
+          )
+    case Continue(label) =>
+      lookupLabelContext(label) match
+        case S(ctx) => br(ctx.continueTarget)
+        case N =>
+          errExpr(
+            Ls(msg"WatBuilder::returningTerm encountered continue to unknown label `${label.nme}`" -> label.toLoc),
+            extraInfo = S(label)
+          )
+    
+
     case Match(scrut, arms, dflt, rst) =>
       val matchLabelSym = TempSymbol(N, "match")
       val matchLabel = scope.allocateName(matchLabelSym)
@@ -726,8 +899,14 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     vars
 
   def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
+    val localsBefore = ctx.getAllWasmLocals.headOption.getOrElse(Nil)
     val locals = blockPreamble(t.definedVars)
-    (returningTerm(t), locals)
+    val expr = returningTerm(t)
+    val localsAfter = ctx.getAllWasmLocals.headOption.getOrElse(Nil)
+    val beforeSet = localsBefore.toSet
+    val declaredSet = locals.toSet
+    val extraLocals = localsAfter.filter(sym => !beforeSet(sym) && !declaredSet(sym))
+    (expr, locals ++ extraLocals)
 
   def body(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
     scope.nest givenIn:
