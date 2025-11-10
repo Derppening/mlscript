@@ -34,6 +34,20 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   type Context = Ctx
 
+  private val classTagFieldIdx: MutMap[BlockMemberSymbol, FieldIdx] = MutMap.empty
+  private val classTagValues: MutMap[BlockMemberSymbol, Int] = MutMap.empty
+  private var nextClassTagValue: Int = 1
+  private val classTagFieldType: RefType = RefType.i31ref
+
+  private def allocateClassTagValue(sym: BlockMemberSymbol): Int =
+    classTagValues.getOrElseUpdate(
+      sym, {
+        val id = nextClassTagValue
+        nextClassTagValue += 1
+        id
+      }
+    )
+
   /**
    * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits an
    * `unreachable` instruction.
@@ -439,22 +453,38 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       ctx.addLocal(p.sym)
                       p -> scope.allocateName(p.sym)
 
+                  val clsFieldSyms = clsLikeDefn.publicFields.map(_._2) ++ clsLikeDefn.privateFields
+                  val baseFieldMap: Map[FieldSymbol, (NumIdx, Field)] =
+                    clsFieldSyms.zipWithIndex
+                      .map { case (f, index) =>
+                        (f: FieldSymbol) -> (NumIdx(index) -> Field(
+                          RefType.anyref,
+                          mutable = true,
+                          id = S(f.nme)
+                        ))
+                      }
+                      .toMap
+
+                  val tagFieldIdxNum = NumIdx(clsFieldSyms.length)
+                  val tagFieldIdx = FieldIdx(tagFieldIdxNum)
+                  val classTagValue = allocateClassTagValue(clsLikeDefn.sym)
+                  classTagFieldIdx(clsLikeDefn.sym) = tagFieldIdx
+                  val tagFieldIdent = new syntax.Tree.Ident(s"${clsLikeDefn.sym.nme}$$classTag")
+                  val tagFieldSym: TermSymbol = TermSymbol(syntax.MutVal, S(clsLikeDefn.isym), tagFieldIdent)
+
+                  val allFields: Map[FieldSymbol, (NumIdx, Field)] =
+                    baseFieldMap + ((tagFieldSym: FieldSymbol) -> (tagFieldIdxNum -> Field(
+                      classTagFieldType,
+                      mutable = true,
+                      id = S(s"${clsLikeDefn.sym.nme}$$tag")
+                    )))
+
                   val typeref = ctx.addType(
                     sym = S(clsLikeDefn.sym),
                     typeInfo =
                       TypeInfo(
                         sym = clsLikeDefn.sym,
-                        compType = StructType(
-                          (clsLikeDefn.publicFields.map(
-                            _._2
-                          ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
-                            f -> (NumIdx(index) -> Field(
-                              RefType.anyref,
-                              mutable = true,
-                              id = S(f.nme)
-                            ))
-                          .toMap
-                        )
+                        compType = StructType(allFields)
                       )
                   )
 
@@ -468,10 +498,17 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   ctx.addLocal(clsLikeDefn.isym)
                   val thisVar = getVar(clsLikeDefn.isym, N).instrargs(0).asInstanceOf[LocalIdx]
                   val (ctorWat, ctorLocals) = block(clsLikeDefn.ctor)
+                  val nonNullClsRef = RefType(typeref, nullable = false)
+                  val tagInit = struct.set(
+                    index = tagFieldIdx,
+                    ref = ref.cast(local.get(thisVar, RefType.anyref), nonNullClsRef),
+                    value = ref.i31(i32.const(classTagValue))
+                  )
                   val ctorCode = Instructions.block(
                     label = N,
                     Seq(
                       local.set(thisVar, struct.new_default(typeref)),
+                      tagInit,
                       ctorWat,
                       `return`(S(local.get(thisVar, RefType(typeref, nullable = false))))
                     ),
@@ -610,8 +647,37 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               val clsTypeIdx = ctx.getType_!(clsBlkMemberSym)
               val clsRefType = RefType(clsTypeIdx, nullable = true)
 
-              // ref.test to check if the scrut is expected class
-              val testExpr: FoldedInstr = ref.test(getScrutExpr, clsRefType)
+              val nonNullClsRefType = RefType(clsTypeIdx, nullable = false)
+              val tagSpecificTest = classTagFieldIdx.get(clsBlkMemberSym).map: tagIdx =>
+                val expectedTag = classTagValues.getOrElse(
+                  clsBlkMemberSym,
+                  break(errExpr(
+                    Ls(msg"Missing class tag metadata for pattern" -> cls.toLoc),
+                    extraInfo = S(cls.toString)
+                  ))
+                )
+                i32.eq(
+                  i31.get(
+                    struct.get(
+                      tagIdx,
+                      ref.cast(getScrutExpr, nonNullClsRefType),
+                      classTagFieldType
+                    ),
+                    signed = false
+                  ),
+                  i32.const(expectedTag)
+                )
+
+              val testExpr: FoldedInstr = tagSpecificTest match
+                case S(tagTest) =>
+                  Instructions.`if`(
+                    condition = ref.test(getScrutExpr, clsRefType),
+                    ifTrue = tagTest,
+                    ifFalse = S(i32.const(0)),
+                    resultTypes = Seq(Result(I32Type))
+                  )
+                case N =>
+                  ref.test(getScrutExpr, clsRefType)
               val bodyExpr = returningTerm(body)
               val armLabelSym = TempSymbol(N, "arm")
               val armLabel = scope.allocateName(armLabelSym)
