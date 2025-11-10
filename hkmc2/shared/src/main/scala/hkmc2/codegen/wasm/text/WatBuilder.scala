@@ -660,6 +660,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               resultTypes = rstExpr.resultTypes.map(ty => Result(ty.asValType_!))
             )
 
+    // TODO: Implement proper WASM exception throwing
+    case Throw(res) => unreachable
+
     case End(_) => nop
 
     case t =>
