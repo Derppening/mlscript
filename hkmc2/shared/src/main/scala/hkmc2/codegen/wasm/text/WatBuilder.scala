@@ -439,22 +439,27 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       ctx.addLocal(p.sym)
                       p -> scope.allocateName(p.sym)
 
+                  val tagFieldSym: FieldSymbol = BlockMemberSymbol("$tag", Nil, nameIsMeaningful = false)
+                  val tagField = NumIdx(0) -> Field(I32Type, mutable = true, id = S("$tag"))
+                  
+                  val classFields = (clsLikeDefn.publicFields.map(
+                    _._2
+                  ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
+                    f -> (NumIdx(index + 1) -> Field(
+                      RefType.anyref,
+                      mutable = true,
+                      id = S(f.nme)
+                    ))
+                  .toMap
+                  
+                  val allFields: Map[FieldSymbol, NumIdx -> Field] = Map(tagFieldSym -> tagField) ++ classFields
+                  
                   val typeref = ctx.addType(
                     sym = S(clsLikeDefn.sym),
                     typeInfo =
                       TypeInfo(
                         sym = clsLikeDefn.sym,
-                        compType = StructType(
-                          (clsLikeDefn.publicFields.map(
-                            _._2
-                          ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
-                            f -> (NumIdx(index) -> Field(
-                              RefType.anyref,
-                              mutable = true,
-                              id = S(f.nme)
-                            ))
-                          .toMap
-                        )
+                        compType = StructType(allFields)
                       )
                   )
 
@@ -468,10 +473,21 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   ctx.addLocal(clsLikeDefn.isym)
                   val thisVar = getVar(clsLikeDefn.isym, N).instrargs(0).asInstanceOf[LocalIdx]
                   val (ctorWat, ctorLocals) = block(clsLikeDefn.ctor)
+                  
+                  val classTypeIdx = ctx.getType_!(clsLikeDefn.sym, resolveSymIdx = true)
+                  val tagValue = classTypeIdx match
+                    case TypeIdx(NumIdx(idx)) => idx
+                    case _ => lastWords(s"Expected numeric type index for class ${clsLikeDefn.sym}")
+                  
                   val ctorCode = Instructions.block(
                     label = N,
                     Seq(
                       local.set(thisVar, struct.new_default(typeref)),
+                      struct.set(
+                        FieldIdx(NumIdx(0)),
+                        ref.cast(local.get(thisVar, RefType.anyref), RefType(typeref, nullable = false)),
+                        i32.const(tagValue)
+                      ),
                       ctorWat,
                       `return`(S(local.get(thisVar, RefType(typeref, nullable = false))))
                     ),
@@ -572,7 +588,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       
       // Compile each match arm
       boundary:
-        val armExprs = arms.zipWithIndex.flatMap { case ((cse, body), armIdx) =>
+        val armExprs = arms.zipWithIndex.flatMap: (caseAndBody, armIdx) =>
+          val (cse, body) = caseAndBody
           cse match
             case Case.Lit(lit) =>
               val testExpr: FoldedInstr = lit match
@@ -607,19 +624,38 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   Ls(msg"Could not resolve BlockMemberSymbol for class pattern" -> cls.toLoc),
                   extraInfo = S(s"ClassLikeSymbol: ${cls.toString}")
                 ))
-              val clsTypeIdx = ctx.getType_!(clsBlkMemberSym)
+              val clsTypeIdx = ctx.getType_!(clsBlkMemberSym, resolveSymIdx = true)
               val clsRefType = RefType(clsTypeIdx, nullable = true)
+              
+              val expectedTag = clsTypeIdx match
+                case TypeIdx(NumIdx(idx)) => idx
+                case _ => break(errExpr(
+                  Ls(msg"Expected numeric type index for class pattern" -> cls.toLoc),
+                  extraInfo = S(s"TypeIdx: ${clsTypeIdx}")
+                ))
 
-              // ref.test to check if the scrut is expected class
-              val testExpr: FoldedInstr = ref.test(getScrutExpr, clsRefType)
+              val scrutExpr = getScrutExpr
+              val isStructCompatible = ref.test(scrutExpr, clsRefType)
+              
               val bodyExpr = returningTerm(body)
               val armLabelSym = TempSymbol(N, "arm")
               val armLabel = scope.allocateName(armLabelSym)
+              
+              // Safe to cast and extract tag since ref.test passed
+              val scrutAsStruct = ref.cast(getScrutExpr, RefType(clsTypeIdx, nullable = false))
+              val scrutTag = struct.get(FieldIdx(NumIdx(0)), scrutAsStruct, I32Type)
+              val tagMatches = i32.eq(scrutTag, i32.const(expectedTag))
+              
               S(Instructions.`if`(
-                condition = testExpr,
-                ifTrue = Instructions.block(
-                  label = S(armLabel),
-                  children = Seq(bodyExpr, br(matchLabel)),
+                condition = isStructCompatible,
+                ifTrue = Instructions.`if`(
+                  condition = tagMatches,
+                  ifTrue = Instructions.block(
+                    label = S(armLabel),
+                    children = Seq(bodyExpr, br(matchLabel)),
+                    resultTypes = Seq.empty
+                  ),
+                  ifFalse = N,
                   resultTypes = Seq.empty
                 ),
                 ifFalse = N,
@@ -632,7 +668,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 ),
                 extraInfo = S(cse.toString)
               ))
-        }
         
 
         val defaultExpr = dflt match
@@ -694,6 +729,22 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
 
     val ctx = Ctx.empty
+    
+    // Create base Object struct with tag field that all other structs will inherit
+    val baseObjectSym = BlockMemberSymbol("Object", Nil)
+    val tagFieldSym = BlockMemberSymbol("$tag", Nil, nameIsMeaningful = false)
+    val baseObjectTypeIdx = ctx.addType(
+      sym = S(baseObjectSym),
+      TypeInfo(
+        id = S(SymIdx("Object")),
+        StructType(
+          Map(
+            tagFieldSym -> (NumIdx(0) -> Field(I32Type, mutable = true, id = S("$tag")))
+          )
+        )
+      )
+    )
+    
     val (entryFnExpr, entryFnLocals) =
       block(p.main)(using ctx, summon[Raise], summon[Scope])
 
