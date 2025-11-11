@@ -43,9 +43,9 @@ if Bar(true) is
   else 0
 //│ Wat:
 //│ (module
-//│   (type $Bar (struct (field $y (mut (ref null any))) (field $Bar$tag (mut (ref null i31)))))
+//│   (type $Bar (struct (field $y (mut (ref null any)))))
 //│   (type (func (param $y (ref null any)) (result (ref null any))))
-//│   (type $Baz (struct (field $z (mut (ref null any))) (field $Baz$tag (mut (ref null i31)))))
+//│   (type $Baz (struct (field $z (mut (ref null any)))))
 //│   (type (func (param $z (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
 //│   (func $Bar (type 1) (param $y (ref null any)) (result (ref null any))
@@ -53,11 +53,6 @@ if Bar(true) is
 //│     (block (result (ref null any))
 //│       (local.set $this
 //│         (struct.new_default $Bar))
-//│       (struct.set $Bar 1
-//│         (ref.cast (ref $Bar)
-//│           (local.get $this))
-//│         (ref.i31
-//│           (i32.const 1)))
 //│       (block
 //│         (struct.set $Bar 0
 //│           (ref.cast (ref $Bar)
@@ -73,11 +68,6 @@ if Bar(true) is
 //│     (block (result (ref null any))
 //│       (local.set $this
 //│         (struct.new_default $Baz))
-//│       (struct.set $Baz 1
-//│         (ref.cast (ref $Baz)
-//│           (local.get $this))
-//│         (ref.i31
-//│           (i32.const 2)))
 //│       (block
 //│         (struct.set $Baz 0
 //│           (ref.cast (ref $Baz)
@@ -107,18 +97,8 @@ if Bar(true) is
 //│               (ref.func $Bar)))
 //│           (block $match (result (ref null any))
 //│             (if
-//│               (if (result i32)
-//│                 (ref.test (ref null $Bar)
-//│                   (local.get $scrut))
-//│                 (then
-//│                   (i32.eq
-//│                     (i31.get_u
-//│                       (struct.get $Bar 1
-//│                         (ref.cast (ref $Bar)
-//│                           (local.get $scrut))))
-//│                     (i32.const 1)))
-//│                 (else
-//│                   (i32.const 0)))
+//│               (ref.test (ref null $Bar)
+//│                 (local.get $scrut))
 //│               (then
 //│                 (block $arm1
 //│                   (block (result (ref null any))
@@ -145,18 +125,8 @@ if Bar(true) is
 //│                           (i32.const 0)))))
 //│                   (br $match))))
 //│             (if
-//│               (if (result i32)
-//│                 (ref.test (ref null $Baz)
-//│                   (local.get $scrut))
-//│                 (then
-//│                   (i32.eq
-//│                     (i31.get_u
-//│                       (struct.get $Baz 1
-//│                         (ref.cast (ref $Baz)
-//│                           (local.get $scrut))))
-//│                     (i32.const 2)))
-//│                 (else
-//│                   (i32.const 0)))
+//│               (ref.test (ref null $Baz)
+//│                 (local.get $scrut))
 //│               (then
 //│                 (block $arm2
 //│                   (block (result (ref null any))
@@ -176,130 +146,22 @@ if Bar(true) is
 //│ Wasm result:
 //│ = 1
 
-:wat
+:re
 class Bar(val y)
 class Baz(val z)
-if Baz(10) is
+if Bar(10) is
   Bar(a) then a
-  Baz(b) then 0
-//│ Wat:
-//│ (module
-//│   (type $Bar (struct (field $y (mut (ref null any))) (field $Bar$tag (mut (ref null i31)))))
-//│   (type (func (param $y (ref null any)) (result (ref null any))))
-//│   (type $Baz (struct (field $z (mut (ref null any))) (field $Baz$tag (mut (ref null i31)))))
-//│   (type (func (param $z (ref null any)) (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $Bar (type 1) (param $y (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
-//│     (block (result (ref null any))
-//│       (local.set $this
-//│         (struct.new_default $Bar))
-//│       (struct.set $Bar 1
-//│         (ref.cast (ref $Bar)
-//│           (local.get $this))
-//│         (ref.i31
-//│           (i32.const 1)))
-//│       (block
-//│         (struct.set $Bar 0
-//│           (ref.cast (ref $Bar)
-//│             (local.get $this))
-//│           (local.get $y))
-//│         (nop))
-//│       (return
-//│         (local.get $this))))
-//│   (export "Bar" (func $Bar))
-//│   (elem declare func $Bar)
-//│   (func $Baz (type 3) (param $z (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
-//│     (block (result (ref null any))
-//│       (local.set $this
-//│         (struct.new_default $Baz))
-//│       (struct.set $Baz 1
-//│         (ref.cast (ref $Baz)
-//│           (local.get $this))
-//│         (ref.i31
-//│           (i32.const 2)))
-//│       (block
-//│         (struct.set $Baz 0
-//│           (ref.cast (ref $Baz)
-//│             (local.get $this))
-//│           (local.get $z))
-//│         (nop))
-//│       (return
-//│         (local.get $this))))
-//│   (export "Baz" (func $Baz))
-//│   (elem declare func $Baz)
-//│   (func $entry (type 4) (result (ref null any))
-//│     (local $Bar (ref null any))
-//│     (local $Baz (ref null any))
-//│     (local $scrut (ref null any))
-//│     (local $param0 (ref null any))
-//│     (local $b (ref null any))
-//│     (local $a (ref null any))
-//│     (block (result (ref null any))
-//│       (nop)
-//│       (block (result (ref null any))
-//│         (nop)
-//│         (block (result (ref null any))
-//│           (local.set $scrut
-//│             (call_ref 3
-//│               (ref.i31
-//│                 (i32.const 10))
-//│               (ref.func $Baz)))
-//│           (block $match (result (ref null any))
-//│             (if
-//│               (if (result i32)
-//│                 (ref.test (ref null $Bar)
-//│                   (local.get $scrut))
-//│                 (then
-//│                   (i32.eq
-//│                     (i31.get_u
-//│                       (struct.get $Bar 1
-//│                         (ref.cast (ref $Bar)
-//│                           (local.get $scrut))))
-//│                     (i32.const 1)))
-//│                 (else
-//│                   (i32.const 0)))
-//│               (then
-//│                 (block $arm
-//│                   (block (result (ref null any))
-//│                     (local.set $param0
-//│                       (struct.get $Bar 0
-//│                         (ref.cast (ref $Bar)
-//│                           (local.get $scrut))))
-//│                     (block (result (ref null any))
-//│                       (local.set $a
-//│                         (local.get $param0))
-//│                       (local.get $a)))
-//│                   (br $match))))
-//│             (if
-//│               (if (result i32)
-//│                 (ref.test (ref null $Baz)
-//│                   (local.get $scrut))
-//│                 (then
-//│                   (i32.eq
-//│                     (i31.get_u
-//│                       (struct.get $Baz 1
-//│                         (ref.cast (ref $Baz)
-//│                           (local.get $scrut))))
-//│                     (i32.const 2)))
-//│                 (else
-//│                   (i32.const 0)))
-//│               (then
-//│                 (block $arm1
-//│                   (block (result (ref null i31))
-//│                     (local.set $param0
-//│                       (struct.get $Baz 0
-//│                         (ref.cast (ref $Baz)
-//│                           (local.get $scrut))))
-//│                     (block (result (ref null i31))
-//│                       (local.set $b
-//│                         (local.get $param0))
-//│                       (ref.i31
-//│                         (i32.const 0))))
-//│                   (br $match))))
-//│             (unreachable))))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
-//│ Wasm result:
-//│ = 0
+  Baz(b) then b
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:669)
+//│ FAILURE INFO: Throw of Instantiate:
+//│   mut = false
+//│   cls = Select:
+//│     qual = Ref of globalThis:globalThis
+//│     name = Ident of "Error"
+//│   args = Ls of 
+//│     Arg:
+//│       spread = N
+//│       value = Lit of StrLit of "match error"
+//│ ═══[COMPILATION ERROR] WatBuilder::returningTerm for expression not implemented yet
+//│ FAILURE: Unexpected lack of runtime error
