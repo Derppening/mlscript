@@ -1,0 +1,25 @@
+
+:global
+:wasm
+:wat
+
+1 + 3
+//│ Wat:
+//│ (module
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 0) (result (ref null any))
+//│     (ref.i31
+//│       (i32.add
+//│         (i31.get_s
+//│           (ref.cast (ref null i31)
+//│             (ref.i31
+//│               (i32.const 1))))
+//│         (i31.get_s
+//│           (ref.cast (ref null i31)
+//│             (ref.i31
+//│               (i32.const 3)))))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 4
+//│

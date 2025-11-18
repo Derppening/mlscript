@@ -156,42 +156,19 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           ref.func(funcIdx, RefType(ctx.getFuncInfo_!(l).typeIdx, nullable = false))
         case N => getVar(l, r.toLoc)
 
+    case c @ Call(fun, lhs :: rhs :: Nil) if isWasmIntrinsic(fun, "plus_impl") =>
+      compilePlusIntrinsic(lhs, rhs)
+
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil) if !l.functionLike =>
       if l.binary then
         l.nme match
           case "+" =>
-            // TODO(Derppening): Refactor to lower to `Call(plus_impl, ...)`
-            def castOperand(expr: Expr, opSide: Str): Expr =
-              expr.resultType match
-                case S(RefType(HeapType.Any, _)) => `if`(
-                    ref.test(expr, RefType.i31ref),
-                    ifTrue = castOperand(ref.cast(expr, RefType.i31ref), opSide),
-                    ifFalse = S(unreachable),
-                    resultTypes = Seq(Result(I32Type))
-                  )
-                case S(RefType(HeapType.I31, _)) => i31.get(expr, true)
-                case S(I32Type) => expr
-                case ty =>
-                  errExpr(
-                    Ls(
-                      msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' ($opSide.type=${ty.fold("(none)")(_.toWat.mkString())}) not implemented yet" -> r.toLoc
-                    ),
-                    extraInfo = S(r.toString)
-                  )
-
-            val lhsOp = castOperand(operand(lhs), "lhs")
-            val rhsOp = castOperand(operand(rhs), "rhs")
-
-            (lhsOp.resultType, rhsOp.resultType) match
-              case (S(I32Type), S(I32Type)) =>
-                ref.i31(i32.add(lhsOp, rhsOp))
-              case (lhsType, rhsType) =>
-                errExpr(
-                  Ls(
-                    msg"WatBuilder::result for binary builtin symbol '${l.nme.toString}' for (${lhsType.fold("(none)")(_.toWat.mkString())}, ${rhsType.fold("(none)")(_.toWat.mkString())}) not implemented yet" -> r.toLoc
-                  ),
-                  extraInfo = S(r.toString)
-                )
+            errExpr(
+              Ls(
+                msg"WatBuilder::result encountered builtin '+' which should be lowered to wasm.plus_impl" -> r.toLoc
+              ),
+              extraInfo = S(r.toString)
+            )
           case lNme =>
             errExpr(
               Ls(
@@ -286,6 +263,25 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         extraInfo = S(s"Block IR: `${r.toString}`")
       )
   end result
+
+  private def isWasmIntrinsic(path: Path, name: Str): Bool = path match
+    case Select(Value.Ref(sym), ident) =>
+      (sym eq State.wasmSymbol) && ident.name == name
+    case _ => false
+
+  private def compilePlusIntrinsic(lhs: Arg, rhs: Arg)(using
+      Ctx,
+      Raise,
+      Scope
+  ): Expr =
+    val lhsCast = ref.cast(operand(lhs), RefType.i31ref)
+    val rhsCast = ref.cast(operand(rhs), RefType.i31ref)
+    ref.i31(
+      i32.add(
+        i31.get(lhsCast, true),
+        i31.get(rhsCast, true)
+      )
+    )
 
   def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr = t match
     case _: HandleBlock =>

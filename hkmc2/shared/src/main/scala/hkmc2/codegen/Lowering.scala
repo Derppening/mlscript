@@ -455,7 +455,11 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
               )(true, false)))
           else
             subTerm_nonTail(arg2): ar2 =>
-              k(Call(Value.Ref(sym).withLocOf(ref), Arg(N, ar1) :: Arg(N, ar2) :: Nil)(true, false))
+              val targetPath =
+                if config.target == CompilationTarget.Wasm && sym.nme == "+"
+                then Value.Ref(State.wasmSymbol).selN(Tree.Ident("plus_impl"))
+                else Value.Ref(sym).withLocOf(ref)
+              k(Call(targetPath, Arg(N, ar1) :: Arg(N, ar2) :: Nil)(true, false))
       case _ => fail:
         ErrorReport(
           msg"Unexpected arguments for builtin symbol '${sym.nme}'" -> arg.toLoc :: Nil, S(arg),
@@ -484,7 +488,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
       case t if t.resolvedSym.isDefined && (t.resolvedSym.get is ctx.builtins.js.try_catch) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("try_catch")))
       case t if t.resolvedSym.exists(_ is ctx.builtins.wasm.plus_impl) =>
-        conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("plus_impl")))
+        conclude(Value.Ref(State.wasmSymbol).selN(Tree.Ident("plus_impl")))
       case t if t.resolvedSym.exists(_ is ctx.builtins.Int31) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("Int31")))
       case t if t.resolvedSym.isDefined && (t.resolvedSym.get is ctx.builtins.debug.printStack) =>
