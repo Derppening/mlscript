@@ -34,6 +34,20 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   type Context = Ctx
 
+  private val baseObjectSym: BlockMemberSymbol = BlockMemberSymbol("Object", Nil)
+  private val tagFieldSym: FieldSymbol = BlockMemberSymbol("$tag", Nil, nameIsMeaningful = false)
+
+  private def baseObjectTypeIdx(using Ctx): TypeIdx =
+    ctx.getType_!(baseObjectSym)
+
+  private def baseObjectStruct(using Ctx): StructType =
+    ctx.getTypeInfo_!(baseObjectSym).compType match
+      case struct: StructType => struct
+      case other => lastWords(s"Base Object type must be a struct, found ${other.toWat.mkString()}")
+
+  private def baseObjectRefType(nullable: Bool)(using Ctx): RefType =
+    RefType(baseObjectTypeIdx, nullable = nullable)
+
   /**
    * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits an
    * `unreachable` instruction.
@@ -439,27 +453,32 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       ctx.addLocal(p.sym)
                       p -> scope.allocateName(p.sym)
 
-                  val tagFieldSym: FieldSymbol = BlockMemberSymbol("$tag", Nil, nameIsMeaningful = false)
-                  val tagField = NumIdx(0) -> Field(I32Type, mutable = true, id = S("$tag"))
-                  
-                  val classFields = (clsLikeDefn.publicFields.map(
+                  val inheritedFields = baseObjectStruct.fields.toMap
+                  val inheritedSize = inheritedFields.size
+
+                  val classFields: Map[FieldSymbol, NumIdx -> Field] = (clsLikeDefn.publicFields.map(
                     _._2
                   ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
-                    f -> (NumIdx(index + 1) -> Field(
+                    f -> (NumIdx(index + inheritedSize) -> Field(
                       RefType.anyref,
                       mutable = true,
                       id = S(f.nme)
                     ))
                   .toMap
-                  
-                  val allFields: Map[FieldSymbol, NumIdx -> Field] = Map(tagFieldSym -> tagField) ++ classFields
-                  
+
+                  val allFields: Map[FieldSymbol, NumIdx -> Field] = inheritedFields ++ classFields
+
+                  // Only parent is base Object for now. For general inheritance add other parents.
                   val typeref = ctx.addType(
                     sym = S(clsLikeDefn.sym),
                     typeInfo =
                       TypeInfo(
                         sym = clsLikeDefn.sym,
-                        compType = StructType(allFields)
+                        compType = StructType(
+                          fields = allFields,
+                          parents = Seq(baseObjectTypeIdx),
+                          isSubtype = true
+                        )
                       )
                   )
 
@@ -625,7 +644,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   extraInfo = S(s"ClassLikeSymbol: ${cls.toString}")
                 ))
               val clsTypeIdx = ctx.getType_!(clsBlkMemberSym, resolveSymIdx = true)
-              val clsRefType = RefType(clsTypeIdx, nullable = true)
               
               val expectedTag = clsTypeIdx match
                 case TypeIdx(NumIdx(idx)) => idx
@@ -635,15 +653,15 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 ))
 
               val scrutExpr = getScrutExpr
-              val isStructCompatible = ref.test(scrutExpr, clsRefType)
+              val isStructCompatible = ref.test(scrutExpr, baseObjectRefType(nullable = true))
               
               val bodyExpr = returningTerm(body)
               val armLabelSym = TempSymbol(N, "arm")
               val armLabel = scope.allocateName(armLabelSym)
               
               // Safe to cast and extract tag since ref.test passed
-              val scrutAsStruct = ref.cast(getScrutExpr, RefType(clsTypeIdx, nullable = false))
-              val scrutTag = struct.get(FieldIdx(NumIdx(0)), scrutAsStruct, I32Type)
+              val scrutAsObject = ref.cast(getScrutExpr, baseObjectRefType(nullable = false))
+              val scrutTag = struct.get(FieldIdx(NumIdx(0)), scrutAsObject, I32Type)
               val tagMatches = i32.eq(scrutTag, i32.const(expectedTag))
               
               S(Instructions.`if`(
@@ -731,16 +749,15 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val ctx = Ctx.empty
     
     // Create base Object struct with tag field that all other structs will inherit
-    val baseObjectSym = BlockMemberSymbol("Object", Nil)
-    val tagFieldSym = BlockMemberSymbol("$tag", Nil, nameIsMeaningful = false)
-    val baseObjectTypeIdx = ctx.addType(
+    ctx.addType(
       sym = S(baseObjectSym),
       TypeInfo(
         id = S(SymIdx("Object")),
         StructType(
           Map(
             tagFieldSym -> (NumIdx(0) -> Field(I32Type, mutable = true, id = S("$tag")))
-          )
+          ),
+          isSubtype = true
         )
       )
     )

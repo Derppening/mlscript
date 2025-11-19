@@ -48,7 +48,7 @@ fun foo() = 42
 foo() + foo()
 //│ Wat:
 //│ (module
-//│   (type $Object (struct (field $$tag (mut i32))))
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
 //│   (type (func (result (ref null any))))
 //│   (type (func (result (ref null any))))
 //│   (func $foo (type 1) (result (ref null any))
@@ -114,8 +114,8 @@ class Foo(val a)
 (new Foo(42)).Foo#a
 //│ Wat:
 //│ (module
-//│   (type $Object (struct (field $$tag (mut i32))))
-//│   (type $Foo (struct (field $$tag (mut i32)) (field $a (mut (ref null any)))))
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $a (mut (ref null any))))))
 //│   (type (func (param $a (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
 //│   (func $Foo (type 2) (param $a (ref null any)) (result (ref null any))
