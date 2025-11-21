@@ -33,6 +33,28 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   import Instructions.*
 
   type Context = Ctx
+  private val binaryOps: Map[Str, (Expr, Expr) => Expr] = Map(
+    "plus_impl" -> ((a, b) => i32.add(a, b)),
+    "minus_impl" -> ((a, b) => i32.sub(a, b)),
+    "times_impl" -> ((a, b) => i32.mul(a, b)),
+    "div_impl" -> ((a, b) => i32.div_s(a, b)),
+    "mod_impl" -> ((a, b) => i32.rem_s(a, b)),
+    "eq_impl" -> ((a, b) => i32.eq(a, b)),
+    "neq_impl" -> ((a, b) => i32.ne(a, b)),
+    "lt_impl" -> ((a, b) => i32.lt_s(a, b)),
+    "le_impl" -> ((a, b) => i32.le_s(a, b)),
+    "gt_impl" -> ((a, b) => i32.gt_s(a, b)),
+    "ge_impl" -> ((a, b) => i32.ge_s(a, b))
+  )
+  private val unaryOps: Map[Str, Expr => Expr] = Map(
+    "neg_impl" -> (value => i32.sub(i32.const(0), value)),
+    "pos_impl" -> (value => value),
+    "not_impl" -> (value => i32.eqz(value))
+  )
+  private val wasmIntrinsicArities: Map[Str, Int] =
+    (binaryOps.keys.map(_ -> 2) ++ unaryOps.keys.map(_ -> 1)).toMap
+  private val wasmIntrinsicNameSet: Set[Str] = wasmIntrinsicArities.keySet
+  private val wasmIntrinsicFuncs: MutMap[Str, FuncIdx] = MutMap.empty
 
   /**
    * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits an
@@ -156,9 +178,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           ref.func(funcIdx, RefType(ctx.getFuncInfo_!(l).typeIdx, nullable = false))
         case N => getVar(l, r.toLoc)
 
-    case c @ Call(fun, lhs :: rhs :: Nil) if isWasmIntrinsic(fun, "plus_impl") =>
-      compilePlusIntrinsic(lhs, rhs)
-
     case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil) if !l.functionLike =>
       if l.binary then
         l.nme match
@@ -181,30 +200,47 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           msg"Cannot call non-binary builtin symbol '${l.nme}'" -> r.toLoc
         ))
 
-    case Call(fun, args) =>
-      val base = subexpression(fun)
-      if base.resultTypes.exists(_ is UnreachableType) then return base
-      val wasmArgs = args.map(argument)
-
-      val baseTypeIdx = base.resultType match
-        case S(RefType(idx: TypeIdx, _)) => idx
-        case ty =>
-          return errExpr(
-            Ls(
-              msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>)` type" -> r.toLoc
-            ),
-            extraInfo = S(
-              s"Block IR: `${fun.toString}`\nCompiled WAT: `${base.toWat.toString}`\n... which has type `${ty.fold("(none)")(_.toWat.toString)}`"
+    case c @ Call(fun, args) =>
+      wasmIntrinsicName(fun) match
+        case S(intrName) =>
+          val expectedArity = wasmIntrinsicArities(intrName)
+          if expectedArity =/= args.length then
+            return errExpr(
+              Ls(
+                msg"Wasm intrinsic '$intrName' called with incorrect arity (${args.length})" -> c.toLoc
+              ),
+              extraInfo = S(c.toString)
             )
+          val funcIdx = getIntrinsic(intrName)
+          call(
+            funcidx = funcIdx,
+            operands = args.map(argument),
+            returnTypes = Seq(Result(RefType.anyref))
           )
-      val baseTypeInfo = ctx.getTypeInfo_!(baseTypeIdx)
+        case N =>
+          val base = subexpression(fun)
+          if base.resultTypes.exists(_ is UnreachableType) then return base
+          val wasmArgs = args.map(argument)
 
-      call_ref(
-        target = base,
-        operands = wasmArgs.toSeq,
-        typeIdx = baseTypeIdx,
-        funcType = baseTypeInfo.compType.asInstanceOf[FunctionType]
-      )
+          val baseTypeIdx = base.resultType match
+            case S(RefType(idx: TypeIdx, _)) => idx
+            case ty =>
+              return errExpr(
+                Ls(
+                  msg"Expected WAT of `fun` expression in Call(...) to have a `(ref <typeidx>)` type" -> r.toLoc
+                ),
+                extraInfo = S(
+                  s"Block IR: `${fun.toString}`\nCompiled WAT: `${base.toWat.toString}`\n... which has type `${ty.fold("(none)")(_.toWat.toString)}`"
+                )
+              )
+          val baseTypeInfo = ctx.getTypeInfo_!(baseTypeIdx)
+
+          call_ref(
+            target = base,
+            operands = wasmArgs.toSeq,
+            typeIdx = baseTypeIdx,
+            funcType = baseTypeInfo.compType.asInstanceOf[FunctionType]
+          )
 
     case sel @ Select(qual, id) =>
       val qualRes = result(qual)
@@ -264,24 +300,87 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
   end result
 
-  private def isWasmIntrinsic(path: Path, name: Str): Bool = path match
-    case Select(Value.Ref(sym), ident) =>
-      (sym eq State.wasmSymbol) && ident.name == name
-    case _ => false
+  private def wasmIntrinsicName(path: Path): Opt[Str] = path match
+    case Select(Value.Ref(sym), ident) if (sym eq State.wasmSymbol) && wasmIntrinsicNameSet.contains(ident.name) =>
+      S(ident.name)
+    case _ => N
 
-  private def compilePlusIntrinsic(lhs: Arg, rhs: Arg)(using
-      Ctx,
-      Raise,
-      Scope
-  ): Expr =
-    val lhsCast = ref.cast(operand(lhs), RefType.i31ref)
-    val rhsCast = ref.cast(operand(rhs), RefType.i31ref)
-    ref.i31(
-      i32.add(
-        i31.get(lhsCast, true),
-        i31.get(rhsCast, true)
+  private def getIntrinsic(name: Str)(using Ctx, Scope): FuncIdx =
+    wasmIntrinsicFuncs.getOrElseUpdate(name, createIntrinsic(name))
+
+  private def createIntrinsic(name: Str)(using Ctx, Scope): FuncIdx =
+    if binaryOps.contains(name) then createBinaryInt31Func(name, binaryOps(name))
+    else if unaryOps.contains(name) then createUnaryInt31Func(name, unaryOps(name))
+    else lastWords(s"Unsupported wasm intrinsic '$name'")
+
+  private def createBinaryInt31Func(name: Str, op: (Expr, Expr) => Expr)(using Ctx, Scope): FuncIdx =
+    val params = mkIntrinsicParams(name, Seq("lhs", "rhs"))
+    val lhsName = params.head._2
+    val rhsName = params(1)._2
+    val body = binaryInt31Body(lhsName, rhsName, op)
+    createIntrinsicFunc(name, params, body)
+
+  private def createUnaryInt31Func(name: Str, op: Expr => Expr)(using Ctx, Scope): FuncIdx =
+    val params = mkIntrinsicParams(name, Seq("arg"))
+    val argName = params.head._2
+    val body = unaryInt31Body(argName, op)
+    createIntrinsicFunc(name, params, body)
+
+  private def createIntrinsicFunc(name: Str, params: Seq[(TempSymbol, Str)], body: Expr)(using Ctx): FuncIdx =
+    val funcTy = ctx.addType(
+      sym = N,
+      TypeInfo(
+        id = N,
+        FunctionType(
+          params = params.map((_, nme) => WasmParam(S(nme), RefType.anyref)),
+          results = Seq(Result(RefType.anyref))
+        )
       )
     )
+    val funcInfo = FuncInfo(
+      id = S(SymIdx(s"wasm.$name")),
+      typeIdx = funcTy,
+      params = params,
+      nResults = 1,
+      locals = Seq.empty,
+      body = body
+    )
+    ctx.addFunc(N, funcInfo)
+
+  private def binaryInt31Body(lhsName: Str, rhsName: Str, op: (Expr, Expr) => Expr)(using Ctx, Scope): Expr =
+    val cond = i32.and(
+      ref.test(paramAnyref(lhsName), RefType.i31ref),
+      ref.test(paramAnyref(rhsName), RefType.i31ref)
+    )
+    val i31Op = ref.i31(op(loadI31Value(lhsName), loadI31Value(rhsName)))
+    `if`(
+      condition = cond,
+      ifTrue = i31Op,
+      ifFalse = S(unreachable),
+      resultTypes = Seq(Result(RefType.anyref))
+    )
+
+  private def unaryInt31Body(paramName: Str, op: Expr => Expr)(using Ctx, Scope): Expr =
+    val cond = ref.test(paramAnyref(paramName), RefType.i31ref)
+    val i31Op = ref.i31(op(loadI31Value(paramName)))
+    `if`(
+      condition = cond,
+      ifTrue = i31Op,
+      ifFalse = S(unreachable),
+      resultTypes = Seq(Result(RefType.anyref))
+    )
+
+  private def mkIntrinsicParams(name: Str, suffixes: Seq[Str]): Seq[(TempSymbol, Str)] =
+    suffixes.map: suffix =>
+      val sym = TempSymbol(N, s"${name}_$suffix")
+      val paramName = s"wasm_${name}_$suffix"
+      sym -> paramName
+
+  private def paramAnyref(name: Str): Expr =
+    local.get(LocalIdx(SymIdx(name)), RefType.anyref)
+
+  private def loadI31Value(name: Str): Expr =
+    i31.get(ref.cast(paramAnyref(name), RefType.i31ref), true)
 
   def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr = t match
     case _: HandleBlock =>

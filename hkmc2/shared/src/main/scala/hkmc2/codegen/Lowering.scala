@@ -70,6 +70,45 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
   val lowerHandlers: Bool = config.effectHandlers.isDefined
   val lift: Bool = config.liftDefns.isDefined
 
+  private val wasmBinaryIntrinsicMap: Map[Str, Str] = Map(
+    "+" -> "plus_impl",
+    "-" -> "minus_impl",
+    "*" -> "times_impl",
+    "/" -> "div_impl",
+    "%" -> "mod_impl",
+    "==" -> "eq_impl",
+    "!=" -> "neq_impl",
+    "<" -> "lt_impl",
+    "<=" -> "le_impl",
+    ">" -> "gt_impl",
+    ">=" -> "ge_impl"
+  )
+  private val wasmUnaryIntrinsicMap: Map[Str, Str] = Map(
+    "-" -> "neg_impl",
+    "+" -> "pos_impl",
+    "!" -> "not_impl"
+  )
+  private def wasmIntrinsicPath(sym: BuiltinSymbol, map: Map[Str, Str]): Opt[Path] =
+    if config.target is CompilationTarget.Wasm then
+      map.get(sym.nme).map(name => Value.Ref(State.wasmSymbol).selN(Tree.Ident(name)))
+    else N
+  private lazy val wasmIntrinsicSymbols: Set[BlockMemberSymbol] = Set(
+    ctx.builtins.wasm.plus_impl,
+    ctx.builtins.wasm.minus_impl,
+    ctx.builtins.wasm.times_impl,
+    ctx.builtins.wasm.div_impl,
+    ctx.builtins.wasm.mod_impl,
+    ctx.builtins.wasm.eq_impl,
+    ctx.builtins.wasm.neq_impl,
+    ctx.builtins.wasm.lt_impl,
+    ctx.builtins.wasm.le_impl,
+    ctx.builtins.wasm.gt_impl,
+    ctx.builtins.wasm.ge_impl,
+    ctx.builtins.wasm.neg_impl,
+    ctx.builtins.wasm.pos_impl,
+    ctx.builtins.wasm.not_impl
+  )
+
   lazy val unreachableFn =
     Select(Value.Ref(State.runtimeSymbol), Tree.Ident("unreachable"))(N)
   
@@ -435,7 +474,9 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
             msg"Builtin '${sym.nme}' is not a unary operator" -> t.toLoc :: Nil, S(arg),
             source = Diagnostic.Source.Compilation)
         subTerm(arg): ar =>
-          k(Call(Value.Ref(sym).withLocOf(ref), Arg(N, ar) :: Nil)(true, false))
+          val target = wasmIntrinsicPath(sym, wasmUnaryIntrinsicMap)
+            .getOrElse(Value.Ref(sym).withLocOf(ref))
+          k(Call(target, Arg(N, ar) :: Nil)(true, false))
       case st.Tup(Fld(FldFlags.benign(), arg1, N) :: Fld(FldFlags.benign(), arg2, N) :: Nil) =>
         if !sym.binary then raise:
           ErrorReport(
@@ -455,11 +496,9 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
               )(true, false)))
           else
             subTerm_nonTail(arg2): ar2 =>
-              val targetPath =
-                if config.target == CompilationTarget.Wasm && sym.nme == "+"
-                then Value.Ref(State.wasmSymbol).selN(Tree.Ident("plus_impl"))
-                else Value.Ref(sym).withLocOf(ref)
-              k(Call(targetPath, Arg(N, ar1) :: Arg(N, ar2) :: Nil)(true, false))
+              val target = wasmIntrinsicPath(sym, wasmBinaryIntrinsicMap)
+                .getOrElse(Value.Ref(sym).withLocOf(ref))
+              k(Call(target, Arg(N, ar1) :: Arg(N, ar2) :: Nil)(true, false))
       case _ => fail:
         ErrorReport(
           msg"Unexpected arguments for builtin symbol '${sym.nme}'" -> arg.toLoc :: Nil, S(arg),
@@ -487,8 +526,12 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("shl")))
       case t if t.resolvedSym.isDefined && (t.resolvedSym.get is ctx.builtins.js.try_catch) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("try_catch")))
-      case t if t.resolvedSym.exists(_ is ctx.builtins.wasm.plus_impl) =>
-        conclude(Value.Ref(State.wasmSymbol).selN(Tree.Ident("plus_impl")))
+      case t if t.resolvedSym.exists(sym =>
+            sym.isInstanceOf[BlockMemberSymbol] &&
+              wasmIntrinsicSymbols.contains(sym.asInstanceOf[BlockMemberSymbol])
+          ) =>
+        val sym = t.resolvedSym.get.asInstanceOf[BlockMemberSymbol]
+        conclude(Value.Ref(State.wasmSymbol).selN(Tree.Ident(sym.nme)))
       case t if t.resolvedSym.exists(_ is ctx.builtins.Int31) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("Int31")))
       case t if t.resolvedSym.isDefined && (t.resolvedSym.get is ctx.builtins.debug.printStack) =>

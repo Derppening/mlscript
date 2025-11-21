@@ -3,23 +3,139 @@
 :wasm
 :wat
 
-1 + 3
+1 + 2
 //│ Wat:
 //│ (module
+//│   (type (func (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
-//│   (func $entry (type 0) (result (ref null any))
-//│     (ref.i31
-//│       (i32.add
-//│         (i31.get_s
-//│           (ref.cast (ref null i31)
-//│             (ref.i31
-//│               (i32.const 1))))
-//│         (i31.get_s
-//│           (ref.cast (ref null i31)
-//│             (ref.i31
-//│               (i32.const 3)))))))
+//│   (func $wasm.plus_impl (type 0) (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))
+//│     (if (result (ref null any))
+//│       (i32.and
+//│         (ref.test (ref null i31)
+//│           (local.get $wasm_plus_impl_lhs))
+//│         (ref.test (ref null i31)
+//│           (local.get $wasm_plus_impl_rhs)))
+//│       (then
+//│         (ref.i31
+//│           (i32.add
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_plus_impl_lhs)))
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_plus_impl_rhs))))))
+//│       (else
+//│         (unreachable))))
+//│   (export "wasm.plus_impl" (func $wasm.plus_impl))
+//│   (elem declare func $wasm.plus_impl)
+//│   (func $entry (type 1) (result (ref null any))
+//│     (call $wasm.plus_impl
+//│       (ref.i31
+//│         (i32.const 1))
+//│       (ref.i31
+//│         (i32.const 2))))
 //│   (export "entry" (func $entry))
 //│   (elem declare func $entry))
 //│ Wasm result:
-//│ = 4
+//│ = 3
 //│
+
+1 + 2 + 3
+//│ Wat:
+//│ (module
+//│   (type (func (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $wasm.plus_impl (type 0) (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))
+//│     (if (result (ref null any))
+//│       (i32.and
+//│         (ref.test (ref null i31)
+//│           (local.get $wasm_plus_impl_lhs))
+//│         (ref.test (ref null i31)
+//│           (local.get $wasm_plus_impl_rhs)))
+//│       (then
+//│         (ref.i31
+//│           (i32.add
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_plus_impl_lhs)))
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_plus_impl_rhs))))))
+//│       (else
+//│         (unreachable))))
+//│   (export "wasm.plus_impl" (func $wasm.plus_impl))
+//│   (elem declare func $wasm.plus_impl)
+//│   (func $entry (type 1) (result (ref null any))
+//│     (local $tmp (ref null any))
+//│     (block (result (ref null any))
+//│       (local.set $tmp
+//│         (call $wasm.plus_impl
+//│           (ref.i31
+//│             (i32.const 1))
+//│           (ref.i31
+//│             (i32.const 2))))
+//│       (call $wasm.plus_impl
+//│         (local.get $tmp)
+//│         (ref.i31
+//│           (i32.const 3)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 6
+
+-1
+//│ Wat:
+//│ (module
+//│   (type (func (param $wasm_neg_impl_arg (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $wasm.neg_impl (type 0) (param $wasm_neg_impl_arg (ref null any)) (result (ref null any))
+//│     (if (result (ref null any))
+//│       (ref.test (ref null i31)
+//│         (local.get $wasm_neg_impl_arg))
+//│       (then
+//│         (ref.i31
+//│           (i32.sub
+//│             (i32.const 0)
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_neg_impl_arg))))))
+//│       (else
+//│         (unreachable))))
+//│   (export "wasm.neg_impl" (func $wasm.neg_impl))
+//│   (elem declare func $wasm.neg_impl)
+//│   (func $entry (type 1) (result (ref null any))
+//│     (call $wasm.neg_impl
+//│       (ref.i31
+//│         (i32.const 1))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = -1
+
+not true
+//│ Wat:
+//│ (module
+//│   (type (func (param $wasm_not_impl_arg (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $wasm.not_impl (type 0) (param $wasm_not_impl_arg (ref null any)) (result (ref null any))
+//│     (if (result (ref null any))
+//│       (ref.test (ref null i31)
+//│         (local.get $wasm_not_impl_arg))
+//│       (then
+//│         (ref.i31
+//│           (i32.eqz
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_not_impl_arg))))))
+//│       (else
+//│         (unreachable))))
+//│   (export "wasm.not_impl" (func $wasm.not_impl))
+//│   (elem declare func $wasm.not_impl)
+//│   (func $entry (type 1) (result (ref null any))
+//│     (call $wasm.not_impl
+//│       (ref.i31
+//│         (i32.const 1))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 0

@@ -49,6 +49,7 @@ foo() + foo()
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
+//│   (type (func (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
 //│   (func $foo (type 0) (result (ref null any))
 //│     (return
@@ -56,28 +57,43 @@ foo() + foo()
 //│         (i32.const 42))))
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
-//│   (func $entry (type 1) (result (ref null any))
+//│   (func $wasm.plus_impl (type 1) (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))
+//│     (if (result (ref null any))
+//│       (i32.and
+//│         (ref.test (ref null i31)
+//│           (local.get $wasm_plus_impl_lhs))
+//│         (ref.test (ref null i31)
+//│           (local.get $wasm_plus_impl_rhs)))
+//│       (then
+//│         (ref.i31
+//│           (i32.add
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_plus_impl_lhs)))
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $wasm_plus_impl_rhs))))))
+//│       (else
+//│         (unreachable))))
+//│   (export "wasm.plus_impl" (func $wasm.plus_impl))
+//│   (elem declare func $wasm.plus_impl)
+//│   (func $entry (type 2) (result (ref null any))
 //│     (local $foo (ref null any))
 //│     (local $tmp (ref null any))
 //│     (local $tmp1 (ref null any))
-//│     (block (result (ref null i31))
+//│     (block (result (ref null any))
 //│       (nop)
-//│       (block (result (ref null i31))
+//│       (block (result (ref null any))
 //│         (local.set $tmp
 //│           (call_ref 0
 //│             (ref.func $foo)))
-//│         (block (result (ref null i31))
+//│         (block (result (ref null any))
 //│           (local.set $tmp1
 //│             (call_ref 0
 //│               (ref.func $foo)))
-//│           (ref.i31
-//│             (i32.add
-//│               (i31.get_s
-//│                 (ref.cast (ref null i31)
-//│                   (local.get $tmp)))
-//│               (i31.get_s
-//│                 (ref.cast (ref null i31)
-//│                   (local.get $tmp1)))))))))
+//│           (call $wasm.plus_impl
+//│             (local.get $tmp)
+//│             (local.get $tmp1))))))
 //│   (export "entry" (func $entry))
 //│   (elem declare func $entry))
 //│ Wasm result:
