@@ -45,11 +45,11 @@ class BlockTransformer(subst: SymbolSubst):
                 (arms2 is arms) &&
                 (dflt2 is dflt) && (rst2 is rst)
               then b else Match(scrut2, arms2, dflt2, rst2)
-    case Label(lbl, bod, rst) =>
+    case Label(lbl, loop, bod, rst) =>
       val lbl2 = applyLocal(lbl)
       val bod2 = applySubBlock(bod)
       val rst2 = applySubBlock(rst)
-      if (lbl2 is lbl) && (bod2 is bod) && (rst2 is rst) then b else Label(lbl2, bod2, rst2)
+      if (lbl2 is lbl) && (bod2 is bod) && (rst2 is rst) then b else Label(lbl2, loop, bod2, rst2)
     case Begin(sub, rst) =>
       val sub2 = applySubBlock(sub)
       val rst2 = applySubBlock(rst)
@@ -118,7 +118,7 @@ class BlockTransformer(subst: SymbolSubst):
     case r @ Call(fun, args) =>
       applyPath(fun): fun2 =>
         applyArgs(args): args2 =>
-          k(if (fun2 is fun) && (args2 is args) then r else Call(fun2, args2)(r.isMlsFun, r.mayRaiseEffects))
+          k(if (fun2 is fun) && (args2 is args) then r else Call(fun2, args2)(r.isMlsFun, r.mayRaiseEffects, r.explicitTailCall))
     case Instantiate(mut, cls, args) =>
       applyPath(cls): cls2 =>
         applyArgs(args): args2 =>
@@ -144,9 +144,9 @@ class BlockTransformer(subst: SymbolSubst):
     case v: Value => applyValue(v)(k)
   
   def applyValue(v: Value)(k: Value => Block) = v match
-    case Value.Ref(l) =>
+    case Value.Ref(l, disamb) =>
       val l2 = l.subst
-      k(if (l2 is l) then v else Value.Ref(l2))
+      k(if (l2 is l) then v else Value.Ref(l2, disamb))
     case Value.This(sym) =>
       val sym2 = sym.subst
       k(if (sym2 is sym) then v else Value.This(sym2))
@@ -160,7 +160,7 @@ class BlockTransformer(subst: SymbolSubst):
     val params2 = fun.params.mapConserve(applyParamList)
     val body2 = applySubBlock(fun.body)
     if (own2 is fun.owner) && (sym2 is fun.sym) && (params2 is fun.params) && (body2 is fun.body)
-      then fun else FunDefn(own2, sym2, params2, body2)
+      then fun else FunDefn(own2, sym2, params2, body2)(fun.isTailRec)
   
   def applyValDefn(defn: ValDefn)(k: ValDefn => Block): Block =
     val ValDefn(tsym, sym, rhs) = defn
@@ -186,7 +186,7 @@ class BlockTransformer(subst: SymbolSubst):
     case defn: FunDefn => k(applyFunDefn(defn))
     case defn: ValDefn => applyValDefn(defn)(k)
     case ClsLikeDefn(own, isym, sym, kind, paramsOpt, auxParams, parentPath, methods,
-        privateFields, publicFields, preCtor, ctor, mod)
+        privateFields, publicFields, preCtor, ctor, mod, bufferable)
     =>
       val own2 = own.mapConserve(_.subst)
       val isym2 = isym.subst
@@ -211,7 +211,7 @@ class BlockTransformer(subst: SymbolSubst):
               (preCtor2 is preCtor) && (ctor2 is ctor) &&
               (mod2 is mod)
             then defn else ClsLikeDefn(own2, isym2, sym2, kind, paramsOpt2, 
-              auxParams2, parentPath2, methods2, privateFields2, publicFields2, preCtor2, ctor2, mod2)
+              auxParams2, parentPath2, methods2, privateFields2, publicFields2, preCtor2, ctor2, mod2, bufferable)
       parentPath match
         case Some(pp) => applyPath(pp): pp2 =>
           withoutParentPath:

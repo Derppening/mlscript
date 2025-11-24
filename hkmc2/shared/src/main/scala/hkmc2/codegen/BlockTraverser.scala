@@ -31,7 +31,7 @@ class BlockTraverser:
         applyCase(arm._1); applySubBlock(arm._2)
       dflt.foreach(applySubBlock)
       applySubBlock(rst)
-    case Label(lbl, bod, rst) => applyLocal(lbl); applySubBlock(bod); applySubBlock(rst)
+    case Label(lbl, loop, bod, rst) => applyLocal(lbl); applySubBlock(bod); applySubBlock(rst)
     case Begin(sub, rst) => applySubBlock(sub); applySubBlock(rst)
     case TryBlock(sub, fin, rst) => applySubBlock(sub); applySubBlock(fin); applySubBlock(rst)
     case Assign(l, r, rst) => applyLocal(l); applyResult(r); applySubBlock(rst)
@@ -69,7 +69,7 @@ class BlockTraverser:
     case v: Value => applyValue(v)
   
   def applyValue(v: Value): Unit = v match
-    case Value.Ref(l) => l.traverse
+    case Value.Ref(l, disamb) => l.traverse
     case Value.This(sym) => sym.traverse
     case Value.Lit(lit) => ()
   
@@ -89,7 +89,7 @@ class BlockTraverser:
     case defn: FunDefn => applyFunDefn(defn)
     case defn: ValDefn => applyValDefn(defn)
     case ClsLikeDefn(own, isym, sym, k, paramsOpt, auxParams, parentPath, methods,
-        privateFields, publicFields, preCtor, ctor, mod)
+        privateFields, publicFields, preCtor, ctor, mod, bufferable)
     =>
       own.foreach(_.traverse)
       isym.traverse

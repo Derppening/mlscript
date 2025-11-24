@@ -8,6 +8,8 @@ import syntax.*
 
 import Elaborator.State
 import hkmc2.typing.Type
+import hkmc2.semantics.Elaborator.{Ctx, ctx}
+import hkmc2.Message.MessageContext
 
 
 final case class QuantVar(sym: VarSymbol, ub: Opt[Term], lb: Opt[Term])
@@ -16,6 +18,8 @@ enum Annot extends AutoLocated:
   case Untyped
   case Modifier(mod: Keyword)
   case Trm(trm: Term)
+  case TailRec
+  case TailCall
   
   def symbol: Opt[Symbol] = this match
     case Trm(trm) => trm.symbol
@@ -23,16 +27,18 @@ enum Annot extends AutoLocated:
   
   def subTerms: Ls[Term] = this match
     case Trm(trm) => trm :: Nil
-    case _: Modifier | Untyped => Nil
+    case _: Modifier | Untyped | TailRec | TailCall => Nil
   
   def children: Ls[Located] = this match
     case Trm(trm) => trm :: Nil
-    case _: Modifier | Untyped => Nil
+    case _: Modifier | Untyped | TailRec | TailCall => Nil
   
   def mkClone(using State): Annot = this match
     case Untyped => Untyped
     case Modifier(mod) => Modifier(mod)
     case Trm(trm) => Trm(trm.mkClone)
+    case TailRec => TailRec
+    case TailCall => TailCall
 
 type Resolvable = Term & ResolvableImpl
 
@@ -53,29 +59,36 @@ sealed trait ResolvableImpl:
 
   def duplicate: this.type =
     this.match
+      case t: Term.Resolved => t.copy()(t.typ)
       case t: Term.Ref => t.copy()(t.tree, t.refNum, t.typ)
       case t: Term.App => t.copy()(t.tree, t.typ, t.resSym)
       case t: Term.TyApp => t.copy()(t.typ)
       case t: Term.Sel => t.copy()(t.sym, t.typ)
       case t: Term.SynthSel => t.copy()(t.sym, t.typ)
+      case t: Term.SelProj => t.copy()(t.sym, t.typ)
+      case t: Term.New => t.copy()(t.typ)
     .withLocOf(this)
     .asInstanceOf
   
-  def withSym(sym: FieldSymbol): this.type = 
+  def withSym(sym: MemberSymbol): this.type = 
     this.match
       case t: Term.Sel => t.copy()(S(sym), t.typ)
       case t: Term.SynthSel => t.copy()(S(sym), t.typ)
+      case t: Term.SelProj => t.copy()(S(sym), t.typ)
       case _ => lastWords(s"Cannot attach a symbol to a non-selection term: ${this.show}")
     .withLocOf(this)
     .asInstanceOf
   
   def withTyp(typ: Type): this.type = 
     this.match
+      case t: Term.Resolved => t.copy()(S(typ))
       case t: Term.Ref => t.copy()(t.tree, t.refNum, S(typ))
       case t: Term.App => t.copy()(t.tree, S(typ), t.resSym)
       case t: Term.TyApp => t.copy()(S(typ))
       case t: Term.Sel => t.copy()(t.sym, S(typ))
       case t: Term.SynthSel => t.copy()(t.sym, S(typ))
+      case t: Term.SelProj => t.copy()(t.sym, S(typ))
+      case t: Term.New => t.copy()(S(typ))
     .withLocOf(this)
     .asInstanceOf
   
@@ -119,10 +132,17 @@ sealed trait ResolvableImpl:
   def resolve: this.type = expand(N)
   def dontResolve: this.type = this // TODO rm
   
+  /**
+   * A helper function to create a resolved term for this term.
+   */
+  def resolved(sym: DefinitionSymbol[?]): Term.Resolved =
+    Term.Resolved(this, sym)(typ = resolvedTyp)
+  
   def hasExpansion = expansion.isDefined
   
   def defn: Opt[Definition] = resolvedSym match
-    case S(sym: MemberSymbol[?]) => sym.defn
+    case S(sym: BlockMemberSymbol) => N
+    case S(sym: DefinitionSymbol[?]) => sym.defn
     case _ => N
   
   def typDefn = resolvedTyp match
@@ -188,6 +208,10 @@ enum Term extends Statement:
   case UnitVal()
   case Missing // Placeholder terms that were not elaborated due to the "lightweight" elaboration mode `Mode.Light`
   case Lit(lit: Literal)
+  /** A term that wraps another term, indicating that the symbol of the inner term is resolved.
+    * This is mainly used to disambiguate overloaded definitions. */
+  case Resolved(t: Term, sym: DefinitionSymbol[?])
+    (val typ: Opt[Type]) extends Term, ResolvableImpl
   case Ref(sym: Symbol)
     (val tree: Tree.Ident, val refNum: Int, val typ: Opt[Type]) extends Term, ResolvableImpl
   case App(lhs: Term, rhs: Term)
@@ -195,14 +219,21 @@ enum Term extends Statement:
   case TyApp(lhs: Term, targs: Ls[Term])
     (val typ: Opt[Type]) extends Term, ResolvableImpl
   case Sel(prefix: Term, nme: Tree.Ident)
-    (val sym: Opt[FieldSymbol], val typ: Opt[Type]) extends Term, ResolvableImpl
+    (val sym: Opt[MemberSymbol], val typ: Opt[Type]) extends Term, ResolvableImpl
   case SynthSel(prefix: Term, nme: Tree.Ident)
-    (val sym: Opt[FieldSymbol], val typ: Opt[Type]) extends Term, ResolvableImpl
+    (val sym: Opt[MemberSymbol], val typ: Opt[Type]) extends Term, ResolvableImpl
+  case SelProj(prefix: Term, cls: Term, proj: Tree.Ident)
+    (val sym: Opt[MemberSymbol], val typ: Opt[Type]) extends Term, ResolvableImpl
   case DynSel(prefix: Term, fld: Term, arrayIdx: Bool)
   case Tup(fields: Ls[Elem])(val tree: Tree.Tup)
   case Mut(underlying: Tup | Rcd | New | DynNew)
   case CtxTup(fields: Ls[Elem])(val tree: Tree.Tup)
-  case IfLike(kw: Keyword.`if`.type | Keyword.`while`.type, desugared: Split)
+  case IfLike(kw: Keyword.`if`.type | Keyword.`while`.type, split: SimpleSplit)
+  /** `If` expressions synthesized by the pattern compiler. It should only be
+   *  created and used in `Lowering`. One must make sure that all terms in the
+   *  split are correctly resolved. In the future, we might look for a way to
+   *  remove `SynthIf` by generating IR `Match` blocks directly. */
+  case SynthIf(split: Split)
   case Lam(params: ParamList, body: Term)
   case FunTy(lhs: Term, rhs: Term, eff: Opt[Term])
   case Forall(tvs: Ls[QuantVar], outer: Opt[VarSymbol], body: Term)
@@ -212,8 +243,8 @@ enum Term extends Statement:
   case Quoted(body: Term)
   case Unquoted(body: Term)
   case New(cls: Term, args: Ls[Term], rft: Opt[ClassSymbol -> ObjBody])
+    (val typ: Opt[Type]) extends Term, ResolvableImpl
   case DynNew(cls: Term, args: Ls[Term])
-  case SelProj(prefix: Term, cls: Term, proj: Tree.Ident)(val sym: Opt[FieldSymbol])
   case Asc(term: Term, ty: Term)
   case CompType(lhs: Term, rhs: Term, pol: Bool)
   case Neg(rhs: Term)
@@ -242,6 +273,7 @@ enum Term extends Statement:
    * elaboration. 
    */
   lazy val symbol: Opt[Symbol] = this match
+    case res: Resolved => S(res.sym)
     case Ref(sym) => S(sym)
     case sel: Sel => sel.sym
     case sel: SynthSel => sel.sym
@@ -254,6 +286,7 @@ enum Term extends Statement:
    * symbol is resolved during the resolution stage.
    */
   def resolvedSym: Opt[Symbol] = expanded match
+    case res: Resolved => S(res.sym)
     case ref: Ref => ref.symbol
     case sel: Sel => sel.sym
     case sel: SynthSel => sel.sym
@@ -262,14 +295,16 @@ enum Term extends Statement:
     case _ => N
   
   def resolvedTyp: Opt[Type] = expanded match
+    case res: Resolved => res.typ
     case ref: Ref => ref.typ
     case app: App => app.typ
     case app: TyApp => app.typ
     case sel: Sel => sel.typ
     case sel: SynthSel => sel.typ
+    case nu: New => nu.typ
     case _ => N
   
-  def sel(id: Tree.Ident, sym: Opt[FieldSymbol]): Sel =
+  def sel(id: Tree.Ident, sym: Opt[MemberSymbol]): Sel =
     Sel(this, id)(sym, N)
   def selNoSym(nme: Str, synth: Bool = false): Sel | SynthSel =
     val id = new Tree.Ident(nme)
@@ -281,59 +316,67 @@ enum Term extends Statement:
     App(this, Tup(args.toList.map(PlainFld(_)))(Tree.DummyTup))
       (Tree.App(Tree.Dummy, Tree.Dummy), N, FlowSymbol(""))
   
-  override def mkClone(using State): Term = this match
-    case Error => Error
-    case UnitVal() => UnitVal()
-    case Missing => Missing
-    case Lit(Tree.StrLit(value)) => Lit(Tree.StrLit(value))
-    case Lit(Tree.IntLit(value)) => Lit(Tree.IntLit(value))
-    case Lit(Tree.DecLit(value)) => Lit(Tree.DecLit(value))
-    case Lit(Tree.BoolLit(value)) => Lit(Tree.BoolLit(value))
-    case Lit(Tree.UnitLit(value)) => Lit(Tree.UnitLit(value))
-    case term @ Ref(sym) => Ref(sym)(Tree.Ident(term.tree.name), term.refNum, term.typ)
-    case term @ Sel(prefix, nme) => Sel(prefix.mkClone, Tree.Ident(nme.name))(term.sym, term.typ)
-    case term @ App(lhs, rhs) => App(lhs.mkClone, rhs.mkClone)(term.tree, term.typ, term.resSym)
-    case term @ TyApp(lhs, targs) => TyApp(lhs.mkClone, targs.map(_.mkClone))(term.typ)
-    case term @ SynthSel(prefix, nme) => SynthSel(prefix.mkClone, Tree.Ident(nme.name))(term.sym, term.typ)
-    case DynSel(prefix, fld, arrayIdx) => DynSel(prefix.mkClone, fld.mkClone, arrayIdx)
-    case term @ Tup(fields) => Tup(fields.map {
-      case f: Fld => f.copy(term = f.term.mkClone, asc = f.asc.map(_.mkClone))
-      case s: Spd => s.copy(term = s.term.mkClone)
-    })(term.tree)
-    case Mut(underlying) => Mut(underlying.mkClone.asInstanceOf[Tup | Rcd | New | DynNew])
-    case term @ CtxTup(fields) => CtxTup(fields.map {
-      case f: Fld => f.copy(term = f.term.mkClone, asc = f.asc.map(_.mkClone))
-      case s: Spd => s.copy(term = s.term.mkClone)
-    })(term.tree)
-    case IfLike(kw, desugared) => IfLike(kw, desugared) // desugared is Split, which is immutable
-    case Lam(params, body) => Lam(params, body.mkClone)
-    case FunTy(lhs, rhs, eff) => FunTy(lhs.mkClone, rhs.mkClone, eff.map(_.mkClone))
-    case Forall(tvs, outer, body) => Forall(tvs, outer, body.mkClone)
-    case WildcardTy(in, out) => WildcardTy(in.map(_.mkClone), out.map(_.mkClone))
-    case blk: Blk => blk.mkBlkClone
-    case Rcd(mut, stats) => Rcd(mut, stats.map(_.mkClone))
-    case Quoted(body) => Quoted(body.mkClone)
-    case Unquoted(body) => Unquoted(body.mkClone)
-    case New(cls, args, rft) =>
-      New(cls.mkClone, args.map(_.mkClone), rft.map { case (cs, ob) => cs -> ObjBody(ob.blk.mkBlkClone) })
-    case DynNew(cls, args) => DynNew(cls.mkClone, args.map(_.mkClone))
-    case term @ SelProj(prefix, cls, proj) =>
-      SelProj(prefix.mkClone, cls.mkClone, Tree.Ident(proj.name))(term.sym)
-    case Asc(term, ty) => Asc(term.mkClone, ty.mkClone)
-    case CompType(lhs, rhs, pol) => CompType(lhs.mkClone, rhs.mkClone, pol)
-    case Neg(rhs) => Neg(rhs.mkClone)
-    case Region(name, body) => Region(name, body.mkClone)
-    case RegRef(reg, value) => RegRef(reg.mkClone, value.mkClone)
-    case Assgn(lhs, rhs) => Assgn(lhs.mkClone, rhs.mkClone)
-    case Drop(trm) => Drop(trm.mkClone)
-    case Deref(ref) => Deref(ref.mkClone)
-    case SetRef(ref, value) => SetRef(ref.mkClone, value.mkClone)
-    case Ret(result) => Ret(result.mkClone)
-    case Throw(result) => Throw(result.mkClone)
-    case Try(body, finallyDo) => Try(body.mkClone, finallyDo.mkClone)
-    case Annotated(annot, target) => Annotated(annot, target.mkClone)
-    case Handle(lhs, rhs, args, derivedClsSym, defs, body) =>
-      Handle(lhs, rhs.mkClone, args.map(_.mkClone), derivedClsSym, defs, body.mkClone)
+  override def mkClone(using State): Term = 
+    val that = this match
+      case Error => Error
+      case UnitVal() => UnitVal()
+      case Missing => Missing
+      case Lit(Tree.StrLit(value)) => Lit(Tree.StrLit(value))
+      case Lit(Tree.IntLit(value)) => Lit(Tree.IntLit(value))
+      case Lit(Tree.DecLit(value)) => Lit(Tree.DecLit(value))
+      case Lit(Tree.BoolLit(value)) => Lit(Tree.BoolLit(value))
+      case Lit(Tree.UnitLit(value)) => Lit(Tree.UnitLit(value))
+      case term @ Resolved(t, sym) => Resolved(t.mkClone, sym)(term.typ)
+      case term @ Ref(sym) => Ref(sym)(Tree.Ident(term.tree.name), term.refNum, term.typ)
+      case term @ Sel(prefix, nme) => Sel(prefix.mkClone, Tree.Ident(nme.name))(term.sym, term.typ)
+      case term @ App(lhs, rhs) => App(lhs.mkClone, rhs.mkClone)(term.tree, term.typ, term.resSym)
+      case term @ TyApp(lhs, targs) => TyApp(lhs.mkClone, targs.map(_.mkClone))(term.typ)
+      case term @ SynthSel(prefix, nme) => SynthSel(prefix.mkClone, Tree.Ident(nme.name))(term.sym, term.typ)
+      case DynSel(prefix, fld, arrayIdx) => DynSel(prefix.mkClone, fld.mkClone, arrayIdx)
+      case term @ Tup(fields) => Tup(fields.map {
+        case f: Fld => f.copy(term = f.term.mkClone, asc = f.asc.map(_.mkClone))
+        case s: Spd => s.copy(term = s.term.mkClone)
+      })(term.tree)
+      case Mut(underlying) => Mut(underlying.mkClone.asInstanceOf[Tup | Rcd | New | DynNew])
+      case term @ CtxTup(fields) => CtxTup(fields.map {
+        case f: Fld => f.copy(term = f.term.mkClone, asc = f.asc.map(_.mkClone))
+        case s: Spd => s.copy(term = s.term.mkClone)
+      })(term.tree)
+      case IfLike(kw, split) => IfLike(kw, split)
+      case SynthIf(split) => SynthIf(split.mkClone)
+      case Lam(params, body) => Lam(params, body.mkClone)
+      case FunTy(lhs, rhs, eff) => FunTy(lhs.mkClone, rhs.mkClone, eff.map(_.mkClone))
+      case Forall(tvs, outer, body) => Forall(tvs, outer, body.mkClone)
+      case WildcardTy(in, out) => WildcardTy(in.map(_.mkClone), out.map(_.mkClone))
+      case blk: Blk => blk.mkBlkClone
+      case Rcd(mut, stats) => Rcd(mut, stats.map(_.mkClone))
+      case Quoted(body) => Quoted(body.mkClone)
+      case Unquoted(body) => Unquoted(body.mkClone)
+      case term @ New(cls, args, rft) =>
+        New(cls.mkClone, args.map(_.mkClone), rft.map { case (cs, ob) => cs -> ObjBody(ob.blk.mkBlkClone) })(term.typ)
+      case DynNew(cls, args) => DynNew(cls.mkClone, args.map(_.mkClone))
+      case term @ SelProj(prefix, cls, proj) =>
+        SelProj(prefix.mkClone, cls.mkClone, Tree.Ident(proj.name))(term.sym, term.typ)
+      case Asc(term, ty) => Asc(term.mkClone, ty.mkClone)
+      case CompType(lhs, rhs, pol) => CompType(lhs.mkClone, rhs.mkClone, pol)
+      case Neg(rhs) => Neg(rhs.mkClone)
+      case Region(name, body) => Region(name, body.mkClone)
+      case RegRef(reg, value) => RegRef(reg.mkClone, value.mkClone)
+      case Assgn(lhs, rhs) => Assgn(lhs.mkClone, rhs.mkClone)
+      case Drop(trm) => Drop(trm.mkClone)
+      case Deref(ref) => Deref(ref.mkClone)
+      case SetRef(ref, value) => SetRef(ref.mkClone, value.mkClone)
+      case Ret(result) => Ret(result.mkClone)
+      case Throw(result) => Throw(result.mkClone)
+      case Try(body, finallyDo) => Try(body.mkClone, finallyDo.mkClone)
+      case Annotated(annot, target) => Annotated(annot, target.mkClone)
+      case Handle(lhs, rhs, args, derivedClsSym, defs, body) =>
+        Handle(lhs, rhs.mkClone, args.map(_.mkClone), derivedClsSym, defs, body.mkClone)
+    (this, that) match
+      case (self: Resolvable, that: Resolvable) if self.expansion.isDefined =>
+        that.expand(self.expansion.get.map(_.mkClone))
+      case _ =>
+        that
   
   
 end Term
@@ -372,6 +415,7 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
       case CtxTup(fields) => "contextual tuple literal"
       case IfLike(Keyword.`if`, body) => "`if` expression"
       case IfLike(Keyword.`while`, body) => "`while` expression"
+      case SynthIf(split) => "synthetic `if` expression"
       case Lam(params, body) => "function literal"
       case FunTy(lhs, rhs, eff) => "function type"
       case Forall(tvs, outer, body) => "universal quantification"
@@ -394,6 +438,7 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
       case Annotated(annotation, target) => "annotation"
       case Ret(res) => "return"
       case Try(body, finallyDo) => "try expression"
+      case Resolved(t, sym) => t.describe
       case s => TODO(s)
     this match
       case self: Resolvable => self.resolvedTyp match
@@ -414,6 +459,7 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
     case _ => subTerms
   def subTerms: Ls[Term] = this match
     case Error | Missing | _: Lit | _: Ref | _: UnitVal => Nil
+    case Resolved(t, sym) => t :: Nil
     case App(lhs, rhs) => lhs :: rhs :: Nil
     case RcdField(lhs, rhs) => lhs :: rhs :: Nil
     case RcdSpread(bod) => bod :: Nil
@@ -425,7 +471,8 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
     case Tup(fields) => fields.flatMap(_.subTerms)
     case Mut(und) => und :: Nil
     case CtxTup(fields) => fields.flatMap(_.subTerms)
-    case IfLike(_, body) => body.subTerms
+    case IfLike(_, split) => split.subTerms
+    case SynthIf(split) => split.subTerms
     case Lam(params, body) => body :: Nil
     case Blk(stats, res) => stats.flatMap(_.subTerms) ::: res :: Nil
     case Rcd(mut, stats) => stats.flatMap(_.subTerms)
@@ -475,7 +522,8 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
     case t: Tup => treeOrSubterms(t.tree)
     case l: Lam => l.params.paramSyms.map(_.id) ::: l.body :: Nil
     case t: App => treeOrSubterms(t.tree)
-    case IfLike(kw, desug) => desug :: Nil
+    case IfLike(_, split) => split :: Nil
+    case SynthIf(split) => split :: Nil
     case SynthSel(pre, nme) => pre :: nme :: Nil
     case Sel(pre, nme) => pre :: nme :: Nil
     case SelProj(prefix, cls, proj) => prefix :: cls :: proj :: Nil
@@ -487,6 +535,8 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
   def showDbg: Str = this match
     case r: Ref =>
       showPlain
+    case r: Resolved =>
+      s"${r.showPlain}‹${r.sym}›"
     case trm: Term =>
       // s"$showPlain‹${trm.symbol.getOrElse("")}›"
       s"$showPlain${trm.symbol.fold("")("‹"+_+"›")}"
@@ -500,6 +550,7 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
   def showPlain: Str = this match
     case Term.UnitVal() => "()"
     case Lit(lit) => lit.idStr
+    case Resolved(t, sym) => t.showPlain
     case r @ Ref(symbol) => symbol.toString + symbol.getState.dbgRefNum(r.refNum)
     case App(lhs, rhs) => s"${lhs.showDbg}${rhs.showAsParams}"
     case RcdField(lhs, rhs) => s"${lhs.showDbg}: ${rhs.showDbg}"
@@ -515,7 +566,8 @@ sealed trait Statement extends AutoLocated, ProductWithExtraInfo:
     case Sel(pre, nme) => s"${pre.showDbg}.${nme.name}"
     case SynthSel(pre, nme) => s"(${pre.showDbg}.)${nme.name}"
     case DynSel(pre, fld, _) => s"${pre.showDbg}[${fld.showDbg}]"
-    case IfLike(kw, body) => s"${kw.name} { ${body.showDbg} }"
+    case IfLike(kw, split) => s"${kw.name} { ${split.showDbg} }"
+    case SynthIf(split) => s"if { ${split.showDbg} }"
     case Lam(params, body) => s"λ${params.showDbg}. ${body.showDbg}"
     case Blk(stats, res) =>
       (stats.map(_.showDbg + "; ") :+ (res match { case Lit(Tree.UnitLit(false)) => "" case x => x.showDbg + " " }))
@@ -642,19 +694,44 @@ final case class TermDefinition(
   def extraAnnotations: Ls[Annot] = annotations.filter:
     case Annot.Modifier(Keyword.`declare` | Keyword.`abstract`) => false
     case _ => true
+  
+  def companionClass: Opt[ClassSymbol] = companion match
+    case S(sym: ClassSymbol) if sym.defn.isDefined => S(sym)
+    case _ => N
 
 final case class HandlerTermDefinition(
   resumeSym: VarSymbol,
   td: TermDefinition
 )
 
+object ObjBody:
+  
+  def extractMembers(blk: Term.Blk): Ls[ErrorReport] \/ Map[Str, BlockMemberSymbol] =
+    val (errs, mems) = blk.stats.collect:
+      case td: TermDefinition => td.sym -> td
+      case td: ClassLikeDef => td.bsym -> td
+      case td: TypeDef => td.bsym -> td
+    .groupBy(_._1.nme)
+    .partitionMap: (nme, syms) =>
+      if syms.map(_._1).distinct.tail.nonEmpty then L:
+        (msg"Duplicate definition of member named '${nme}'." -> N) ::
+        syms.map(_._2).map(msg"Defined at: " -> _.toLoc)
+      else R:
+        nme -> syms.head._1
+    
+    if errs.nonEmpty then
+      L(errs.map(ErrorReport(_)).toList)
+    else
+      R(mems.toMap)
+
 case class ObjBody(blk: Term.Blk):
   
-  lazy val members: Map[Str, FieldSymbol] = blk.stats.collect:
-    case td: TermDefinition => td.sym.nme -> td.sym
-    case td: ClassLikeDef => td.sym.nme -> td.sym
-    case td: TypeDef => td.sym.nme -> td.sym
-  .toMap
+  lazy val members: Map[Str, BlockMemberSymbol] =
+    ObjBody.extractMembers(blk) match
+      case L(errs) => lastWords:
+        errs.map(_.mainMsg).mkString("\n")
+      case R(mems) =>
+        mems
   
   lazy val (methods, nonMethods) = blk.stats.partitionMap:
     case td: TermDefinition if td.k is syntax.Fun => L(td)
@@ -672,11 +749,21 @@ case class Import(sym: Symbol, str: Str, file: os.Path) extends Statement
 
 sealed abstract class Declaration:
   val sym: Symbol
+  
+  /** Whether this declares a class, a pattern, an object, or a pattern
+    * parameter. Only these can be in patterns constructor position. */
+  def isPatternConstructor: Bool = this match
+    case _: (TermDefinition | TypeDef | TyParam) => false
+    case d: ModuleOrObjectDef => d.kind isnt Mod
+    case _: (PatternDef | ClassDef) => true
+    case p: Param => p.flags.pat
 
 sealed abstract class Definition extends Declaration, Statement:
   val annotations: Ls[Annot]
   def hasDeclareModifier: Opt[Annot.Modifier] = annotations.collectFirst:
     case mod @ Annot.Modifier(Keyword.`declare`) => mod
+  def hasStagedModifier: Opt[Annot.Modifier] = annotations.collectFirst:
+    case mod @ Annot.Modifier(Keyword.`staged`) => mod
 
 sealed trait CompanionValue extends Definition
 
@@ -693,7 +780,7 @@ sealed abstract class TypeLikeDef extends Definition:
 sealed abstract class ClassLikeDef extends TypeLikeDef:
   val owner: Opt[InnerSymbol]
   val kind: ClsLikeKind
-  val sym: MemberSymbol[? <: ClassLikeDef] & InnerSymbol
+  val sym: DefinitionSymbol[? <: ClassLikeDef] & InnerSymbol
   val bsym: BlockMemberSymbol
   val tparams: Ls[TyParam]
   val paramsOpt: Opt[ParamList]
@@ -708,8 +795,12 @@ sealed abstract class ClassLikeDef extends TypeLikeDef:
   def moduleCompanion = companion match
     case S(sym: ModuleOrObjectSymbol) => S(sym)
     case _ => N
-  def extraAnnotations: Ls[Annot] = annotations.filter:
+  def extraAnnotations(using Ctx): Ls[Annot] = annotations.filter:
     case Annot.Modifier(Keyword.`declare` | Keyword.`abstract` | Keyword.`data`) => false
+    case Annot.Trm(trm: SynthSel) if
+      (kind is Cls) &&
+        (trm.sym.contains(ctx.builtins.annotations.bufferable) ||
+        trm.sym.contains(ctx.builtins.annotations.buffered)) => false
     case _ => true
 
 
@@ -732,6 +823,8 @@ case class PatternDef(
     sym: PatternSymbol,
     bsym: BlockMemberSymbol,
     tparams: Ls[TyParam],
+    /** All parameters. */
+    parameters: Ls[Param],
     /** The pattern parameters, for example, `T` in
      *  `pattern Nullable(pattern T) = null | T`. */
     patternParams: Ls[Param],
@@ -768,7 +861,7 @@ sealed abstract class ClassDef extends ClassLikeDef:
   val annotations: Ls[Annot]
   def isData: Opt[Annot.Modifier] = annotations.collectFirst:
     case mod @ Annot.Modifier(Keyword.`data`) => mod
-  override def extraAnnotations: Ls[Annot] = super.extraAnnotations.filter:
+  override def extraAnnotations(using Ctx): Ls[Annot] = super.extraAnnotations.filter:
     case Annot.Modifier(Keyword.`data`) => false
     case _ => true
 
@@ -891,7 +984,7 @@ object Param:
 
 final case class Param(flags: FldFlags, sym: VarSymbol, sign: Opt[Term], modulefulness: Modulefulness) 
 extends Declaration, AutoLocated:
-  var fldSym: Opt[FieldSymbol] = N
+  var fldSym: Opt[MemberSymbol] = N
   def subTerms: Ls[Term] = sign.toList
   override protected def children: List[Located] = sym :: sign.toList
   def showDbg: Str = flags.show + sym + sign.fold("")(": " + _.showDbg)

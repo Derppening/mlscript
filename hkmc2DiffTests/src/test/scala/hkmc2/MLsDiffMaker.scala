@@ -20,6 +20,8 @@ abstract class MLsDiffMaker extends DiffMaker:
   val predefFile: os.Path // * Contains MLscript standard library definitions
   val runtimeFile: os.Path = predefFile/os.up/"Runtime.mjs" // * Contains MLscript runtime definitions
   val termFile: os.Path = predefFile/os.up/"Term.mjs" // * Contains MLscript runtime term definitions
+  val blockFile: os.Path = predefFile/os.up/"Block.mjs" // * Contains MLscript runtime block definitions
+  val shapeFile: os.Path = predefFile/os.up/"Shape.mjs" // * Contains MLscript runtime shape definitions
   
   val wd = file / os.up
   
@@ -68,6 +70,8 @@ abstract class MLsDiffMaker extends DiffMaker:
   val stackSafe = Command("stackSafe")(_.trim)
   val liftDefns = NullaryCommand("lift")
   val importQQ = NullaryCommand("qq")
+  val stageCode = NullaryCommand("staging")
+  val dontRewriteWhile = NullaryCommand("dontRewriteWhile")
   
   def mkConfig: Config =
     import Config.*
@@ -93,7 +97,9 @@ abstract class MLsDiffMaker extends DiffMaker:
         ,
       )),
       liftDefns = Opt.when(liftDefns.isSet)(LiftDefns()),
+      stageCode = stageCode.isSet,
       target = if wasm.isSet then CompilationTarget.Wasm else CompilationTarget.JS,
+      rewriteWhileLoops = !dontRewriteWhile.isSet,
     )
   
   
@@ -156,6 +162,12 @@ abstract class MLsDiffMaker extends DiffMaker:
       given Config = mkConfig
       processTrees(
         PrefixApp(Keywrd(`import`), StrLit(termFile.toString)) :: Nil)
+    if stageCode.isSet then
+      given Config = mkConfig
+      processTrees(
+        PrefixApp(Keywrd(`import`), StrLit(blockFile.toString))
+        :: PrefixApp(Keywrd(`import`), StrLit(shapeFile.toString))
+        :: Nil)
     super.init()
   
   

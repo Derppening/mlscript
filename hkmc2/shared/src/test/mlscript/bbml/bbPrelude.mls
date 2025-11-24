@@ -7,6 +7,9 @@ declare class Object
 
 declare class untyped
 
+declare class tailrec
+declare class tailcall
+
 declare class Unit
 declare class Bool
 declare class Int
@@ -69,6 +72,8 @@ declare module debug with
 
 declare module annotations with
   object compile
+  object buffered
+  object bufferable
 
 
 declare fun run: [T] -> CodeBase[out T, out Nothing, out Any] -> T
