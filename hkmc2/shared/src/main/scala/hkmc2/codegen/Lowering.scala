@@ -498,7 +498,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
         subTerm(arg): ar =>
           val target = wasmIntrinsicPath(sym, wasmUnaryIntrinsicMap)
             .getOrElse(Value.Ref(sym).withLocOf(ref))
-          k(Call(target, Arg(N, ar) :: Nil)(true, false))
+          k(Call(target, Arg(N, ar) :: Nil)(true, false, false))
       case st.Tup(Fld(FldFlags.benign(), arg1, N) :: Fld(FldFlags.benign(), arg2, N) :: Nil) =>
         if !sym.binary then raise:
           ErrorReport(
@@ -520,7 +520,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
             subTerm_nonTail(arg2): ar2 =>
               val target = wasmIntrinsicPath(sym, wasmBinaryIntrinsicMap)
                 .getOrElse(Value.Ref(sym).withLocOf(ref))
-              k(Call(target, Arg(N, ar1) :: Arg(N, ar2) :: Nil)(true, false))
+              k(Call(target, Arg(N, ar1) :: Arg(N, ar2) :: Nil)(true, false, false))
       case _ => fail:
         ErrorReport(
           msg"Unexpected arguments for builtin symbol '${sym.nme}'" -> arg.toLoc :: Nil, S(arg),

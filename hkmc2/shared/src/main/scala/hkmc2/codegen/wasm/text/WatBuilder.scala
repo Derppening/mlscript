@@ -302,7 +302,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   end result
 
   private def wasmIntrinsicName(path: Path): Opt[Str] = path match
-    case Select(Value.Ref(sym), ident) if (sym eq State.wasmSymbol) && wasmIntrinsicNameSet.contains(ident.name) =>
+    case Select(Value.Ref(sym, _), ident) if (sym eq State.wasmSymbol) && wasmIntrinsicNameSet.contains(ident.name) =>
       S(ident.name)
     case _ => N
 
