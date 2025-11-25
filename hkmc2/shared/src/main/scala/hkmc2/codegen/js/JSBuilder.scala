@@ -108,22 +108,25 @@ class JSBuilder(using TL, State, Ctx) extends CodeBuilder:
     case Value.This(sym) => scope.findThis_!(sym)
     case Value.Lit(Tree.StrLit(value)) => makeStringLiteral(value)
     case Value.Lit(lit) => lit.idStr
-    case Value.Ref(l: BuiltinSymbol) =>
+    case Value.Ref(l: BuiltinSymbol, _) =>
       if l.nullary then l.nme
       else errExpr(msg"Illegal reference to builtin symbol '${l.nme}'")
-    case Value.Ref(l) => getVar(l, r.toLoc)
-    
-    case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil) if !l.functionLike =>
+    case Value.Ref(l, disamb) => l match
+      case l: BlockMemberSymbol if disamb.exists(_.shouldBeLifted) =>
+        doc"${getVar(l, l.toLoc)}.class"
+      case _ =>
+        getVar(l, r.toLoc)
+    case Call(Value.Ref(l: BuiltinSymbol, _), lhs :: rhs :: Nil) if !l.functionLike =>
       if l.binary then
         val res = doc"${operand(lhs)} ${l.nme} ${operand(rhs)}"
         if needsParens(l.nme) then doc"(${res})" else res
       else errExpr(msg"Cannot call non-binary builtin symbol '${l.nme}'")
-    case Call(Value.Ref(l: BuiltinSymbol), rhs :: Nil) if !l.functionLike =>
+    case Call(Value.Ref(l: BuiltinSymbol, _), rhs :: Nil) if !l.functionLike =>
       if l.unary then
         val res = doc"${l.nme} ${operand(rhs)}"
         if needsParens(l.nme) then doc"(${res})" else res
       else errExpr(msg"Cannot call non-unary builtin symbol '${l.nme}'")
-    case Call(Value.Ref(l: BuiltinSymbol), args) =>
+    case Call(Value.Ref(l: BuiltinSymbol, _), args) =>
       if l.functionLike then
         val argsDoc = args.map(argument).mkDocument(", ")
         doc"${l.nme}(${argsDoc})"
@@ -146,7 +149,10 @@ class JSBuilder(using TL, State, Ctx) extends CodeBuilder:
     case Lambda(ps, bod) => scope.nest givenIn:
       val (params, bodyDoc) = setupFunction(none, ps, bod)
       doc"($params) => ${ braced(bodyDoc) }"
-    case Select(qual, id) =>
+    case s @ Select(qual, id) => 
+      val dotClass = s.symbol match
+        case S(ds) if ds.shouldBeLifted => doc".class"
+        case _ => doc""
       val name = id.name
       doc"${result(qual)}${
         if isValidFieldName(name)
@@ -154,7 +160,7 @@ class JSBuilder(using TL, State, Ctx) extends CodeBuilder:
         else name.toIntOption match
           case S(index) => doc"[$index]"
           case N => doc"[${makeStringLiteral(name)}]"
-      }"
+      }${dotClass}"
     case DynSelect(qual, fld, ai) =>
       if ai
       then doc"${result(qual)}.at(${result(fld)})"
@@ -335,7 +341,7 @@ class JSBuilder(using TL, State, Ctx) extends CodeBuilder:
                     else v
                   ownr match
                   case S(owner) =>
-                    doc" # ${result(Value.Ref(owner))}.${sym.nme}$extraPath = $rhs"
+                    doc" # ${result(Value.Ref(owner, N))}.${sym.nme}$extraPath = $rhs"
                   case N =>
                     doc" # ${getVar(sym, sym.toLoc)}$extraPath = $rhs"
               } :/: ctorHead :: " " :: braced(ctorAux)
@@ -456,6 +462,7 @@ class JSBuilder(using TL, State, Ctx) extends CodeBuilder:
           case Elaborator.ctx.builtins.BigInt => doc"typeof $sd === 'bigint'"
           case Elaborator.ctx.builtins.Symbol.module => doc"typeof $sd === 'symbol'"
           case Elaborator.ctx.builtins.TypedArray => doc"globalThis.ArrayBuffer.isView($sd) && !($sd instanceof globalThis.DataView)"
+          case _: ModuleOrObjectSymbol => doc"$sd instanceof ${result(pth)}.class"
           case _ => doc"$sd instanceof ${result(pth)}"
         case Case.Tup(len, inf) => doc"$runtimeVar.Tuple.isArrayLike($sd) && $sd.length ${if inf then ">=" else "==="} ${len}"
         case Case.Field(name = n, safe = false) =>
@@ -702,7 +709,16 @@ object JSBuilder:
         then c.toString
         else f"\\u${c.toInt}%04X"
     }.mkString
-    
+  
+  extension (dsym: DefinitionSymbol[?])
+    def shouldBeLifted: Bool = 
+      val bsym = dsym.asBlkMember
+      (
+        (dsym.asTrm orElse bsym.flatMap(_.asTrm)).isDefined ||
+        (dsym.asCls orElse bsym.flatMap(_.asCls)).flatMap(_.defn).exists(_.paramsOpt.isDefined)
+      ) && 
+        (dsym.asModOrObj orElse dsym.asCls).isDefined
+  
 end JSBuilder
 
 

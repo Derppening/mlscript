@@ -137,7 +137,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case r => result(r)
 
-  def fieldSelect(thisSym: BlockMemberSymbol, sym: FieldSymbol)(using Ctx, Raise): FieldIdx =
+  def fieldSelect(thisSym: BlockMemberSymbol, sym: DefinitionSymbol[?])(using Ctx, Raise): FieldIdx =
     val structInfo = ctx.getTypeInfo_!(thisSym)
     val symToField = structInfo.compType match
       case ty: StructType => ty.fields
@@ -172,13 +172,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ref.i31(i32.const(if value then 1 else 0))
     case Value.Lit(IntLit(value)) =>
       ref.i31(i32.const(value.toInt))
-    case Value.Ref(l) =>
+    case Value.Ref(l, _) =>
       ctx.getFunc(l) match
         case S(funcIdx) =>
           ref.func(funcIdx, RefType(ctx.getFuncInfo_!(l).typeIdx, nullable = false))
         case N => getVar(l, r.toLoc)
 
-    case Call(Value.Ref(l: BuiltinSymbol), lhs :: rhs :: Nil) if !l.functionLike =>
+    case Call(Value.Ref(l: BuiltinSymbol, _), lhs :: rhs :: Nil) if !l.functionLike =>
       if l.binary then
         l.nme match
           case "+" =>
@@ -265,15 +265,16 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
 
     case Instantiate(_, cls, as) =>
-      val ctorClsPath = cls match
-        case sel: Select => sel
+      val ctorClsSymOpt = cls match
+        case ref: Value.Ref => ref.disamb
+        case sel: Select => sel.symbol
         case cls => return errExpr(
             Ls(
-              msg"WatBuilder::result for Instantiate(...) where `cls` is not a Select(...) path not implemented yet " -> cls.toLoc
+              msg"WatBuilder::result for Instantiate(...) where `cls` is not a Ref(...) or Select(...) path not implemented yet " -> cls.toLoc
             ),
             extraInfo = S(s"Block IR of `cls` expression: ${cls.toString}")
           )
-      val ctorClsSym = ctorClsPath.symbol match
+      val ctorClsSym = ctorClsSymOpt match
         case S(sym) => sym
         case N => return errExpr(
             Ls(

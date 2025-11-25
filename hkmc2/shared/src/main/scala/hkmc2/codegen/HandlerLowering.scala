@@ -33,7 +33,7 @@ object HandlerLowering:
         
   private case class LinkState(res: Local, cls: Path, uid: Path)
   
-  type FnOrCls = Either[BlockMemberSymbol, MemberSymbol[? <: ClassLikeDef] & InnerSymbol]
+  type FnOrCls = Either[BlockMemberSymbol, DefinitionSymbol[? <: ClassLikeDef] & InnerSymbol]
   
   // isTopLevel:
   // whether the current block is the top level block, as we do not emit code for continuation class on the top level
@@ -97,7 +97,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
   private def topLevelCall(state: LinkState) = Call(
       paths.topLevelEffectPath, 
       state.res.asPath.asArg :: Value.Lit(Tree.BoolLit(opt.debug)).asArg :: Nil
-    )(true, false)
+    )(true, false, false)
   private def topLevelCtx(nme: Str, debugNme: Str) = HandlerCtx(
       true, false, nme, N, DebugInfo.topLevel(debugNme), 
       state => Assign(
@@ -117,7 +117,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
   )
   
   object PureCall:
-    def apply(fun: Path, args: List[Path]) = Call(fun, args.map(Arg(N, _)))(true, false)
+    def apply(fun: Path, args: List[Path]) = Call(fun, args.map(Arg(N, _)))(true, false, false)
     def unapply(res: Result) = res match
       case Call(fun, args) => args.foldRight[Opt[List[Path]]](S(Nil)): (arg, acc) =>
           acc.flatMap: acc =>
@@ -132,7 +132,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
     def apply(res: Local, uid: StateId, rest: Block) =
       Assign(res, PureCall(Value.Ref(resumptionSymbol), List(Value.Lit(Tree.IntLit(uid)))), rest)
     def unapply(blk: Block) = blk match
-      case Assign(res, PureCall(Value.Ref(`resumptionSymbol`), List(Value.Lit(Tree.IntLit(uid)))), rest) =>
+      case Assign(res, PureCall(Value.Ref(`resumptionSymbol`, _), List(Value.Lit(Tree.IntLit(uid)))), rest) =>
         Some(res, uid, rest)
       case _ => None
   
@@ -141,7 +141,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
     def apply(res: Local, uid: StateId) =
       Assign(res, PureCall(Value.Ref(returnContSymbol), List(Value.Lit(Tree.IntLit(uid)))), End(""))
     def unapply(blk: Block) = blk match
-      case Assign(res, PureCall(Value.Ref(`returnContSymbol`), List(Value.Lit(Tree.IntLit(uid)))), _) =>
+      case Assign(res, PureCall(Value.Ref(`returnContSymbol`, _), List(Value.Lit(Tree.IntLit(uid)))), _) =>
         Some(res, uid)
       case _ => None
   
@@ -157,7 +157,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
     def unapply(blk: Block) = blk match
       case Assign(
           res,
-          PureCall(Value.Ref(`callSymbol`), List(Value.Lit(Tree.IntLit(uid)))),
+          PureCall(Value.Ref(`callSymbol`, _), List(Value.Lit(Tree.IntLit(uid)))),
           Assign(_, c, rest)) =>
         Some(res, uid, c, rest)
       case _ => None
@@ -167,7 +167,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
     def apply(uid: StateId) =
       Return(PureCall(Value.Ref(transitionSymbol), List(Value.Lit(Tree.IntLit(uid)))), false)
     def unapply(blk: Block) = blk match
-      case Return(PureCall(Value.Ref(`transitionSymbol`), List(Value.Lit(Tree.IntLit(uid)))), false) =>
+      case Return(PureCall(Value.Ref(`transitionSymbol`, _), List(Value.Lit(Tree.IntLit(uid)))), false) =>
         S(uid)
       case _ => N
   
@@ -175,7 +175,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
     private val fnEndSymbol = freshTmp("fnEnd")
     def apply() = Return(PureCall(Value.Ref(fnEndSymbol), Nil), false)
     def unapply(blk: Block) = blk match
-      case Return(PureCall(Value.Ref(`fnEndSymbol`), Nil), false) => true
+      case Return(PureCall(Value.Ref(`fnEndSymbol`, _), Nil), false) => true
       case _ => false
   
   private class FreshId:
@@ -429,7 +429,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
   private val stackDepthPath: Path = runtimePath.selN(stackDepthIdent)
   private val fnLocalsPath: Path = runtimePath.selSN("FnLocalsInfo").selSN("class")
   private val localVarInfoPath: Path = runtimePath.selSN("LocalVarInfo").selSN("class")
-  private def createGetLocalsFn(b: Block, extraLocals: Set[Local])(using h: HandlerCtx) =
+  private def createGetLocalsFn(b: Block, extraLocals: Set[Local])(using h: HandlerCtx): FunDefn =
     val locals = (b.userDefinedVars ++ extraLocals) -- h.debugInfo.inScopeLocals
     val localsInfo = locals.toList.sortBy(_.uid).map: s =>
       FlowSymbol(s.nme) -> Instantiate(mut = true, localVarInfoPath,
@@ -452,10 +452,10 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
             :: Value.Ref(arrSym).asArg
             :: Nil
         ))
-      .assign(TempSymbol(N, ""), Call(startSym.asPath.selSN("push"), thisInfo.asPath.asArg :: Nil)(false, false))
+      .assign(TempSymbol(N, ""), Call(startSym.asPath.selSN("push"), thisInfo.asPath.asArg :: Nil)(false, false, false))
       .ret(startSym.asPath)
 
-    FunDefn(N, BlockMemberSymbol("getLocals", Nil), PlainParamList(Nil) :: Nil, body)
+    FunDefn(N, BlockMemberSymbol("getLocals", Nil), PlainParamList(Nil) :: Nil, body)(false)
     
   var doUnwindMap: Map[FnOrCls, Path] = Map.empty
     
@@ -493,13 +493,13 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
         case Return(c @ Call(fun, args), false) if !handlerCtx.isHandlerBody =>
           applyPath(fun): fun2 =>
             applyArgs(args): args2 =>
-              val c2 = if (fun2 is fun) && (args2 is args) then c else Call(fun2, args2)(c.isMlsFun, c.mayRaiseEffects)
+              val c2 = if (fun2 is fun) && (args2 is args) then c else Call(fun2, args2)(c.isMlsFun, c.mayRaiseEffects, c.explicitTailCall)
               if c2 is c then b else Return(c2, false)
         // Optimization to avoid generation of unnecessary variables
         case Assign(lhs, c @ Call(fun, args), rest) if c.mayRaiseEffects =>
           applyPath(fun): fun2 =>
             applyArgs(args): args2 =>
-              val c2 = if (fun2 is fun) && (args2 is args) then c else Call(fun2, args2)(c.isMlsFun, c.mayRaiseEffects)
+              val c2 = if (fun2 is fun) && (args2 is args) then c else Call(fun2, args2)(c.isMlsFun, c.mayRaiseEffects, c.explicitTailCall)
               ResultPlaceholder(lhs, freshId(), c2, applyBlock(rest))
         case Assign(lhs, c @ Instantiate(mut, cls, args), rest) =>
           applyPath(cls): cls2 =>
@@ -512,7 +512,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
           val res = freshTmp("res")
           applyPath(fun): fun2 =>
             applyArgs(args): args2 =>
-              val c2 = if (fun2 is fun) && (args2 is args) then c else Call(fun2, args2)(c.isMlsFun, c.mayRaiseEffects)
+              val c2 = if (fun2 is fun) && (args2 is args) then c else Call(fun2, args2)(c.isMlsFun, c.mayRaiseEffects, c.explicitTailCall)
               ResultPlaceholder(res, freshId(), c2, k(Value.Ref(res)))
         case c @ Instantiate(mut, cls, args) =>
           val res = freshTmp("res")
@@ -522,7 +522,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
               ResultPlaceholder(res, freshId(), c2, k(Value.Ref(res)))
         case r => super.applyResult(r)(k)
       override def applyPath(p: Path)(k: Path => Block): Block = p match
-        case Value.Ref(`getLocalsSym`) => k(handlerCtx.debugInfo.prevLocalsFn.get)
+        case Value.Ref(`getLocalsSym`, _) => k(handlerCtx.debugInfo.prevLocalsFn.get)
         case _ => super.applyPath(p)(k)
       override def applyLam(lam: Lambda): Lambda =
         // This should normally be unreachable due to prior desugaring of lambda
@@ -553,7 +553,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
           N, doUnwindSym,
           PlainParamList(Param.simple(resSym) :: Param.simple(pcSym) :: Nil) :: Nil,
           doUnwindBlk
-        )
+        )(false)
         val doUnwindLazy = Lazy(doUnwindSym.asPath)
         val rst = genNormalBody(b, cls.sym, S(doUnwindLazy))
         
@@ -589,9 +589,9 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       case pList :: Nil => 
         val params = pList.params.map(p => p.sym.asPath.asArg)
         f.owner match
-        case None => S(Call(f.sym.asPath, params)(true, true))
+        case None => S(Call(f.sym.asPath, params)(true, true, false))
         case Some(owner) => 
-          S(Call(Select(owner.asPath, Tree.Ident(f.sym.nme))(S(f.sym)), params)(true, true))
+          S(Call(Select(owner.asPath, Tree.Ident(f.sym.nme))(N), params)(true, true, false))
       case _ => None // TODO: more than one plist
     
     FunDefn(f.owner, f.sym, f.params, translateBlock(f.body,
@@ -599,7 +599,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       callSelf,
       L(f.sym),
       functionHandlerCtx(s"Cont$$func$$${symToStr(f.sym)}$$", f.sym.nme))
-    )
+    )(isTailRec = f.isTailRec)
   
   private def translateBody(cls: ClsLikeBody, sym: BlockMemberSymbol)(using HandlerCtx): ClsLikeBody =
     val curCtorCtx =
@@ -632,7 +632,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
     val lblLoop = freshTmp("handlerLoop")
     
     val handlerBody = translateBlock(
-      h.body, Set.empty, S(Call(sym.asPath, Nil)(true, false)), L(sym),
+      h.body, Set.empty, S(Call(sym.asPath, Nil)(true, false, false)), L(sym),
       HandlerCtx(
         false, true,
         s"Cont$$handleBlock$$${symToStr(h.lhs)}$$", N, 
@@ -651,19 +651,19 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       val fDef = FunDefn(
         N, sym, PlainParamList(Param(FldFlags.empty, handler.resumeSym, N, Modulefulness.none) :: Nil) :: Nil,
         mtdBdy 
-        )
+        )(false)
       FunDefn(
         S(h.cls),
         handler.sym, handler.params,
         Define(
           fDef,
-          Return(PureCall(paths.mkEffectPath, h.cls.asPath :: Value.Ref(sym) :: Nil), false)))
+          Return(PureCall(paths.mkEffectPath, h.cls.asPath :: Value.Ref(sym, N) :: Nil), false)))(false)
     
     // Some limited handling of effects extending classes and having access to their fields.
     // Currently does not support super() raising effects.
     val tmp = freshTmp()
     val ctor = blockBuilder
-      .assign(tmp, Call(Value.Ref(State.builtinOpsMap("super")), h.args.map(_.asArg))(true, true))
+      .assign(tmp, Call(Value.Ref(State.builtinOpsMap("super")), h.args.map(_.asArg))(true, true, false))
       .ret(h.cls.asPath)
     
     val ctorT = translateBlock(ctor, Set.empty, N, R(h.cls), // TODO: callSelf 
@@ -677,7 +677,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       syntax.Cls,
       N, Nil,
       S(h.par), handlerMtds, Nil, Nil,
-      Assign(freshTmp(), Call(Value.Ref(State.builtinOpsMap("super")), h.args.map(_.asArg))(true, true), End()),
+      Assign(freshTmp(), Call(Value.Ref(State.builtinOpsMap("super")), h.args.map(_.asArg))(true, true, false), End()),
       End(),
       N,
       N, // TODO: bufferable?
@@ -687,17 +687,17 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
     
     val body = blockBuilder
       .define(clsDefn)
-      .assign(h.lhs, Instantiate(mut = true, Value.Ref(clsDefn.sym), Nil))
+      .assign(h.lhs, Instantiate(mut = true, Value.Ref(clsDefn.sym, S(h.cls)), Nil))
       .rest(handlerBody)
     
     val defn = FunDefn(
       N, // no owner
-      sym, PlainParamList(Nil) :: Nil, body)
+      sym, PlainParamList(Nil) :: Nil, body)(false)
     
     val result = blockBuilder
       .define(defn)
       .rest(
-        ResultPlaceholder(h.res, freshId(), Call(sym.asPath, Nil)(true, true), h.rest)
+        ResultPlaceholder(h.res, freshId(), Call(sym.asPath, Nil)(true, true, false), h.rest)
       )
     result
   
@@ -735,7 +735,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       val transform = new BlockTransformerShallow(SymbolSubst()):
         override def applyResult(r: Result)(k: Result => Block): Block = 
           r match
-            case c @ Call(Value.Ref(s: BuiltinSymbol), _) => ()
+            case c @ Call(Value.Ref(s: BuiltinSymbol, _), _) => ()
             case c: Call if !c.mayRaiseEffects => ()
             case _: Call | _: Instantiate => containsCall = true
             case _ => ()
@@ -792,8 +792,9 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
           override def applyBlock(b: Block): Block = b match
             case ReturnCont(res, uid) => Return(Call(
                 Select(clsSym.asPath, Tree.Ident("doUnwind"))(
-                  N /* this refers to the method defined in Runtime.FunctionContFrame */ ),
-                res.asPath.asArg :: Value.Lit(Tree.IntLit(uid)).asArg :: Nil)(true, false),
+                  N /* this refers to the method defined in Runtime.FunctionContFrame */
+                ),
+                res.asPath.asArg :: Value.Lit(Tree.IntLit(uid)).asArg :: Nil)(true, false, false),
                 false
               )
             case StateTransition(uid) =>
@@ -860,7 +861,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
       resumeSym,
       List(PlainParamList(List(Param(FldFlags.empty, resumedVal, N, Modulefulness.none)))),
       resumeBody
-    )
+    )(false)
 
     val debugMtds = if !opt.debug then Nil else
     
@@ -875,7 +876,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
         getLocalsSym,
         List(),
         Return(localsRes, false)
-      )
+      )(false)
 
       val getLocSym = BlockMemberSymbol("getLoc", List())
       val getLocFnDef = FunDefn(
@@ -888,7 +889,7 @@ class HandlerLowering(paths: HandlerPaths, opt: EffectHandlers)(using TL, Raise,
             Tree.StrLit(s"${loc.origin.fileName.last}:${line + loc.origin.startLineNum - 1}:$col")
           ), false)
         .toList, N, End()),
-      )
+      )(false)
 
       getLocalsFnDef :: getLocFnDef :: Nil
     
