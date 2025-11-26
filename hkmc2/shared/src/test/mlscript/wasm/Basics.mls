@@ -49,7 +49,7 @@ foo() + foo()
 //│ Wat:
 //│ (module
 //│   (type (func (result (ref null any))))
-//│   (type (func (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))))
+//│   (type (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
 //│   (func $foo (type 0) (result (ref null any))
 //│     (return
@@ -57,26 +57,24 @@ foo() + foo()
 //│         (i32.const 42))))
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
-//│   (func $wasm.plus_impl (type 1) (param $wasm_plus_impl_lhs (ref null any)) (param $wasm_plus_impl_rhs (ref null any)) (result (ref null any))
+//│   (func  (type 1) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and
 //│         (ref.test (ref null i31)
-//│           (local.get $wasm_plus_impl_lhs))
+//│           (local.get $lhs))
 //│         (ref.test (ref null i31)
-//│           (local.get $wasm_plus_impl_rhs)))
+//│           (local.get $rhs)))
 //│       (then
 //│         (ref.i31
 //│           (i32.add
 //│             (i31.get_s
 //│               (ref.cast (ref null i31)
-//│                 (local.get $wasm_plus_impl_lhs)))
+//│                 (local.get $lhs)))
 //│             (i31.get_s
 //│               (ref.cast (ref null i31)
-//│                 (local.get $wasm_plus_impl_rhs))))))
+//│                 (local.get $rhs))))))
 //│       (else
 //│         (unreachable))))
-//│   (export "wasm.plus_impl" (func $wasm.plus_impl))
-//│   (elem declare func $wasm.plus_impl)
 //│   (func $entry (type 2) (result (ref null any))
 //│     (local $foo (ref null any))
 //│     (local $tmp (ref null any))
@@ -91,7 +89,7 @@ foo() + foo()
 //│           (local.set $tmp1
 //│             (call_ref 0
 //│               (ref.func $foo)))
-//│           (call $wasm.plus_impl
+//│           (call 1
 //│             (local.get $tmp)
 //│             (local.get $tmp1))))))
 //│   (export "entry" (func $entry))
