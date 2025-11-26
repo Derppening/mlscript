@@ -10,7 +10,7 @@ import document.*
 import document.Document
 import js.CodeBuilder
 import semantics.*, Elaborator.State
-import syntax.Tree.{BoolLit, IntLit}
+import syntax.Tree.{BoolLit, IntLit, Ident}
 import text.Param as WasmParam
 import Message.MessageContext
 import Scope.scope
@@ -35,7 +35,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   type Context = Ctx
 
   private val baseObjectSym: BlockMemberSymbol = BlockMemberSymbol("Object", Nil)
-  private val tagFieldSym: FieldSymbol = BlockMemberSymbol("$tag", Nil, nameIsMeaningful = false)
+  private val tagFieldSym: TermSymbol = TermSymbol(syntax.MutVal, owner = N, Ident("$tag"))
 
   private def baseObjectTypeIdx(using Ctx): TypeIdx =
     ctx.getType_!(baseObjectSym)
@@ -408,7 +408,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         typeIdx = funcTy,
                         params = ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
                         nResults = bodyWat.resultTypes.length,
-                        locals = locals.map(l => l -> scope.lookup_!(l, l.toLoc)),
+                        locals = locals,
                         body = bodyWat
                       )
                     val func = ctx.addFunc(S(defn.sym), funcInfo)
@@ -457,7 +457,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val inheritedFields = baseObjectStruct.fields.toMap
                   val inheritedSize = inheritedFields.size
 
-                  val classFields: Map[FieldSymbol, NumIdx -> Field] = (clsLikeDefn.publicFields.map(
+                  val classFields: Map[DefinitionSymbol[?], NumIdx -> Field] = (clsLikeDefn.publicFields.map(
                     _._2
                   ) ++ clsLikeDefn.privateFields).zipWithIndex.map: (f, index) =>
                     f -> (NumIdx(index + inheritedSize) -> Field(
@@ -467,7 +467,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     ))
                   .toMap
 
-                  val allFields: Map[FieldSymbol, NumIdx -> Field] = inheritedFields ++ classFields
+                  val allFields: Map[DefinitionSymbol[?], NumIdx -> Field] = inheritedFields ++ classFields
 
                   // Only parent is base Object for now. For general inheritance add other parents.
                   val typeref = ctx.addType(
@@ -809,18 +809,19 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Ctx,
       Raise,
       Scope
-  ): (Seq[WasmParam -> Str], Expr, Seq[Local]) =
+  ): (Seq[WasmParam -> Str], Expr, Seq[(Local, Str)]) =
     // Add a frame for `ctx.locals`
     ctx.pushLocal()
 
     val result = scope.nest givenIn:
-      val paramsList = params.params.map: p =>
+      val wasmParams = params.params.map: p =>
         val paramNme = scope.allocateName(p.sym)
         val param = WasmParam(S(paramNme), RefType.anyref)
         ctx.addLocal(p.sym)
         param -> paramNme
-      val (wasmParams, (wasmBody, locals)) = (paramsList.toSeq, this.body(body))
-      (wasmParams, wasmBody, locals)
+      val (wasmBody, locals) = block(body)
+      val localsWithNames = locals.map(l => l -> scope.lookup_!(l, l.toLoc))
+      (wasmParams.toSeq, wasmBody, localsWithNames)
 
     // Restore `ctx.locals`
     ctx.popLocal()

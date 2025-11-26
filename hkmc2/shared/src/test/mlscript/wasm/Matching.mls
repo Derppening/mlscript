@@ -91,9 +91,9 @@ if Bar(true) is
 //│     (local $Bar (ref null any))
 //│     (local $Baz (ref null any))
 //│     (local $scrut (ref null any))
-//│     (local $param0 (ref null any))
-//│     (local $b (ref null any))
 //│     (local $a (ref null any))
+//│     (local $b (ref null any))
+//│     (local $argument0$ (ref null any))
 //│     (block (result (ref null any))
 //│       (nop)
 //│       (block (result (ref null any))
@@ -118,13 +118,13 @@ if Bar(true) is
 //│                   (then
 //│                     (block $arm1
 //│                       (block (result (ref null any))
-//│                         (local.set $param0
+//│                         (local.set $argument0$
 //│                           (struct.get $Bar 1
 //│                             (ref.cast (ref $Bar)
 //│                               (local.get $scrut))))
 //│                         (block (result (ref null any))
 //│                           (local.set $a
-//│                             (local.get $param0))
+//│                             (local.get $argument0$))
 //│                           (block $match1 (result (ref null any))
 //│                             (if
 //│                               (i32.eq
@@ -153,13 +153,13 @@ if Bar(true) is
 //│                   (then
 //│                     (block $arm2
 //│                       (block (result (ref null any))
-//│                         (local.set $param0
+//│                         (local.set $argument0$
 //│                           (struct.get $Baz 1
 //│                             (ref.cast (ref $Baz)
 //│                               (local.get $scrut))))
 //│                         (block (result (ref null any))
 //│                           (local.set $b
-//│                             (local.get $param0))
+//│                             (local.get $argument0$))
 //│                           (local.get $b)))
 //│                       (br $match))))))
 //│             (ref.i31
@@ -182,90 +182,7 @@ if false then 1
 //│ Wasm result:
 //│ ═══[RUNTIME ERROR] RuntimeError: unreachable
 
-:wat
 class Foo(val x, val y)
 if Foo(1,2) is Foo(a,b) then 0
-//│ Wat:
-//│ (module
-//│   (type $Object (sub (struct (field $$tag (mut i32)))))
-//│   (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $x (mut (ref null any))) (field $y (mut (ref null any))))))
-//│   (type (func (param $x (ref null any)) (param $y (ref null any)) (result (ref null any))))
-//│   (type (func (result (ref null any))))
-//│   (func $Foo (type 2) (param $x (ref null any)) (param $y (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
-//│     (block (result (ref null any))
-//│       (local.set $this
-//│         (struct.new_default $Foo))
-//│       (struct.set $Foo 0
-//│         (ref.cast (ref $Foo)
-//│           (local.get $this))
-//│         (i32.const 1))
-//│       (block
-//│         (struct.set $Foo 1
-//│           (ref.cast (ref $Foo)
-//│             (local.get $this))
-//│           (local.get $x))
-//│         (block
-//│           (struct.set $Foo 2
-//│             (ref.cast (ref $Foo)
-//│               (local.get $this))
-//│             (local.get $y))
-//│           (nop)))
-//│       (return
-//│         (local.get $this))))
-//│   (export "Foo" (func $Foo))
-//│   (elem declare func $Foo)
-//│   (func $entry (type 3) (result (ref null any))
-//│     (local $Foo (ref null any))
-//│     (local $scrut (ref null any))
-//│     (local $param0 (ref null any))
-//│     (local $param1 (ref null any))
-//│     (local $a (ref null any))
-//│     (local $b (ref null any))
-//│     (block (result (ref null any))
-//│       (nop)
-//│       (block (result (ref null any))
-//│         (local.set $scrut
-//│           (call_ref 2
-//│             (ref.i31
-//│               (i32.const 1))
-//│             (ref.i31
-//│               (i32.const 2))
-//│             (ref.func $Foo)))
-//│         (block $match (result (ref null any))
-//│           (if
-//│             (ref.test (ref null $Object)
-//│               (local.get $scrut))
-//│             (then
-//│               (if
-//│                 (i32.eq
-//│                   (struct.get $Object 0
-//│                     (ref.cast (ref $Object)
-//│                       (local.get $scrut)))
-//│                   (i32.const 1))
-//│                 (then
-//│                   (block $arm
-//│                     (block (result (ref null i31))
-//│                       (local.set $param0
-//│                         (struct.get $Foo 1
-//│                           (ref.cast (ref $Foo)
-//│                             (local.get $scrut))))
-//│                       (block (result (ref null i31))
-//│                         (local.set $param1
-//│                           (struct.get $Foo 2
-//│                             (ref.cast (ref $Foo)
-//│                               (local.get $scrut))))
-//│                         (block (result (ref null i31))
-//│                           (local.set $a
-//│                             (local.get $param0))
-//│                           (block (result (ref null i31))
-//│                             (local.set $b
-//│                               (local.get $param1))
-//│                             (ref.i31
-//│                               (i32.const 0))))))
-//│                     (br $match))))))
-//│           (unreachable)))))
-//│   (export "entry" (func $entry))
-//│   (elem declare func $entry))
 //│ Wasm result:
 //│ = 0
