@@ -99,6 +99,14 @@ object Instructions:
     resultType = S(UnreachableType)
   )
 
+  /** Creates a `br` (branch) instruction. */
+  def br(label: Str): FoldedInstr = FoldedInstr(
+    mnemonic = "br",
+    instrargs = Seq(doc"$$$label"),
+    stackargs = Seq.empty,
+    resultType = S(UnreachableType)
+  )
+
   object i32:
     /** Creates an `i32.const` instruction. */
     def const(value: Int): FoldedInstr = FoldedInstr(
@@ -111,6 +119,26 @@ object Instructions:
     /** Creates an `i32.add` instruction. */
     def add(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "i32.add",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(I32Type)
+    )
+
+    /** Creates an `i32.add` instruction. */
+    def eq(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.eq",
+      instrargs = Seq.empty,
+      stackargs = Seq(lhs, rhs),
+      resultType = S(
+        (lhs.resultType, rhs.resultType) match
+          case (UnreachableType, _) | (_, UnreachableType) => UnreachableType
+          case _ => I32Type
+      )
+    )
+
+    /** Creates an `i32.ge_u` instruction (greater than or equal, unsigned). */
+    def ge_u(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.ge_u",
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
       resultType = S(I32Type)
@@ -151,14 +179,6 @@ object Instructions:
     /** Creates an `i32.rem_s` instruction. */
     def rem_s(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
       mnemonic = "i32.rem_s",
-      instrargs = Seq.empty,
-      stackargs = Seq(lhs, rhs),
-      resultType = S(I32Type)
-    )
-
-    /** Creates an `i32.eq` instruction. */
-    def eq(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
-      mnemonic = "i32.eq",
       instrargs = Seq.empty,
       stackargs = Seq(lhs, rhs),
       resultType = S(I32Type)
@@ -212,6 +232,16 @@ object Instructions:
       resultType = S(I32Type)
     )
   end i32
+
+  object array:
+    /** Creates an `array.len` instruction. */
+    def len(arrayRef: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "array.len",
+      instrargs = Seq.empty,
+      stackargs = Seq(arrayRef),
+      resultType = S(I32Type)
+    )
+  end array
 
   object ref:
     /** Creates a `ref.func` instruction. */
