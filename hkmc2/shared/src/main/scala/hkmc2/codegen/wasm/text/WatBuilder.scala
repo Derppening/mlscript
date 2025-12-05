@@ -393,9 +393,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
    */
   private def mkIntrinsicParams(name: Str, suffixes: Seq[Str]): Seq[(TempSymbol, Str)] =
     suffixes.map: suffix =>
-      val sym = TempSymbol(N, s"$suffix")
-      val paramName = s"$suffix"
-      sym -> paramName
+      val sym = TempSymbol(N, suffix)
+      sym -> suffix
 
   /**
    * Loads the local `name` as an `anyref`.
