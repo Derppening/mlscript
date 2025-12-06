@@ -70,7 +70,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
   val lowerHandlers: Bool = config.effectHandlers.isDefined
   val lift: Bool = config.liftDefns.isDefined
 
-  private val wasmBinaryIntrinsicMap: Map[Str, Str] = Map(
+  private lazy val wasmBinaryIntrinsicMap: Map[Str, Str] = Map(
     "+" -> "plus_impl",
     "-" -> "minus_impl",
     "*" -> "times_impl",
@@ -83,13 +83,14 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
     ">" -> "gt_impl",
     ">=" -> "ge_impl"
   )
-  private val wasmUnaryIntrinsicMap: Map[Str, Str] = Map(
+  private lazy val wasmUnaryIntrinsicMap: Map[Str, Str] = Map(
     "-" -> "neg_impl",
     "+" -> "pos_impl",
     "!" -> "not_impl"
   )
-  private def wasmIntrinsicPath(sym: BuiltinSymbol, map: Map[Str, Str]): Opt[Path] =
+  private def wasmIntrinsicPath(sym: BuiltinSymbol, unary: Bool): Opt[Path] =
     if config.target is CompilationTarget.Wasm then
+      val map = if unary then wasmUnaryIntrinsicMap else wasmBinaryIntrinsicMap
       map.get(sym.nme).map(name => Value.Ref(State.wasmSymbol).selN(Tree.Ident(name)))
     else N
   private lazy val wasmIntrinsicSymbols: Set[BlockMemberSymbol] = Set(
@@ -496,7 +497,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
             msg"Builtin '${sym.nme}' is not a unary operator" -> t.toLoc :: Nil, S(arg),
             source = Diagnostic.Source.Compilation)
         subTerm(arg): ar =>
-          val target = wasmIntrinsicPath(sym, wasmUnaryIntrinsicMap)
+          val target = wasmIntrinsicPath(sym, unary = true)
             .getOrElse(Value.Ref(sym).withLocOf(ref))
           k(Call(target, Arg(N, ar) :: Nil)(true, false, false))
       case st.Tup(Fld(FldFlags.benign(), arg1, N) :: Fld(FldFlags.benign(), arg2, N) :: Nil) =>
@@ -518,7 +519,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
               )(true, false, false)))
           else
             subTerm_nonTail(arg2): ar2 =>
-              val target = wasmIntrinsicPath(sym, wasmBinaryIntrinsicMap)
+              val target = wasmIntrinsicPath(sym, unary = false)
                 .getOrElse(Value.Ref(sym).withLocOf(ref))
               k(Call(target, Arg(N, ar1) :: Arg(N, ar2) :: Nil)(true, false, false))
       case _ => fail:
@@ -553,10 +554,10 @@ class Lowering()(using Config, TL, Raise, State, Ctx):
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("shl")))
       case t if instantiatedResolvedBms.exists(_ is ctx.builtins.js.try_catch) =>
         conclude(Value.Ref(State.runtimeSymbol).selN(Tree.Ident("try_catch")))
-      case t if t.resolvedSym.exists(sym =>
-            sym.isInstanceOf[BlockMemberSymbol] &&
-              wasmIntrinsicSymbols.contains(sym.asInstanceOf[BlockMemberSymbol])
-          ) =>
+      case t if t.resolvedSym.exists {
+        case sym: BlockMemberSymbol => wasmIntrinsicSymbols.contains(sym)
+        case _ => false
+      } =>
         val sym = t.resolvedSym.get.asInstanceOf[BlockMemberSymbol]
         conclude(Value.Ref(State.wasmSymbol).selN(Tree.Ident(sym.nme)))
       case t if t.resolvedSym.exists(_ is ctx.builtins.Int31) =>

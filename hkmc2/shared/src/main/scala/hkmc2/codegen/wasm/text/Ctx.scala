@@ -130,22 +130,22 @@ end TypeInfo
 
 object Ctx:
   val binaryOps: Map[Str, (Expr, Expr) => Expr] = Map(
-    "plus_impl" -> ((a, b) => i32.add(a, b)),
-    "minus_impl" -> ((a, b) => i32.sub(a, b)),
-    "times_impl" -> ((a, b) => i32.mul(a, b)),
-    "div_impl" -> ((a, b) => i32.div_s(a, b)),
-    "mod_impl" -> ((a, b) => i32.rem_s(a, b)),
-    "eq_impl" -> ((a, b) => i32.eq(a, b)),
-    "neq_impl" -> ((a, b) => i32.ne(a, b)),
-    "lt_impl" -> ((a, b) => i32.lt_s(a, b)),
-    "le_impl" -> ((a, b) => i32.le_s(a, b)),
-    "gt_impl" -> ((a, b) => i32.gt_s(a, b)),
-    "ge_impl" -> ((a, b) => i32.ge_s(a, b))
+    "plus_impl" -> i32.add,
+    "minus_impl" -> i32.sub,
+    "times_impl" -> i32.mul,
+    "div_impl" -> i32.div_s,
+    "mod_impl" -> i32.rem_s,
+    "eq_impl" -> i32.eq,
+    "neq_impl" -> i32.ne,
+    "lt_impl" -> i32.lt_s,
+    "le_impl" -> i32.le_s,
+    "gt_impl" -> i32.gt_s,
+    "ge_impl" -> i32.ge_s
   )
   val unaryOps: Map[Str, Expr => Expr] = Map(
     "neg_impl" -> (value => i32.sub(i32.const(0), value)),
-    "pos_impl" -> (value => value),
-    "not_impl" -> (value => i32.eqz(value))
+    "pos_impl" -> identity,
+    "not_impl" -> i32.eqz
   )
   val wasmIntrinsicArities: Map[Str, Int] =
     (binaryOps.keys.map(_ -> 2) ++ unaryOps.keys.map(_ -> 1)).toMap
