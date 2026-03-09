@@ -38,7 +38,7 @@ class FuncInfo(
     params: Seq[Local -> Str],
     nResults: Int,
     locals: Seq[Local -> Str],
-    val body: Expr
+    val body: Expr,
 ) extends ToWat:
 
   /**
@@ -61,20 +61,20 @@ class FuncInfo(
       params: Seq[Local -> Str],
       nResults: Int,
       locals: Seq[Local -> Str],
-      body: Expr
+      body: Expr,
   ) = this(
     sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
     typeIdx,
     params,
     nResults,
     locals,
-    body
+    body,
   )
 
   /** Returns the type of this function as a [[SignatureType]]. */
   def getSignatureType: SignatureType = SignatureType(
     params = params.map((_, varNme) => WasmParam(S(varNme), RefType.anyref)),
-    results = Seq.fill(nResults)(Result(RefType.anyref))
+    results = Seq.fill(nResults)(Result(RefType.anyref)),
   )
 
   def toWat: Document =
@@ -108,7 +108,7 @@ class GlobalInfo(
     val id: SymIdx,
     val valType: ValType,
     val mutable: Bool,
-    val init: Expr
+    val init: Expr,
 ) extends ToWat:
 
   /** Returns the symbolic identifier document used in global declarations. */
@@ -133,7 +133,7 @@ end GlobalInfo
  */
 class TypeInfo(
     val id: Opt[SymIdx],
-    val compType: CompType
+    val compType: CompType,
 ) extends ToWat:
 
   /**
@@ -144,7 +144,7 @@ class TypeInfo(
    */
   def this(sym: BlockMemberSymbol, compType: CompType) = this(
     sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
-    compType
+    compType,
   )
 
   private def idDoc: Document = id.fold(doc"")(_.toWat)
@@ -162,12 +162,12 @@ end TypeInfo
 /**
  * A WebAssembly exception tag declaration.
  *
- * In Wasm, a `tag` names an exception kind and points to a function type that describes the
- * payload values carried by `throw tag ...` and extracted by matching `catch tag ...`.
+ * In Wasm, a `tag` names an exception kind and points to a function type that describes the payload
+ * values carried by `throw tag ...` and extracted by matching `catch tag ...`.
  */
 class TagInfo(
     val id: SymIdx,
-    val typeIdx: TypeIdx
+    val typeIdx: TypeIdx,
 ) extends ToWat:
 
   def toWat: Document =
@@ -180,7 +180,7 @@ enum WasmIntrinsicType:
 object Ctx:
   case class SingletonInfo(
       globalName: Str,
-      globalTy: RefType
+      globalTy: RefType,
   )
 
   val binaryOps: Map[Str, (Expr, Expr) => Expr] = Map(
@@ -194,12 +194,12 @@ object Ctx:
     "lt_impl" -> i32.lt_s,
     "le_impl" -> i32.le_s,
     "gt_impl" -> i32.gt_s,
-    "ge_impl" -> i32.ge_s
+    "ge_impl" -> i32.ge_s,
   )
   val unaryOps: Map[Str, Expr => Expr] = Map(
     "neg_impl" -> (value => i32.sub(i32.const(0), value)),
     "pos_impl" -> identity,
-    "not_impl" -> i32.eqz
+    "not_impl" -> i32.eqz,
   )
   val wasmIntrinsicArities: Map[Str, Int] =
     (binaryOps.keys.map(_ -> 2) ++ unaryOps.keys.map(_ -> 1)).toMap
@@ -218,7 +218,7 @@ object Ctx:
     tags = ArrayBuf.empty,
     namedGlobals = MutMap.empty,
     locals = MutMap() :: Nil,
-    startFunc = N
+    startFunc = N,
   )
 
   def ctx(using ctx: Ctx): Ctx = ctx
@@ -266,7 +266,7 @@ class Ctx(
     tags: ArrayBuf[TagInfo],
     namedGlobals: MutMap[Symbol, NumIdx],
     var locals: Ls[MutMap[Local, NumIdx]],
-    private var startFunc: Opt[FuncIdx]
+    private var startFunc: Opt[FuncIdx],
 ) extends ToWat:
 
   import Ctx.prettyString
@@ -343,8 +343,8 @@ class Ctx(
     FuncIdx(funcImport.id.getOrElse(numIdx))
 
   /**
-   * Returns the cached function import for (`module`, `name`), creating it with `createImport`
-   * if needed.
+   * Returns the cached function import for (`module`, `name`), creating it with `createImport` if
+   * needed.
    */
   def getOrCreateFunctionImport(
       module: Str,
@@ -352,7 +352,7 @@ class Ctx(
   )(createImport: => FuncImport): FuncIdx =
     cachedFunctionImports.getOrElseUpdate(
       (module, name),
-      addFunctionImport(N, createImport)
+      addFunctionImport(N, createImport),
     )
 
   /**
@@ -468,7 +468,7 @@ class Ctx(
   def registerSingleton(
       bms: BlockMemberSymbol,
       isym: Opt[ModuleOrObjectSymbol],
-      info: Ctx.SingletonInfo
+      info: Ctx.SingletonInfo,
   ): Unit =
     singletonByBms(bms) = info
     isym.foreach(singletonByIsym(_) = info)

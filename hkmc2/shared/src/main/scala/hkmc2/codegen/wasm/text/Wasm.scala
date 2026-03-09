@@ -13,7 +13,7 @@ extension (doc: Document)
   /** Surrounds a document by the given `prefix` and `suffix`, unless the document is empty. */
   private def surroundUnlessEmpty(
       prefix: => Document = Document.empty,
-      postfix: => Document = Document.empty
+      postfix: => Document = Document.empty,
   ): Document =
     doc.optionUnless(_.isEmpty).fold(doc): doc =>
       doc"$prefix$doc$postfix"
@@ -47,7 +47,7 @@ private case object V128Type extends Type:
   def toWat: Document = doc"v128"
 private case object UnreachableType extends Type:
   def toWat: Document = throw UnsupportedOperationException(
-    s"${toString} is a compiler-internal type and cannot be converted to WAT"
+    s"${toString} is a compiler-internal type and cannot be converted to WAT",
   )
 
 type NumType = I32Type.type | I64Type.type | F32Type.type | F64Type.type
@@ -116,7 +116,7 @@ case class FunctionType(sigType: SignatureType) extends ToWat:
 case class Field(
     ty: Type,
     mutable: Bool,
-    id: Opt[Str]
+    id: Opt[Str],
 ) extends ToWat:
   def toWat: Document =
     doc"(field ${id.fold(doc"")(id => doc"$$$id ")}${
@@ -127,7 +127,7 @@ case class Field(
 case class StructType(
     fields: Map[DefinitionSymbol[?], NumIdx -> Field],
     parents: Seq[TypeIdx] = Seq.empty,
-    isSubtype: Bool = false
+    isSubtype: Bool = false,
 ) extends ToWat:
 
   def fieldSeq: Seq[Field] = fields.values.toSeq.sortBy(_._1.index).map(_._2)
@@ -197,7 +197,7 @@ case class TagIdx(idx: Index) extends CtxIdx(idx)
 /** A memory import entry. */
 case class MemoryImport(module: Str, name: Str, minPages: Int) extends ToWat:
   def toWat: Document =
-    doc"""(import "${module}" "${name}" (memory ${minPages}))"""
+    doc"""(import "$module" "$name" (memory $minPages))"""
 
 /** A function import entry. */
 case class FuncImport(
@@ -207,12 +207,14 @@ case class FuncImport(
     typeIdx: TypeIdx,
 ) extends ToWat:
   def toWat: Document =
-    doc"""(import "${module}" "${name}" (func ${id.fold(doc"")(_.toWat)} (type ${typeIdx.toWat})))"""
+    doc"""(import "$module" "$name" (func ${
+        id.fold(doc"")(_.toWat)
+      } (type ${typeIdx.toWat})))"""
 
 /** A data segment entry. */
 case class DataSegment(offsetExpr: Expr, bytes: Str) extends ToWat:
   def toWat: Document =
-    doc"""(data ${offsetExpr.toWat} "${bytes}")"""
+    doc"""(data ${offsetExpr.toWat} "$bytes")"""
 
 /**
  * An abstraction over a generic WebAssembly instructions.
@@ -235,7 +237,7 @@ object FoldedInstr:
       mnemonic: Str,
       instrargs: Seq[ToWat | Document],
       stackargs: Seq[FoldedInstr],
-      resultType: Opt[Type]
+      resultType: Opt[Type],
   ): FoldedInstr =
     new FoldedInstr(mnemonic, instrargs, stackargs, resultType.toSeq)
 
@@ -249,7 +251,7 @@ case class FoldedInstr(
     mnemonic: Str,
     instrargs: Seq[ToWat | Document],
     stackargs: Seq[Expr],
-    resultTypes: Seq[Type]
+    resultTypes: Seq[Type],
 ) extends Instruction:
 
   /** Returns the result type of this instruction if this instruction only has 0-1 result values. */
