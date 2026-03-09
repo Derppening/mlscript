@@ -430,15 +430,17 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           )
 
   /**
-   * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits an
-   * `unreachable` instruction.
+   * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits the
+   * `defaultValue` instruction.
    */
-  def warnExpr(warnMsgs: Ls[Message -> Opt[Loc]], extraInfo: Opt[Any] = N)(using
-      Ctx,
-      Raise,
-  )(using Line): Expr =
+  def warnExpr(
+      warnMsgs: Ls[Message -> Opt[Loc]],
+      extraInfo: Opt[Any] = N,
+  )(
+      defaultValue: => FoldedInstr = unreachable,
+  )(using Ctx, Raise)(using Line): Expr =
     raise(WarningReport(warnMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
-    unreachable
+    defaultValue
 
   /**
    * Raises an [[ErrorReport]] with the given `warnMsgs` and `extraInfo`, and emits an `unreachable`
@@ -735,13 +737,15 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 case Value.Lit(BoolLit(value)) => ref.i31(i32.const(if value then 1 else 0))
                 case Value.Lit(IntLit(value)) =>
                   withValidIntLit(value, arg.value.toLoc)(intVal => ref.i31(i32.const(intVal)))
-                case unsupported => 
-                  raise(WarningReport(
-                    msg"WatBuilder::result for Instantiate(...) of `globalThis.Error(...)` with payload `${unsupported.toString}` not implemented yet" -> unsupported.toLoc :: Nil,
-                    source = Diagnostic.Source.Compilation,
-                    extraInfo = S(unsupported.toString)
-                  ))
-                  ref.i31(i32.const(0))
+                case unsupported =>
+                  warnExpr(
+                    msg"WatBuilder::result for Instantiate(...) of `globalThis.Error(...)` with payload `${
+                        unsupported.toString
+                      }` not implemented yet" ->
+                      unsupported.toLoc :: Nil,
+                    extraInfo = S(unsupported.toString),
+                  ):
+                    ref.i31(i32.const(0))
             case N => ref.i31(i32.const(0))
         case _ => ()
       val ctorClsSymOpt = cls match
