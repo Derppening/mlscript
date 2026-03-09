@@ -124,11 +124,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       Define(unitDefn, main)
 
   /** Registers eager singleton runtime state by creating its global and start-init action. */
-  private def registerSingletonInit(clsLikeDefn: ClsLikeDefn, typeref: TypeIdx)(using
-      Ctx,
-      Raise,
-      Scope,
-  ): Unit =
+  private def registerSingletonInit(
+      clsLikeDefn: ClsLikeDefn,
+      typeref: TypeIdx,
+  )(using Ctx, Raise, Scope): Unit =
     if ctx.containsSingleton(clsLikeDefn.sym) then return
 
     val globalSym =
@@ -445,10 +444,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
    * Raises an [[ErrorReport]] with the given `warnMsgs` and `extraInfo`, and emits an `unreachable`
    * instruction.
    */
-  def errExpr(errMsgs: Ls[Message -> Opt[Loc]], extraInfo: => Opt[Any] = N)(using
-      Ctx,
-      Raise,
-  )(using Line): Expr =
+  def errExpr(
+      errMsgs: Ls[Message -> Opt[Loc]],
+      extraInfo: => Opt[Any] = N,
+  )(using Ctx, Raise)(using Line): Expr =
     raise(ErrorReport(errMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
     unreachable
 
@@ -531,10 +530,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     case r => result(r)
 
-  def fieldSelect(thisSym: BlockMemberSymbol, sym: DefinitionSymbol[?])(using
-      Ctx,
-      Raise,
-  ): FieldIdx =
+  def fieldSelect(
+      thisSym: BlockMemberSymbol,
+      sym: DefinitionSymbol[?],
+  )(using Ctx, Raise): FieldIdx =
     val structInfo = ctx.getTypeInfo_!(thisSym)
     val symToField = structInfo.compType match
       case ty: StructType => ty.fields
@@ -814,10 +813,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   /**
    * Creates a binary Int31 intrinsic with two parameters and body built from `op`.
    */
-  private def createBinaryInt31Func(name: Str, op: (Expr, Expr) => Expr)(using
-      Ctx,
-      Scope,
-  ): FuncIdx =
+  private def createBinaryInt31Func(
+      name: Str,
+      op: (Expr, Expr) => Expr,
+  )(using Ctx, Scope): FuncIdx =
     val params = mkIntrinsicParams(name, Seq("lhs", "rhs"))
     val lhsName = params.head._2
     val rhsName = params(1)._2
@@ -836,9 +835,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   /**
    * Allocates the Wasm type and function definition for an intrinsic with the given signature.
    */
-  private def createIntrinsicFunc(name: Str, params: Seq[(TempSymbol, Str)], body: Expr)(using
-      Ctx,
-  ): FuncIdx =
+  private def createIntrinsicFunc(
+      name: Str,
+      params: Seq[(TempSymbol, Str)],
+      body: Expr,
+  )(using Ctx): FuncIdx =
     val funcTy = ctx.addType(
       sym = N,
       TypeInfo(
@@ -862,10 +863,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   /**
    * Builds the body for an Int31 binary operator.
    */
-  private def binaryInt31Body(lhsName: Str, rhsName: Str, op: (Expr, Expr) => Expr)(using
-      Ctx,
-      Scope,
-  ): Expr =
+  private def binaryInt31Body(
+      lhsName: Str,
+      rhsName: Str,
+      op: (Expr, Expr) => Expr,
+  )(using Ctx, Scope): Expr =
     val cond = i32.and(
       ref.test(getLocalAnyref(lhsName), RefType.i31ref),
       ref.test(getLocalAnyref(rhsName), RefType.i31ref),
@@ -1444,10 +1446,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
   end returningTerm
 
-  def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: io.Path)(using
-      Raise,
-      Scope,
-  ): (Document, Str, Int) =
+  def program(
+      p: Program,
+      exprt: Opt[BlockMemberSymbol],
+      wd: io.Path,
+  )(using Raise, Scope): (Document, Str, Int) =
     for imprt <- p.imports do
       raise(
         ErrorReport(
@@ -1580,11 +1583,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     scope.nest givenIn:
       block(t)
 
-  def setupFunction(name: Option[Str], params: ParamList, body: Block)(using
-      Ctx,
-      Raise,
-      Scope,
-  ): (Seq[WasmParam -> Str], Expr, Seq[(Local, Str)]) =
+  def setupFunction(
+      name: Option[Str],
+      params: ParamList,
+      body: Block,
+  )(using Ctx, Raise, Scope): (Seq[WasmParam -> Str], Expr, Seq[(Local, Str)]) =
     // Add a frame for `ctx.locals`
     ctx.pushLocal()
 
