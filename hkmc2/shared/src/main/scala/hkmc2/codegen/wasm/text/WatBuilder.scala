@@ -38,7 +38,7 @@ object WatBuilder:
 class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   import Ctx.ctx
   import Ctx.{SingletonInfo, binaryOps, unaryOps, wasmIntrinsicArities, wasmIntrinsicNameSet}
-  import Instructions.*
+  import Instructions.{block as blockInstr, *}
   import WatBuilder.ExternIntrinsics
 
   type Context = Ctx
@@ -423,7 +423,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             resultTypes = Seq(Result(I32Type)),
           )
 
-          Instructions.block(
+          blockInstr(
             label = N,
             children = Seq(storeIdx, normalizedIdx),
             resultTypes = Seq(Result(I32Type)),
@@ -944,7 +944,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           )
 
       val rstBlk = returningTerm(rst)
-      Instructions.block(
+      blockInstr(
         label = N,
         children = Seq(assignExpr, rstBlk),
         resultTypes = resultClauses(rstBlk),
@@ -984,7 +984,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           )
 
       val rstBlk = returningTerm(rst)
-      Instructions.block(
+      blockInstr(
         label = N,
         children = Seq(assignInstr, rstBlk),
         resultTypes = resultClauses(rstBlk),
@@ -1013,7 +1013,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           )
 
       val rstBlk = returningTerm(rst)
-      Instructions.block(
+      blockInstr(
         label = N,
         children = Seq(assignInstr, rstBlk),
         resultTypes = resultClauses(rstBlk),
@@ -1042,7 +1042,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             case S(owner) =>
               val ownerBlkMem = owner.asBlkMember.get
               val rstWat = returningTerm(rst)
-              Instructions.block(
+              blockInstr(
                 label = N,
                 children = Seq(
                   struct.set(
@@ -1170,7 +1170,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     case TypeIdx(NumIdx(idx)) => idx
                     case _ => lastWords(s"Expected numeric type index for class ${clsLikeDefn.sym}")
                   
-                  val ctorCode = Instructions.block(
+                  val ctorCode = blockInstr(
                     label = N,
                     Seq(
                       local.set(thisVar, struct.new_default(typeref)),
@@ -1249,7 +1249,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 ),
                 extraInfo = S(defn.showAsTree),
               )
-            case _ => Instructions.block(
+            case _ => blockInstr(
                 label = N,
                 children = Seq(res, rstBlk),
                 resultTypes = resultClauses(rstBlk),
@@ -1313,7 +1313,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               val armLabel = scope.allocateName(armLabelSym)
               S(`if`(
                 condition = testExpr,
-                ifTrue = Instructions.block(
+                ifTrue = blockInstr(
                   label = S(armLabel),
                   children = Seq(bodyExpr, br(matchLabel)),
                   resultTypes = Seq.empty,
@@ -1353,7 +1353,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 condition = isStructCompatible,
                 ifTrue = `if`(
                   condition = tagMatches,
-                  ifTrue = Instructions.block(
+                  ifTrue = blockInstr(
                     label = S(armLabel),
                     children = Seq(bodyExpr, br(matchLabel)),
                     resultTypes = Seq.empty,
@@ -1382,7 +1382,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               val armLabel = scope.allocateName(armLabelSym)
               S(`if`(
                 condition = testExpr,
-                ifTrue = Instructions.block(
+                ifTrue = blockInstr(
                   label = S(armLabel),
                   children = Seq(bodyExpr, br(matchLabel)),
                   resultTypes = Seq.empty,
@@ -1409,7 +1409,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         val matchResultTypes = Seq(Result(RefType.anyref))
         
         // Generate the match block
-        val matchBlock = Instructions.block(
+        val matchBlock = blockInstr(
           label = S(matchLabel),
           children = armExprs :+ defaultExpr,
           resultTypes = matchResultTypes,
@@ -1420,7 +1420,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           case End(_) =>
             matchBlock
           case _ =>
-            Instructions.block(
+            blockInstr(
               label = N,
               children = Seq(matchBlock, rstExpr),
               resultTypes = resultClauses(rstExpr),
@@ -1523,7 +1523,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     if stringLits.nonEmpty then
       stringLits.valuesIterator.foreach: lit =>
         if lit.byteLen > 0 then
-          ctx.addDataSegment(DataSegment(Instructions.i32.const(lit.offset), lit.watBytes))
+          ctx.addDataSegment(DataSegment(i32.const(lit.offset), lit.watBytes))
 
     val singletonInitActions = ctx.getSingletonInitActions
     if singletonInitActions.nonEmpty then
@@ -1537,7 +1537,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           ),
         ),
       )
-      val initBody = Instructions.block(
+      val initBody = blockInstr(
         label = N,
         children = singletonInitActions.toSeq,
         resultTypes = Seq.empty,
