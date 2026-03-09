@@ -286,8 +286,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         typeIdx = importTy
       )
 
-  /** 
-   * Gets (and caches) the Wasm GC array type used for tuples (`mut` selects mutability). 
+  /**
+   * Gets (and caches) the Wasm GC array type used for tuples (`mut` selects mutability).
    */
   private def tupleArrayType(mut: Bool)(using Ctx): TypeIdx =
     ctx.getOrCreateWasmIntrinsicType(
@@ -307,8 +307,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         )
     )
 
-  /** 
-   * Allocates a fresh temp local (typed `anyref`) and returns its `LocalIdx`. 
+  /**
+   * Allocates a fresh temp local (typed `anyref`) and returns its `LocalIdx`.
    */
   private def mkTempLocal(base: Str)(using Ctx, Scope, Raise): LocalIdx =
     val sym = TempSymbol(N, base)
@@ -339,8 +339,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         extraInfo = S(value.toString)
       )
 
-  /** 
-   * Emits a tuple element load that works for both mutable and immutable tuple arrays. 
+  /**
+   * Emits a tuple element load that works for both mutable and immutable tuple arrays.
    */
   private def tupleArrayGet(
       tupleExpr: Expr,
@@ -365,8 +365,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       resultTypes = Seq(Result(elemType.asValType_!))
     )
     
-  /** 
-   * Builds an i32 index for tuple indexing (supports negative indices; caches non-literals). 
+  /**
+   * Builds an i32 index for tuple indexing (supports negative indices; caches non-literals).
    */
   private def compileTupleIndex(
       fld: Path,
@@ -1061,7 +1061,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       ctx.addLocal(p.sym)
                       p -> scope.allocateName(p.sym)
 
-                  // Use the symbolic type reference (e.g. `$Foo`) in emitted WAT for readability. 
+                  // Use the symbolic type reference (e.g. `$Foo`) in emitted WAT for readability.
                   // Numeric indices are only needed for `$tag` values.
                   val typeref = ctx.getType_!(clsLikeDefn.sym)
 
@@ -1331,7 +1331,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             )
 
     // * Try/finally lowering is intentionally rejected for now: the previous implementation required `exnref` support
-    // * which can only be enabled with the `--experimental-wasm-exnref` flag. 
+    // * which can only be enabled with the `--experimental-wasm-exnref` flag.
     // * Later, it will be implemented using intrinsic function.
     case TryBlock(sub, _, _) =>
       errExpr(
