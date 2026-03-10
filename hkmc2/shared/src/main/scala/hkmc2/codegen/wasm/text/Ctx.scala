@@ -14,24 +14,23 @@ import Instructions.*
 
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 
-/**
- * A Wasm function and its associated information.
- *
- * Each instance of [[FuncInfo]] represents a single function definition in a WebAssembly module.
- *
- * @param id
- *   Symbolic identifier for the function, or `N` if the function is anonymous.
- * @param typeIdx
- *   Index of the function's type in the module's type section.
- * @param params
- *   [[Seq]] of parameter local variables and their names.
- * @param nResults
- *   Number of results the function returns.
- * @param locals
- *   [[Seq]] of local variables (excluding parameters) and their names.
- * @param body
- *   The expression of the function body.
- */
+/** A Wasm function and its associated information.
+  *
+  * Each instance of [[FuncInfo]] represents a single function definition in a WebAssembly module.
+  *
+  * @param id
+  *   Symbolic identifier for the function, or `N` if the function is anonymous.
+  * @param typeIdx
+  *   Index of the function's type in the module's type section.
+  * @param params
+  *   [[Seq]] of parameter local variables and their names.
+  * @param nResults
+  *   Number of results the function returns.
+  * @param locals
+  *   [[Seq]] of local variables (excluding parameters) and their names.
+  * @param body
+  *   The expression of the function body.
+  */
 class FuncInfo(
     val id: Opt[SymIdx],
     val typeIdx: TypeIdx,
@@ -41,20 +40,19 @@ class FuncInfo(
     val body: Expr,
 ) extends ToWat:
 
-  /**
-   * @param sym
-   *   The source [[BlockMemberSymbol]] which this function is generated from.
-   * @param typeIdx
-   *   Index of the function's type in the module's type section.
-   * @param params
-   *   [[Seq]] of parameter local variables and their names.
-   * @param nResults
-   *   Number of results the function returns.
-   * @param locals
-   *   [[Seq]] of local variables (excluding parameters) and their names.
-   * @param body
-   *   The expression of the function body.
-   */
+  /** @param sym
+    *   The source [[BlockMemberSymbol]] which this function is generated from.
+    * @param typeIdx
+    *   Index of the function's type in the module's type section.
+    * @param params
+    *   [[Seq]] of parameter local variables and their names.
+    * @param nResults
+    *   Number of results the function returns.
+    * @param locals
+    *   [[Seq]] of local variables (excluding parameters) and their names.
+    * @param body
+    *   The expression of the function body.
+    */
   def this(
       sym: BlockMemberSymbol,
       typeIdx: TypeIdx,
@@ -90,20 +88,19 @@ class FuncInfo(
       }"""
 end FuncInfo
 
-/**
- * A Wasm global and its associated information.
- *
- * Each instance of [[GlobalInfo]] represents a single global definition in a WebAssembly module.
- *
- * @param id
- *   Symbolic identifier for the global.
- * @param valType
- *   The value type of the global.
- * @param mutable
- *   Whether the global is mutable.
- * @param init
- *   The initializer expression for the global.
- */
+/** A Wasm global and its associated information.
+  *
+  * Each instance of [[GlobalInfo]] represents a single global definition in a WebAssembly module.
+  *
+  * @param id
+  *   Symbolic identifier for the global.
+  * @param valType
+  *   The value type of the global.
+  * @param mutable
+  *   Whether the global is mutable.
+  * @param init
+  *   The initializer expression for the global.
+  */
 class GlobalInfo(val id: SymIdx, val valType: ValType, val mutable: Bool, val init: Expr) extends ToWat:
 
   /** Returns the symbolic identifier document used in global declarations. */
@@ -116,24 +113,22 @@ class GlobalInfo(val id: SymIdx, val valType: ValType, val mutable: Bool, val in
     doc"(global${idDoc.surroundUnlessEmpty(doc" ")} ${typeDoc} ${init.toWat})"
 end GlobalInfo
 
-/**
- * A Wasm type and its associated information.
- *
- * Each instance of [[FuncInfo]] represents a single type defintion in a WebAssembly module.
- *
- * @param id
- *   Symbolic identifier for the function, or `N` if the function is anonymous.
- * @param compType
- *   The composite type this type definition represents.
- */
+/** A Wasm type and its associated information.
+  *
+  * Each instance of [[FuncInfo]] represents a single type defintion in a WebAssembly module.
+  *
+  * @param id
+  *   Symbolic identifier for the function, or `N` if the function is anonymous.
+  * @param compType
+  *   The composite type this type definition represents.
+  */
 class TypeInfo(val id: Opt[SymIdx], val compType: CompType) extends ToWat:
 
-  /**
-   * @param sym
-   *   The source [[BlockMemberSymbol]] which this type is generated from.
-   * @param compType
-   *   The composite type this type definition represents.
-   */
+  /** @param sym
+    *   The source [[BlockMemberSymbol]] which this type is generated from.
+    * @param compType
+    *   The composite type this type definition represents.
+    */
   def this(sym: BlockMemberSymbol, compType: CompType) = this(
     sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
     compType,
@@ -151,12 +146,11 @@ class TypeInfo(val id: Opt[SymIdx], val compType: CompType) extends ToWat:
       doc"(type${idDoc.surroundUnlessEmpty(doc" ")} ${compType.toWat})"
 end TypeInfo
 
-/**
- * A WebAssembly exception tag declaration.
- *
- * In Wasm, a `tag` names an exception kind and points to a function type that describes the payload values carried by
- * `throw tag ...` and extracted by matching `catch tag ...`.
- */
+/** A WebAssembly exception tag declaration.
+  *
+  * In Wasm, a `tag` names an exception kind and points to a function type that describes the payload values carried by
+  * `throw tag ...` and extracted by matching `catch tag ...`.
+  */
 class TagInfo(val id: SymIdx, val typeIdx: TypeIdx) extends ToWat:
 
   def toWat: Document =
@@ -217,30 +211,29 @@ object Ctx:
       case sym: Symbol => s"symbol `${sym.toString}`"
 end Ctx
 
-/**
- * Context for [[WatBuilder]].
- *
- * @param types
- *   [[ArrayBuf]] containing all type definitions in the module.
- * @param namedTypes
- *   [[MutMap]] containing type symbols mapped to their corresponding Wasm type indices.
- * @param memoryImports
- *   [[ArrayBuf]] containing all memory imports in the module.
- * @param functionImports
- *   [[ArrayBuf]] containing all function imports in the module.
- * @param dataSegments
- *   [[ArrayBuf]] containing all data segments in the module.
- * @param funcs
- *   [[ArrayBuf]] containing all function definitions in the module.
- * @param globals
- *   [[ArrayBuf]] containing all global definitions in the module.
- * @param namedFuncs
- *   [[MutMap]] containing function symbols mapped to their corresponding Wasm function indices.
- * @param namedGlobals
- *   [[MutMap]] containing global symbols mapped to their corresponding Wasm global indices.
- * @param locals
- *   Stack of [[MutMap]] from local variable symbols to their numeric indices within the current function scope.
- */
+/** Context for [[WatBuilder]].
+  *
+  * @param types
+  *   [[ArrayBuf]] containing all type definitions in the module.
+  * @param namedTypes
+  *   [[MutMap]] containing type symbols mapped to their corresponding Wasm type indices.
+  * @param memoryImports
+  *   [[ArrayBuf]] containing all memory imports in the module.
+  * @param functionImports
+  *   [[ArrayBuf]] containing all function imports in the module.
+  * @param dataSegments
+  *   [[ArrayBuf]] containing all data segments in the module.
+  * @param funcs
+  *   [[ArrayBuf]] containing all function definitions in the module.
+  * @param globals
+  *   [[ArrayBuf]] containing all global definitions in the module.
+  * @param namedFuncs
+  *   [[MutMap]] containing function symbols mapped to their corresponding Wasm function indices.
+  * @param namedGlobals
+  *   [[MutMap]] containing global symbols mapped to their corresponding Wasm global indices.
+  * @param locals
+  *   Stack of [[MutMap]] from local variable symbols to their numeric indices within the current function scope.
+  */
 class Ctx(
     types: ArrayBuf[TypeInfo],
     namedTypes: MutMap[BlockMemberSymbol, NumIdx],
@@ -278,9 +271,8 @@ class Ctx(
       namedTypes(_) = numIdx
     TypeIdx(typeInfo.id.getOrElse(numIdx))
 
-  /**
-   * Returns the [[TypeIdx]] of the given `typeref`, optionally resolving the symbolic index into a numeric index.
-   */
+  /** Returns the [[TypeIdx]] of the given `typeref`, optionally resolving the symbolic index into a numeric index.
+    */
   def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): Opt[TypeIdx] =
     typeref match
       case TypeIdx(SymIdx(nme)) if resolveSymIdx =>
@@ -317,11 +309,10 @@ class Ctx(
       namedFuncs(_) = numIdx
     FuncIdx(funcInfo.id.getOrElse(numIdx))
 
-  /**
-   * Adds a function import into this context.
-   *
-   * Returns the function index in the global function index space.
-   */
+  /** Adds a function import into this context.
+    *
+    * Returns the function index in the global function index space.
+    */
   def addFunctionImport(sym: Opt[Symbol], funcImport: FuncImport): FuncIdx =
     val numIdx = NumIdx(functionImports.size + funcs.size)
     functionImports += funcImport
@@ -329,19 +320,17 @@ class Ctx(
       namedFuncs(_) = numIdx
     FuncIdx(funcImport.id.getOrElse(numIdx))
 
-  /**
-   * Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
-   */
+  /** Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
+    */
   def getOrCreateFunctionImport(
       module: Str,
       name: Str,
   )(createImport: => FuncImport): FuncIdx =
     cachedFunctionImports.getOrElseUpdate((module, name), addFunctionImport(N, createImport))
 
-  /**
-   * Adds or updates a memory import. If the import already exists, its minimum pages are increased to at least
-   * `minPages`.
-   */
+  /** Adds or updates a memory import. If the import already exists, its minimum pages are increased to at least
+    * `minPages`.
+    */
   def ensureMemoryImport(module: Str, name: Str, minPages: Int): Unit =
     val key = module -> name
     cachedMemoryImport.get(key) match
@@ -368,9 +357,8 @@ class Ctx(
     tags += tagInfo
     TagIdx(tagInfo.id)
 
-  /**
-   * Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a numeric index.
-   */
+  /** Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a numeric index.
+    */
   def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = funcref match
     case FuncIdx(SymIdx(nme)) if resolveSymIdx =>
       namedFuncs.find(_._1.nme == nme).map(f => FuncIdx(f._2))
@@ -434,18 +422,16 @@ class Ctx(
   /** Checks whether singleton metadata has been registered for class symbol `sym`. */
   def containsSingleton(sym: BlockMemberSymbol): Bool = singletonByBms.contains(sym)
 
-  /**
-   * Returns singleton metadata for `sym` when it resolves to either the block-member symbol or module/object symbol
-   * used during singleton registration.
-   */
+  /** Returns singleton metadata for `sym` when it resolves to either the block-member symbol or module/object symbol
+    * used during singleton registration.
+    */
   def getSingletonInfo(sym: Local): Opt[Ctx.SingletonInfo] = sym match
     case bms: BlockMemberSymbol => singletonByBms.get(bms)
     case isym: ModuleOrObjectSymbol => singletonByIsym.get(isym)
     case _ => N
 
-  /**
-   * Registers singleton metadata under both its block-member symbol and optional module/object symbol alias.
-   */
+  /** Registers singleton metadata under both its block-member symbol and optional module/object symbol alias.
+    */
   def registerSingleton(
       bms: BlockMemberSymbol,
       isym: Opt[ModuleOrObjectSymbol],
@@ -465,16 +451,14 @@ class Ctx(
   def setStartFunc(funcIdx: FuncIdx): Unit =
     startFunc = S(funcIdx)
 
-  /**
-   * Converts a [[Map]] of symbols and their respective numeric identifiers into a [[Seq]] of symbols sorted by its
-   * numeric index.
-   */
+  /** Converts a [[Map]] of symbols and their respective numeric identifiers into a [[Seq]] of symbols sorted by its
+    * numeric index.
+    */
   private def wasmLocalsToSeq(scope: Map[Symbol, NumIdx]): Seq[Local] =
     scope.toSeq.sortBy(_._2.index).map(_._1)
 
-  /**
-   * Returns a tuple containing the variables in the current `global` and `local` scopes respectively.
-   */
+  /** Returns a tuple containing the variables in the current `global` and `local` scopes respectively.
+    */
   def getWasmLocals: Seq[Symbol] -> Opt[Seq[Local]] =
     wasmLocalsToSeq(namedGlobals.toMap) -> locals.headOption.map(l => wasmLocalsToSeq(l.toMap))
 
@@ -483,17 +467,15 @@ class Ctx(
     case Nil => wasmLocalsToSeq(namedGlobals.toMap) :: Nil
     case _ => locals.init.map(l => wasmLocalsToSeq(l.toMap)) :+ wasmLocalsToSeq(namedGlobals.toMap)
 
-  /**
-   * Returns the cached [[FuncIdx]] for the intrinsic named `name`, creating it with `createIntrinsic` if it does not
-   * yet exist in this context.
-   */
+  /** Returns the cached [[FuncIdx]] for the intrinsic named `name`, creating it with `createIntrinsic` if it does not
+    * yet exist in this context.
+    */
   def getOrCreateWasmIntrinsic(name: Str, createIntrinsic: => FuncIdx): FuncIdx =
     wasmIntrinsicFuncs.getOrElseUpdate(name, createIntrinsic)
 
-  /**
-   * Returns the cached [[TypeIdx]] for the intrinsic type `key`, creating it with `createType` if it does not yet exist
-   * in this context.
-   */
+  /** Returns the cached [[TypeIdx]] for the intrinsic type `key`, creating it with `createType` if it does not yet
+    * exist in this context.
+    */
   def getOrCreateWasmIntrinsicType(key: WasmIntrinsicType)(createType: => TypeIdx): TypeIdx =
     wasmIntrinsicTypes.getOrElseUpdate(key, createType)
 

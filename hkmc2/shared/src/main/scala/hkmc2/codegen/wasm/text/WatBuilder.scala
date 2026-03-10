@@ -20,11 +20,10 @@ import scala.util.boundary, boundary.break
 import sourcecode.Line
 
 extension (instr: FoldedInstr)
-  /**
-   * Returns the mneomic prefix of this instruction.
-   *
-   * For example, for `local.get` it returns `Some("local")`, and for `nop` it returns `None`.
-   */
+  /** Returns the mneomic prefix of this instruction.
+    *
+    * For example, for `local.get` it returns `Some("local")`, and for `nop` it returns `None`.
+    */
   private def mnemonicPrefix: Opt[Str] =
     instr.mnemonic.split('.').optionUnless(_.size == 1).map(_.head)
 
@@ -81,9 +80,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   private def singletonGlobalGet(info: SingletonInfo): Expr =
     global.get(GlobalIdx(SymIdx(info.globalName)), info.globalTy)
 
-  /**
-   * True when the lowered main block references `Unit` and needs synthesized singleton definition.
-   */
+  /** True when the lowered main block references `Unit` and needs synthesized singleton definition.
+    */
   private def requiresUnitSingleton(main: Block): Bool =
     var required = false
     val traverser = new BlockTraverser:
@@ -216,9 +214,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )),
     )
 
-  /**
-   * Returns (and caches) string literal data metadata, allocating data-segment space on first use.
-   */
+  /** Returns (and caches) string literal data metadata, allocating data-segment space on first use.
+    */
   private def internStringLiteral(value: Str): StringLitInfo =
     stringLits.getOrElseUpdate(
       value,
@@ -237,9 +234,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         StringLitInfo(offset = offset, byteLen = byteLen, watBytes = watBytes),
     )
 
-  /**
-   * Ensures imports required for string materialization exist and returns the constructor function.
-   */
+  /** Ensures imports required for string materialization exist and returns the constructor function.
+    */
   private def getOrLoadStrCtorFunction(using Ctx): FuncIdx =
     val minBytes = nextStringDataOffset
     val pageSize = ExternIntrinsics.WasmPageSizeBytes
@@ -273,9 +269,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
   end getOrLoadStrCtorFunction
 
-  /**
-   * Gets (and caches) the Wasm GC array type used for tuples (`mut` selects mutability).
-   */
+  /** Gets (and caches) the Wasm GC array type used for tuples (`mut` selects mutability).
+    */
   private def tupleArrayType(mut: Bool)(using Ctx): TypeIdx =
     ctx.getOrCreateWasmIntrinsicType(WasmIntrinsicType.TupleArray(mutable = mut)):
       val suffix = if mut then "Mut" else ""
@@ -288,18 +283,16 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         ),
       )
 
-  /**
-   * Allocates a fresh temp local (typed `anyref`) and returns its `LocalIdx`.
-   */
+  /** Allocates a fresh temp local (typed `anyref`) and returns its `LocalIdx`.
+    */
   private def mkTempLocal(base: Str)(using Ctx, Scope, Raise): LocalIdx =
     val sym = TempSymbol(N, base)
     val nme = scope.allocateName(sym)
     ctx.addLocal(sym)
     LocalIdx(SymIdx(nme))
 
-  /**
-   * Binds constructor self (`thisSym`) to the Wasm local name `this` in the current scope/context.
-   */
+  /** Binds constructor self (`thisSym`) to the Wasm local name `this` in the current scope/context.
+    */
   private def bindCtorThis(thisSym: Local)(using Ctx, Raise, Scope): LocalIdx -> Str =
     val thisName = "this"
     scope.lookup(thisSym) match
@@ -309,9 +302,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ctx.addLocal(thisSym)
     LocalIdx(SymIdx(thisName)) -> thisName
 
-  /**
-   * Compiles a class/object constructor body under its own Wasm-local frame.
-   */
+  /** Compiles a class/object constructor body under its own Wasm-local frame.
+    */
   private def setupCtorLocals(
       clsLikeDefn: ClsLikeDefn,
   )(using Ctx, Raise, Scope): (Seq[Local -> Str], LocalIdx, Expr, Seq[Local -> Str]) =
@@ -335,9 +327,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     if expr.resultTypes.exists(_ is UnreachableType) then Seq.empty
     else expr.resultTypes.map(ty => Result(ty.asValType_!))
 
-  /**
-   * Validates an IntLit value fits signed 32-bit and delegates codegen to `onValid`.
-   */
+  /** Validates an IntLit value fits signed 32-bit and delegates codegen to `onValid`.
+    */
   private def withValidIntLit(
       value: BigInt,
       loc: Opt[Loc],
@@ -349,9 +340,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         extraInfo = S(value.toString),
       )
 
-  /**
-   * Emits a tuple element load that works for both mutable and immutable tuple arrays.
-   */
+  /** Emits a tuple element load that works for both mutable and immutable tuple arrays.
+    */
   private def tupleArrayGet(tupleExpr: Expr, idxBuilder: Expr => Expr)(using Ctx, Raise, Scope): Expr =
     val elemType = RefType.anyref
     val mutArrayType = tupleArrayType(true)
@@ -372,9 +362,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       resultTypes = Seq(Result(elemType.asValType_!)),
     )
     
-  /**
-   * Builds an i32 index for tuple indexing (supports negative indices; caches non-literals).
-   */
+  /** Builds an i32 index for tuple indexing (supports negative indices; caches non-literals).
+    */
   private def compileTupleIndex(
       fld: Path,
       loc: Opt[Loc],
@@ -421,9 +410,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             resultTypes = Seq(Result(I32Type)),
           )
 
-  /**
-   * Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits the `defaultValue` instruction.
-   */
+  /** Raises a [[WarningReport]] with the given `warnMsgs` and `extraInfo`, and emits the `defaultValue` instruction.
+    */
   def warnExpr(
       warnMsgs: Ls[Message -> Opt[Loc]],
       extraInfo: Opt[Any] = N,
@@ -431,9 +419,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     raise(WarningReport(warnMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
     defaultValue
 
-  /**
-   * Raises an [[ErrorReport]] with the given `warnMsgs` and `extraInfo`, and emits an `unreachable` instruction.
-   */
+  /** Raises an [[ErrorReport]] with the given `warnMsgs` and `extraInfo`, and emits an `unreachable` instruction.
+    */
   def errExpr(
       errMsgs: Ls[Message -> Opt[Loc]],
       extraInfo: => Opt[Any] = N,
@@ -755,31 +742,27 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
   end result
 
-  /**
-   * Returns the intrinsic name if `path` refers to a builtin under `wasm`, or `N` otherwise.
-   */
+  /** Returns the intrinsic name if `path` refers to a builtin under `wasm`, or `N` otherwise.
+    */
   private def wasmIntrinsicName(path: Path): Opt[Str] = path match
     case Select(Value.Ref(sym, _), ident) if (sym eq State.wasmSymbol) && wasmIntrinsicNameSet.contains(ident.name) =>
       S(ident.name)
     case _ => N
 
-  /**
-   * Gets (or creates) the intrinsic function implementing the wasm operator `name`.
-   */
+  /** Gets (or creates) the intrinsic function implementing the wasm operator `name`.
+    */
   private def getIntrinsic(name: Str)(using Ctx, Scope): FuncIdx =
     ctx.getOrCreateWasmIntrinsic(name, createIntrinsic(name))
 
-  /**
-   * Creates the intrinsic definition for `name`.
-   */
+  /** Creates the intrinsic definition for `name`.
+    */
   private def createIntrinsic(name: Str)(using Ctx, Scope): FuncIdx =
     if binaryOps.contains(name) then createBinaryInt31Func(name, binaryOps(name))
     else if unaryOps.contains(name) then createUnaryInt31Func(name, unaryOps(name))
     else lastWords(s"Unsupported wasm intrinsic '$name'")
 
-  /**
-   * Creates a binary Int31 intrinsic with two parameters and body built from `op`.
-   */
+  /** Creates a binary Int31 intrinsic with two parameters and body built from `op`.
+    */
   private def createBinaryInt31Func(
       name: Str,
       op: (Expr, Expr) => Expr,
@@ -790,18 +773,16 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val body = binaryInt31Body(lhsName, rhsName, op)
     createIntrinsicFunc(name, params, body)
 
-  /**
-   * Creates a unary Int31 intrinsic with a single parameter and body built from `op`.
-   */
+  /** Creates a unary Int31 intrinsic with a single parameter and body built from `op`.
+    */
   private def createUnaryInt31Func(name: Str, op: Expr => Expr)(using Ctx, Scope): FuncIdx =
     val params = mkIntrinsicParams(name, Seq("arg"))
     val argName = params.head._2
     val body = unaryInt31Body(argName, op)
     createIntrinsicFunc(name, params, body)
 
-  /**
-   * Allocates the Wasm type and function definition for an intrinsic with the given signature.
-   */
+  /** Allocates the Wasm type and function definition for an intrinsic with the given signature.
+    */
   private def createIntrinsicFunc(
       name: Str,
       params: Seq[(TempSymbol, Str)],
@@ -828,9 +809,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ctx.addFunc(N, funcInfo)
   end createIntrinsicFunc
 
-  /**
-   * Builds the body for an Int31 binary operator.
-   */
+  /** Builds the body for an Int31 binary operator.
+    */
   private def binaryInt31Body(
       lhsName: Str,
       rhsName: Str,
@@ -848,9 +828,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       resultTypes = Seq(Result(RefType.anyref)),
     )
 
-  /**
-   * Builds the body for an Int31 unary operator.
-   */
+  /** Builds the body for an Int31 unary operator.
+    */
   private def unaryInt31Body(paramName: Str, op: Expr => Expr)(using Ctx, Scope): Expr =
     val cond = ref.test(getLocalAnyref(paramName), RefType.i31ref)
     val i31Op = ref.i31(op(getI32FromAnyref(paramName)))
@@ -861,23 +840,20 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       resultTypes = Seq(Result(RefType.anyref)),
     )
 
-  /**
-   * Creates parameters for an intrinsic.
-   */
+  /** Creates parameters for an intrinsic.
+    */
   private def mkIntrinsicParams(name: Str, suffixes: Seq[Str]): Seq[(TempSymbol, Str)] =
     suffixes.map: suffix =>
       val sym = TempSymbol(N, suffix)
       sym -> suffix
 
-  /**
-   * Loads the local `name` as an `anyref`.
-   */
+  /** Loads the local `name` as an `anyref`.
+    */
   private def getLocalAnyref(name: Str): Expr =
     local.get(LocalIdx(SymIdx(name)), RefType.anyref)
 
-  /**
-   * Extracts the signed i32 value from the Int31 stored in the local `name`.
-   */
+  /** Extracts the signed i32 value from the Int31 stored in the local `name`.
+    */
   private def getI32FromAnyref(name: Str): Expr =
     i31.get(ref.cast(getLocalAnyref(name), RefType.i31ref), true)
 
@@ -1487,9 +1463,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     (ctx.toWat, entryNme, systemMemMinPages)
   end program
 
-  /**
-   * Captures the local symbols introduced while compiling `expr`.
-   */
+  /** Captures the local symbols introduced while compiling `expr`.
+    */
   private def withLocalDelta(expr: => Expr)(using Ctx): (Expr, Seq[Local]) =
     val before = ctx.getWasmLocals._2.getOrElse(Seq.empty).toSet
     val compiled = expr

@@ -96,11 +96,10 @@ case class Param(id: Opt[Str], valtype: ValType) extends ToWat:
 case class Result(valtype: ValType) extends ToWat:
   def toWat: Document = doc"(result ${valtype.toWat})"
 
-/**
- * A type representing a function signature.
- *
- * Function signatures differ from [[FunctionType]] in that they do not include the `func` keyword.
- */
+/** A type representing a function signature.
+  *
+  * Function signatures differ from [[FunctionType]] in that they do not include the `func` keyword.
+  */
 case class SignatureType(params: Seq[Param], results: Seq[Result]) extends ToWat:
   def toWat: Document = (params.map(_.toWat) ++ results.map(_.toWat)).mkDocument(doc" ")
 
@@ -205,19 +204,17 @@ case class DataSegment(offsetExpr: Expr, bytes: Str) extends ToWat:
   def toWat: Document =
     doc"""(data ${offsetExpr.toWat} "$bytes")"""
 
-/**
- * An abstraction over a generic WebAssembly instructions.
- */
+/** An abstraction over a generic WebAssembly instructions.
+  */
 sealed abstract class Instruction extends ToWat:
   /** The mnemonic of the instruction, e.g. "i32.add". */
   val mnemonic: String
 
-  /**
-   * The arguments to the instruction. Note that this only includes arguments that are directly part of the instruction,
-   * not the stack arguments.
-   *
-   * For example, for `i32.add` this would be empty, but for `i32.const 42`, this would be `Seq(doc"42")`.
-   */
+  /** The arguments to the instruction. Note that this only includes arguments that are directly part of the
+    * instruction, not the stack arguments.
+    *
+    * For example, for `i32.add` this would be empty, but for `i32.const 42`, this would be `Seq(doc"42")`.
+    */
   val instrargs: Seq[ToWat | Document]
 
 object FoldedInstr:
@@ -229,12 +226,11 @@ object FoldedInstr:
   ): FoldedInstr =
     new FoldedInstr(mnemonic, instrargs, stackargs, resultType.toSeq)
 
-/**
- * A WebAssembly folded instruction.
- *
- * @param stackargs
- *   The stack arguments of the instruction.
- */
+/** A WebAssembly folded instruction.
+  *
+  * @param stackargs
+  *   The stack arguments of the instruction.
+  */
 case class FoldedInstr(
     mnemonic: Str,
     instrargs: Seq[ToWat | Document],
@@ -263,7 +259,6 @@ case class FoldedInstr(
     } #} )"
 end FoldedInstr
 
-/**
- * A WebAssembly expression, comprised of one or more instructions that generate a result value.
- */
+/** A WebAssembly expression, comprised of one or more instructions that generate a result value.
+  */
 type Expr = FoldedInstr
