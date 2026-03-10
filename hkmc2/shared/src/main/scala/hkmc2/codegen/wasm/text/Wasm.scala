@@ -113,11 +113,7 @@ case class FunctionType(sigType: SignatureType) extends ToWat:
     doc"(func${sigType.toWat.surroundUnlessEmpty(doc" ")})"
 
 /** A type representing a struct field. */
-case class Field(
-    ty: Type,
-    mutable: Bool,
-    id: Opt[Str],
-) extends ToWat:
+case class Field(ty: Type, mutable: Bool, id: Opt[Str]) extends ToWat:
   def toWat: Document =
     doc"(field ${id.fold(doc"")(id => doc"$$$id ")}${
         if mutable then doc"(mut ${ty.toWat})" else ty.toWat
@@ -136,10 +132,7 @@ case class StructType(
     doc"(struct${fieldSeq.map(_.toWat).mkDocument(doc" ").surroundUnlessEmpty(doc" ")})"
 
 /** A type representing an array type. */
-case class ArrayType(
-    elemType: Type,
-    mutable: Bool,
-) extends ToWat:
+case class ArrayType(elemType: Type, mutable: Bool) extends ToWat:
   private def elemDoc: Document =
     if mutable then doc"(mut ${elemType.toWat})" else elemType.toWat
 
@@ -200,12 +193,7 @@ case class MemoryImport(module: Str, name: Str, minPages: Int) extends ToWat:
     doc"""(import "$module" "$name" (memory $minPages))"""
 
 /** A function import entry. */
-case class FuncImport(
-    module: Str,
-    name: Str,
-    id: Opt[SymIdx],
-    typeIdx: TypeIdx,
-) extends ToWat:
+case class FuncImport(module: Str, name: Str, id: Opt[SymIdx], typeIdx: TypeIdx) extends ToWat:
   def toWat: Document =
     doc"""(import "$module" "$name" (func ${
         id.fold(doc"")(_.toWat)
@@ -224,11 +212,10 @@ abstract sealed class Instruction extends ToWat:
   val mnemonic: String
 
   /**
-   * The arguments to the instruction. Note that this only includes arguments that are directly part
-   * of the instruction, not the stack arguments.
+   * The arguments to the instruction. Note that this only includes arguments that are directly part of the instruction,
+   * not the stack arguments.
    *
-   * For example, for `i32.add` this would be empty, but for `i32.const 42`, this would be
-   * `Seq(doc"42")`.
+   * For example, for `i32.add` this would be empty, but for `i32.const 42`, this would be `Seq(doc"42")`.
    */
   val instrargs: Seq[ToWat | Document]
 

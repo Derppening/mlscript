@@ -104,12 +104,7 @@ end FuncInfo
  * @param init
  *   The initializer expression for the global.
  */
-class GlobalInfo(
-    val id: SymIdx,
-    val valType: ValType,
-    val mutable: Bool,
-    val init: Expr,
-) extends ToWat:
+class GlobalInfo(val id: SymIdx, val valType: ValType, val mutable: Bool, val init: Expr) extends ToWat:
 
   /** Returns the symbolic identifier document used in global declarations. */
   private def idDoc: Document = id.toWat
@@ -131,10 +126,7 @@ end GlobalInfo
  * @param compType
  *   The composite type this type definition represents.
  */
-class TypeInfo(
-    val id: Opt[SymIdx],
-    val compType: CompType,
-) extends ToWat:
+class TypeInfo(val id: Opt[SymIdx], val compType: CompType) extends ToWat:
 
   /**
    * @param sym
@@ -162,13 +154,10 @@ end TypeInfo
 /**
  * A WebAssembly exception tag declaration.
  *
- * In Wasm, a `tag` names an exception kind and points to a function type that describes the payload
- * values carried by `throw tag ...` and extracted by matching `catch tag ...`.
+ * In Wasm, a `tag` names an exception kind and points to a function type that describes the payload values carried by
+ * `throw tag ...` and extracted by matching `catch tag ...`.
  */
-class TagInfo(
-    val id: SymIdx,
-    val typeIdx: TypeIdx,
-) extends ToWat:
+class TagInfo(val id: SymIdx, val typeIdx: TypeIdx) extends ToWat:
 
   def toWat: Document =
     doc"""(tag ${id.toWat} (type ${typeIdx.toWat})) # (export "${id.id}" (tag ${id.toWat}))"""
@@ -201,8 +190,7 @@ object Ctx:
     "pos_impl" -> identity,
     "not_impl" -> i32.eqz,
   )
-  val wasmIntrinsicArities: Map[Str, Int] =
-    (binaryOps.keys.map(_ -> 2) ++ unaryOps.keys.map(_ -> 1)).toMap
+  val wasmIntrinsicArities: Map[Str, Int] = (binaryOps.keys.map(_ -> 2) ++ unaryOps.keys.map(_ -> 1)).toMap
   val wasmIntrinsicNameSet: Set[Str] = wasmIntrinsicArities.keySet
 
   def empty: Ctx = Ctx(
@@ -250,8 +238,7 @@ object Ctx:
  * @param namedGlobals
  *   [[MutMap]] containing global symbols mapped to their corresponding Wasm global indices.
  * @param locals
- *   Stack of [[MutMap]] from local variable symbols to their numeric indices within the current
- *   function scope.
+ *   Stack of [[MutMap]] from local variable symbols to their numeric indices within the current function scope.
  */
 class Ctx(
     types: ArrayBuf[TypeInfo],
@@ -291,8 +278,7 @@ class Ctx(
     TypeIdx(typeInfo.id.getOrElse(numIdx))
 
   /**
-   * Returns the [[TypeIdx]] of the given `typeref`, optionally resolving the symbolic index into a
-   * numeric index.
+   * Returns the [[TypeIdx]] of the given `typeref`, optionally resolving the symbolic index into a numeric index.
    */
   def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): Opt[TypeIdx] =
     typeref match
@@ -343,21 +329,17 @@ class Ctx(
     FuncIdx(funcImport.id.getOrElse(numIdx))
 
   /**
-   * Returns the cached function import for (`module`, `name`), creating it with `createImport` if
-   * needed.
+   * Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
    */
   def getOrCreateFunctionImport(
       module: Str,
       name: Str,
   )(createImport: => FuncImport): FuncIdx =
-    cachedFunctionImports.getOrElseUpdate(
-      (module, name),
-      addFunctionImport(N, createImport),
-    )
+    cachedFunctionImports.getOrElseUpdate((module, name), addFunctionImport(N, createImport))
 
   /**
-   * Adds or updates a memory import. If the import already exists, its minimum pages are increased
-   * to at least `minPages`.
+   * Adds or updates a memory import. If the import already exists, its minimum pages are increased to at least
+   * `minPages`.
    */
   def ensureMemoryImport(module: Str, name: Str, minPages: Int): Unit =
     val key = module -> name
@@ -386,8 +368,7 @@ class Ctx(
     TagIdx(tagInfo.id)
 
   /**
-   * Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a
-   * numeric index.
+   * Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a numeric index.
    */
   def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = funcref match
     case FuncIdx(SymIdx(nme)) if resolveSymIdx =>
@@ -453,8 +434,8 @@ class Ctx(
   def containsSingleton(sym: BlockMemberSymbol): Bool = singletonByBms.contains(sym)
 
   /**
-   * Returns singleton metadata for `sym` when it resolves to either the block-member symbol or
-   * module/object symbol used during singleton registration.
+   * Returns singleton metadata for `sym` when it resolves to either the block-member symbol or module/object symbol
+   * used during singleton registration.
    */
   def getSingletonInfo(sym: Local): Opt[Ctx.SingletonInfo] = sym match
     case bms: BlockMemberSymbol => singletonByBms.get(bms)
@@ -462,8 +443,7 @@ class Ctx(
     case _ => N
 
   /**
-   * Registers singleton metadata under both its block-member symbol and optional module/object
-   * symbol alias.
+   * Registers singleton metadata under both its block-member symbol and optional module/object symbol alias.
    */
   def registerSingleton(
       bms: BlockMemberSymbol,
@@ -485,15 +465,14 @@ class Ctx(
     startFunc = S(funcIdx)
 
   /**
-   * Converts a [[Map]] of symbols and their respective numeric identifiers into a [[Seq]] of
-   * symbols sorted by its numeric index.
+   * Converts a [[Map]] of symbols and their respective numeric identifiers into a [[Seq]] of symbols sorted by its
+   * numeric index.
    */
   private def wasmLocalsToSeq(scope: Map[Symbol, NumIdx]): Seq[Local] =
     scope.toSeq.sortBy(_._2.index).map(_._1)
 
   /**
-   * Returns a tuple containing the variables in the current `global` and `local` scopes
-   * respectively.
+   * Returns a tuple containing the variables in the current `global` and `local` scopes respectively.
    */
   def getWasmLocals: Seq[Symbol] -> Opt[Seq[Local]] =
     wasmLocalsToSeq(namedGlobals.toMap) -> locals.headOption.map(l => wasmLocalsToSeq(l.toMap))
@@ -501,21 +480,20 @@ class Ctx(
   /** Returns all local variable scopes and their variables. */
   def getAllWasmLocals: Ls[Seq[Local]] = locals match
     case Nil => wasmLocalsToSeq(namedGlobals.toMap) :: Nil
-    case _ =>
-      locals.init.map(l => wasmLocalsToSeq(l.toMap)) :+ wasmLocalsToSeq(namedGlobals.toMap)
+    case _ => locals.init.map(l => wasmLocalsToSeq(l.toMap)) :+ wasmLocalsToSeq(namedGlobals.toMap)
 
   /**
-   * Returns the cached [[FuncIdx]] for the intrinsic named `name`, creating it with
-   * `createIntrinsic` if it does not yet exist in this context.
+   * Returns the cached [[FuncIdx]] for the intrinsic named `name`, creating it with `createIntrinsic` if it does not
+   * yet exist in this context.
    */
   def getOrCreateWasmIntrinsic(name: Str, createIntrinsic: => FuncIdx): FuncIdx =
     wasmIntrinsicFuncs.getOrElseUpdate(name, createIntrinsic)
 
   /**
-   * Returns the cached [[TypeIdx]] for the intrinsic type `key`, creating it with `createType` if
-   * it does not yet exist in this context.
+   * Returns the cached [[TypeIdx]] for the intrinsic type `key`, creating it with `createType` if it does not yet exist
+   * in this context.
    */
-  def getOrCreateWasmIntrinsicType(key: WasmIntrinsicType, createType: => TypeIdx): TypeIdx =
+  def getOrCreateWasmIntrinsicType(key: WasmIntrinsicType)(createType: => TypeIdx): TypeIdx =
     wasmIntrinsicTypes.getOrElseUpdate(key, createType)
 
   /** Returns the cached [[TagIdx]] for the intrinsic tag named `name`, creating it if absent. */

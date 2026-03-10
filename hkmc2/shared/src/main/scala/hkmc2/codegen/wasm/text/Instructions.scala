@@ -54,13 +54,12 @@ object Instructions:
       funcidx: FuncIdx,
       operands: Seq[Expr],
       returnTypes: Seq[Result],
-  ): FoldedInstr =
-    FoldedInstr(
-      mnemonic = "call",
-      instrargs = Seq(funcidx.toWat),
-      stackargs = operands,
-      resultTypes = returnTypes.map(_.valtype),
-    )
+  ): FoldedInstr = FoldedInstr(
+    mnemonic = "call",
+    instrargs = Seq(funcidx.toWat),
+    stackargs = operands,
+    resultTypes = returnTypes.map(_.valtype),
+  )
 
   /** Creates a `call_ref` instruction. */
   def call_ref(
@@ -116,23 +115,21 @@ object Instructions:
   )
 
   /** Creates a `br` (branch) instruction. */
-  def br(label: Str): FoldedInstr =
-    FoldedInstr(
-      mnemonic = "br",
-      instrargs = Seq(doc"$$$label"),
-      stackargs = Seq.empty,
-      resultType = S(UnreachableType),
-    )
+  def br(label: Str): FoldedInstr = FoldedInstr(
+    mnemonic = "br",
+    instrargs = Seq(doc"$$$label"),
+    stackargs = Seq.empty,
+    resultType = S(UnreachableType),
+  )
 
   object i32:
     /** Creates an `i32.const` instruction. */
-    def const(value: Int): FoldedInstr =
-      FoldedInstr(
-        mnemonic = "i32.const",
-        instrargs = Seq(doc"$value"),
-        stackargs = Seq.empty,
-        resultType = S(I32Type),
-      )
+    def const(value: Int): FoldedInstr = FoldedInstr(
+      mnemonic = "i32.const",
+      instrargs = Seq(doc"$value"),
+      stackargs = Seq.empty,
+      resultType = S(I32Type),
+    )
 
     /** Creates an `i32.add` instruction. */
     def add(lhs: Expr, rhs: Expr): FoldedInstr = FoldedInstr(
@@ -269,22 +266,20 @@ object Instructions:
     )
 
     /** Creates an `array.get` instruction. */
-    def get(arrayType: TypeIdx, arrayRef: Expr, index: Expr, elemType: Type): FoldedInstr =
-      FoldedInstr(
-        mnemonic = "array.get",
-        instrargs = Seq(arrayType.toWat),
-        stackargs = Seq(arrayRef, index),
-        resultType = S(elemType),
-      )
+    def get(arrayType: TypeIdx, arrayRef: Expr, index: Expr, elemType: Type): FoldedInstr = FoldedInstr(
+      mnemonic = "array.get",
+      instrargs = Seq(arrayType.toWat),
+      stackargs = Seq(arrayRef, index),
+      resultType = S(elemType),
+    )
 
     /** Creates an `array.set` instruction. */
-    def set(arrayType: TypeIdx, arrayRef: Expr, index: Expr, value: Expr): FoldedInstr =
-      FoldedInstr(
-        mnemonic = "array.set",
-        instrargs = Seq(arrayType.toWat),
-        stackargs = Seq(arrayRef, index, value),
-        resultType = N,
-      )
+    def set(arrayType: TypeIdx, arrayRef: Expr, index: Expr, value: Expr): FoldedInstr = FoldedInstr(
+      mnemonic = "array.set",
+      instrargs = Seq(arrayType.toWat),
+      stackargs = Seq(arrayRef, index, value),
+      resultType = N,
+    )
   end array
 
   object ref:
