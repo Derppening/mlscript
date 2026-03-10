@@ -137,13 +137,13 @@ class TypeInfo(val id: Opt[SymIdx], val compType: CompType) extends ToWat:
   private def idDoc: Document = id.fold(doc"")(_.toWat)
 
   def toWat: Document = compType match
-    case struct: StructType if struct.isSubtype =>
-      val parentsDoc = struct.parents.optionIf(_.nonEmpty).fold(doc""): parents =>
-        parents.map(_.toWat).mkDocument(doc" ")
-      val structDoc = struct.copy(isSubtype = false).toWat
-      doc"(type${idDoc.surroundUnlessEmpty(doc" ")} (sub${parentsDoc.surroundUnlessEmpty(doc" ")} ${structDoc}))"
-    case _ =>
-      doc"(type${idDoc.surroundUnlessEmpty(doc" ")} ${compType.toWat})"
+  case struct: StructType if struct.isSubtype =>
+    val parentsDoc = struct.parents.optionIf(_.nonEmpty).fold(doc""): parents =>
+      parents.map(_.toWat).mkDocument(doc" ")
+    val structDoc = struct.copy(isSubtype = false).toWat
+    doc"(type${idDoc.surroundUnlessEmpty(doc" ")} (sub${parentsDoc.surroundUnlessEmpty(doc" ")} ${structDoc}))"
+  case _ =>
+    doc"(type${idDoc.surroundUnlessEmpty(doc" ")} ${compType.toWat})"
 end TypeInfo
 
 /** A WebAssembly exception tag declaration.
@@ -207,8 +207,8 @@ object Ctx:
 
   extension (ref: CtxIdx | Symbol)
     private def prettyString: Str = ref match
-      case idx: CtxIdx => s"type index `${idx.toWat.mkString()}`"
-      case sym: Symbol => s"symbol `${sym.toString}`"
+    case idx: CtxIdx => s"type index `${idx.toWat.mkString()}`"
+    case sym: Symbol => s"symbol `${sym.toString}`"
 end Ctx
 
 /** Context for [[WatBuilder]].
@@ -275,13 +275,13 @@ class Ctx(
     */
   def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): Opt[TypeIdx] =
     typeref match
-      case TypeIdx(SymIdx(nme)) if resolveSymIdx =>
-        namedTypes.find(_._1.nme == nme).map(t => TypeIdx(t._2))
-      case typeidx: TypeIdx => S(typeidx)
-      case sym: BlockMemberSymbol if resolveSymIdx => namedTypes.get(sym).map(TypeIdx(_))
-      case sym: BlockMemberSymbol =>
-        getType(sym, resolveSymIdx = true).map: numIdx =>
-          getTypeInfo(numIdx).flatMap(_.id).fold(numIdx)(TypeIdx(_))
+    case TypeIdx(SymIdx(nme)) if resolveSymIdx =>
+      namedTypes.find(_._1.nme == nme).map(t => TypeIdx(t._2))
+    case typeidx: TypeIdx => S(typeidx)
+    case sym: BlockMemberSymbol if resolveSymIdx => namedTypes.get(sym).map(TypeIdx(_))
+    case sym: BlockMemberSymbol =>
+      getType(sym, resolveSymIdx = true).map: numIdx =>
+        getTypeInfo(numIdx).flatMap(_.id).fold(numIdx)(TypeIdx(_))
 
   /** Same as [[getType]] but throws an exception when the `typeref` is not found. */
   def getType_!(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): TypeIdx =
@@ -290,10 +290,10 @@ class Ctx(
 
   /** Returns the [[TypeInfo]] instance associated with the given `typeref`. */
   def getTypeInfo(typeref: TypeIdx | BlockMemberSymbol): Opt[TypeInfo] = typeref match
-    case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
-    case TypeIdx(SymIdx(nme)) =>
-      namedTypes.find(_._1.nme == nme).flatMap(t => getTypeInfo(TypeIdx(t._2)))
-    case sym: BlockMemberSymbol => namedTypes.get(sym).flatMap(idx => getTypeInfo(TypeIdx(idx)))
+  case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
+  case TypeIdx(SymIdx(nme)) =>
+    namedTypes.find(_._1.nme == nme).flatMap(t => getTypeInfo(TypeIdx(t._2)))
+  case sym: BlockMemberSymbol => namedTypes.get(sym).flatMap(idx => getTypeInfo(TypeIdx(idx)))
 
   /** Same as [[getTypeInfo]] but throws an exception when the `typeref` is not found. */
   def getTypeInfo_!(typeref: TypeIdx | BlockMemberSymbol): TypeInfo =
@@ -334,15 +334,15 @@ class Ctx(
   def ensureMemoryImport(module: Str, name: Str, minPages: Int): Unit =
     val key = module -> name
     cachedMemoryImport.get(key) match
-      case S(idx) =>
-        val existing = memoryImports(idx)
-        val newMin = existing.minPages max minPages
-        if newMin =/= existing.minPages then
-          memoryImports(idx) = existing.copy(minPages = newMin)
-      case N =>
-        val idx = memoryImports.size
-        memoryImports += MemoryImport(module, name, minPages)
-        cachedMemoryImport(key) = idx
+    case S(idx) =>
+      val existing = memoryImports(idx)
+      val newMin = existing.minPages max minPages
+      if newMin =/= existing.minPages then
+        memoryImports(idx) = existing.copy(minPages = newMin)
+    case N =>
+      val idx = memoryImports.size
+      memoryImports += MemoryImport(module, name, minPages)
+      cachedMemoryImport(key) = idx
 
   /** Returns the minimum page requirement of memory import (`module`, `name`) if present. */
   def getMemoryImportMinPages(module: Str, name: Str): Opt[Int] =
@@ -360,13 +360,13 @@ class Ctx(
   /** Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a numeric index.
     */
   def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = funcref match
-    case FuncIdx(SymIdx(nme)) if resolveSymIdx =>
-      namedFuncs.find(_._1.nme == nme).map(f => FuncIdx(f._2))
-    case funcidx: FuncIdx => S(funcidx)
-    case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(FuncIdx(_))
-    case sym: Symbol =>
-      getFunc(sym, resolveSymIdx = true).map: numIdx =>
-        getFuncInfo(numIdx).flatMap(_.id).fold(numIdx)(FuncIdx(_))
+  case FuncIdx(SymIdx(nme)) if resolveSymIdx =>
+    namedFuncs.find(_._1.nme == nme).map(f => FuncIdx(f._2))
+  case funcidx: FuncIdx => S(funcidx)
+  case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(FuncIdx(_))
+  case sym: Symbol =>
+    getFunc(sym, resolveSymIdx = true).map: numIdx =>
+      getFuncInfo(numIdx).flatMap(_.id).fold(numIdx)(FuncIdx(_))
 
   /** Same as [[getFunc]] but throws an exception when the `funcref` is not found. */
   def getFunc_!(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): FuncIdx =
@@ -375,11 +375,11 @@ class Ctx(
 
   /** Returns the [[FuncInfo]] instance associated with the given `funcref`. */
   def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
-    case FuncIdx(numIdx @ NumIdx(idx)) =>
-      funcInfosByIndex.get(numIdx).orElse:
-        val localIdx = idx.toInt - functionImports.size
-        if localIdx < 0 then N else funcs.unapply(localIdx)
-    case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))
+  case FuncIdx(numIdx @ NumIdx(idx)) =>
+    funcInfosByIndex.get(numIdx).orElse:
+      val localIdx = idx.toInt - functionImports.size
+      if localIdx < 0 then N else funcs.unapply(localIdx)
+  case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))
 
   /** Same as [[getFuncInfo]] but throws an exception when the `funcref` is not found. */
   def getFuncInfo_!(funcref: FuncIdx | Symbol): FuncInfo =
@@ -426,9 +426,9 @@ class Ctx(
     * used during singleton registration.
     */
   def getSingletonInfo(sym: Local): Opt[Ctx.SingletonInfo] = sym match
-    case bms: BlockMemberSymbol => singletonByBms.get(bms)
-    case isym: ModuleOrObjectSymbol => singletonByIsym.get(isym)
-    case _ => N
+  case bms: BlockMemberSymbol => singletonByBms.get(bms)
+  case isym: ModuleOrObjectSymbol => singletonByIsym.get(isym)
+  case _ => N
 
   /** Registers singleton metadata under both its block-member symbol and optional module/object symbol alias.
     */
@@ -464,8 +464,8 @@ class Ctx(
 
   /** Returns all local variable scopes and their variables. */
   def getAllWasmLocals: Ls[Seq[Local]] = locals match
-    case Nil => wasmLocalsToSeq(namedGlobals.toMap) :: Nil
-    case _ => locals.init.map(l => wasmLocalsToSeq(l.toMap)) :+ wasmLocalsToSeq(namedGlobals.toMap)
+  case Nil => wasmLocalsToSeq(namedGlobals.toMap) :: Nil
+  case _ => locals.init.map(l => wasmLocalsToSeq(l.toMap)) :+ wasmLocalsToSeq(namedGlobals.toMap)
 
   /** Returns the cached [[FuncIdx]] for the intrinsic named `name`, creating it with `createIntrinsic` if it does not
     * yet exist in this context.
