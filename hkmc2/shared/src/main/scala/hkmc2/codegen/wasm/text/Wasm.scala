@@ -24,7 +24,7 @@ trait ToWat:
   def toWat: Document
 
 /** Abstract base class for all Wasm types. */
-abstract sealed class Type extends ToWat:
+sealed abstract class Type extends ToWat:
 
   /** Attempts to convert this type to a [[[ValType]]]. */
   def asValType: Opt[ValType] = this match
@@ -155,7 +155,7 @@ type AbsHeapType =
     | HeapType.NoFunc.type
 type HeapType = AbsHeapType | TypeIdx
 
-abstract sealed class Index extends ToWat
+sealed abstract class Index extends ToWat
 
 /** A numeric index. */
 case class NumIdx(val index: Int) extends Index:
@@ -166,7 +166,7 @@ case class SymIdx(val id: Str) extends Index:
   def toWat: Document = doc"$$$id"
 
 /** An index that is bound to an index space. */
-abstract sealed class CtxIdx(idx: Index) extends ToWat:
+sealed abstract class CtxIdx(idx: Index) extends ToWat:
   def toWat: Document = idx.toWat
 
 /** An index bound to the ''types'' index space. */
@@ -207,7 +207,7 @@ case class DataSegment(offsetExpr: Expr, bytes: Str) extends ToWat:
 /**
  * An abstraction over a generic WebAssembly instructions.
  */
-abstract sealed class Instruction extends ToWat:
+sealed abstract class Instruction extends ToWat:
   /** The mnemonic of the instruction, e.g. "i32.add". */
   val mnemonic: String
 
