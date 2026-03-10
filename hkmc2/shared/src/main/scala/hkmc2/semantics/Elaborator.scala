@@ -158,6 +158,7 @@ object Elaborator:
       val Str = assumeBuiltinCls("Str")
       val BigInt = assumeBuiltinCls("BigInt")
       val Function = assumeBuiltinCls("Function")
+      val Error = assumeBuiltinCls("Error")
       val Bool = assumeBuiltinCls("Bool")
       val Object = assumeBuiltinCls("Object")
       val Array = assumeBuiltinCls("Array")
@@ -257,6 +258,8 @@ object Elaborator:
     val globalThisSymbol = TopLevelSymbol("globalThis")
     val unitSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Obj), Ident("Unit"))
     val loopEndSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Obj), Ident("LoopEnd"))
+    val tupleSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Mod), Ident("Tuple"))
+    val strSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Mod), Ident("Str"))
     // In JavaScript, `import` can be used for getting current file path, as `import.meta`
     val importSymbol = new VarSymbol(Ident("import"))
     val noSymbol = NoSymbol()
@@ -277,6 +280,14 @@ object Elaborator:
     val nonLocalRet =
       val id = new Ident("ret")
       BlockMemberSymbol(id.name, Nil, true)
+    val unreachableSymbol = TermSymbol(syntax.ImmutVal, N, new Ident("unreachable"))
+    val tupleGetSymbol = createFunSymbolInMod("get", "xs" :: "i" :: Nil, tupleSymbol)
+    val tupleSliceSymbol = createFunSymbolInMod("slice", "xs" :: "i" :: "j" :: Nil, tupleSymbol)
+    val tupleLazySliceSymbol = createFunSymbolInMod("lazySlice", "xs" :: "i" :: "j" :: Nil, tupleSymbol)
+    val strStartsWithSymbol = createFunSymbolInMod("startsWith", "string" :: "prefix" :: Nil, strSymbol)
+    val strGetSymbol = createFunSymbolInMod("get", "string" :: "i" :: Nil, strSymbol)
+    val strTakeSymbol = createFunSymbolInMod("take", "string" :: "n" :: Nil, strSymbol)
+    val strLeaveSymbol = createFunSymbolInMod("leave", "string" :: "n" :: Nil, strSymbol)
     val (matchSuccessClsSymbol, matchSuccessTrmSymbol) =
       val id = new Ident("MatchSuccess")
       val td = TypeDef(syntax.Cls, App(id, Tup(Ident("output") :: Ident("bindings") :: Nil)), N)
@@ -323,6 +334,14 @@ object Elaborator:
     def dbgUid(uid: Uid[Symbol]): Str =
       if dbg then s"‹$uid›" else ""
       // ^ we do not display the uid by default to avoid polluting diff-test outputs
+    // Create a term symbol for a function defined in the given module
+    private def createFunSymbolInMod(name: Str, paramNames: List[Str], mod: ModuleOrObjectSymbol) =
+      val sym = TermSymbol(syntax.Fun, N, Ident(name))
+      val bsym = BlockMemberSymbol(name, Nil, true)
+      val ps = PlainParamList(paramNames.map(s => Param.simple(VarSymbol(Ident(s)))))
+      sym.defn = S(TermDefinition(syntax.Fun, bsym, sym, ps :: Nil, N, N, N,
+        TermDefFlags(true), Modulefulness(S(mod))(false), Nil, N))
+      sym
   transparent inline def State(using state: State): State = state
   
 end Elaborator
@@ -539,9 +558,15 @@ extends Importer with ucs.SplitElaborator:
     case InfixApp(lhs, Keywrd(Keyword.`->`), rhs) =>
       Term.FunTy(subterm(lhs), subterm(rhs), N)
     case InfixApp(lhs, Keywrd(Keyword.`=>`), rhs) =>
-      ctx.nest(OuterCtx.LambdaOrHandlerBlock).givenIn:
-        val (syms, nestCtx) = funParams(lhs)
-        Term.Lam(syms, term(rhs)(using nestCtx))
+      lhs match
+      case Tup(_) =>
+        ctx.nest(OuterCtx.LambdaOrHandlerBlock).givenIn:
+          val (syms, nestCtx) = funParams(lhs)
+          Term.Lam(syms, term(rhs)(using nestCtx))
+      case TyTup(tys) =>
+        val constraints = tys.flatMap(constraint)
+        val body = term(rhs)
+        Term.Constrained(constraints, body)
     case InfixApp(lhs, Keywrd(Keyword.`as`), rhs) =>
       Term.Asc(subterm(lhs), subterm(rhs))
     case InfixApp(lhs, Keywrd(Keyword.`:`), rhs) =>
@@ -1508,6 +1533,20 @@ extends Importer with ucs.SplitElaborator:
     ps_ctx._1.restParam.foreach(checkFlags)
     ps_ctx
   
+  /** Elaborate a subtyping constraint. */
+  def constraint(t: Tree): Ctxl[Option[SubConstraint]] =
+    t match
+    case InfixApp(lhs, op @ (Keywrd(Keyword.`<:`) | Keywrd(Keyword.`:>`)), rhs) =>
+      val l = term(lhs)
+      val r = term(rhs)
+      val dir = op match
+        case Keywrd(Keyword.`<:`) => SubDir.Sub
+        case Keywrd(Keyword.`:>`) => SubDir.Sup
+      S(SubConstraint(l, r, dir))
+    case _ =>
+      raise(ErrorReport(msg"Illegal constraint syntax." -> t.toLoc :: Nil))
+      N
+
   /** Elaborate a parameter list of a term or a definition.
    * @param inDataClass Whether the parameter list belongs to a data class.
    * @param inPattern Whether the parameter list belongs to a pattern definition.
