@@ -361,7 +361,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       ifFalse = S(immutableBranch),
       resultTypes = Seq(Result(elemType.asValType_!)),
     )
-    
+
   /** Builds an i32 index for tuple indexing (supports negative indices; caches non-literals).
     */
   private def compileTupleIndex(
@@ -448,20 +448,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         if !ctx.containsLocal(l) then
           return errExpr(
             Ls(
-              msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" ->
-                ts.toLoc,
+              msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" -> ts.toLoc,
             ),
             extraInfo = S(
-              s"Block IR: `${
-                  ts.toString
-                }`\nScope: ${
-                  scope.toString
-                }\nWasm Locals: ${
-                  ctx.getAllWasmLocals.toString
-                }",
+              s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nWasm Locals: ${ctx.getAllWasmLocals.toString}",
             ),
           )
-        local.get(LocalIdx(SymIdx(scope.findThis_!(ts))), RefType.anyref)
+        local.get(LocalIdx(SymIdx(scope.lookup_!(ts, ts.toLoc))), RefType.anyref)
       case l =>
         if ctx.containsLocal(l) then
           local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
@@ -476,13 +469,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 l.toLoc,
             ),
             extraInfo = S(
-              s"Block IR: `${
-                  l.toString
-                }`\nScope: ${
-                  scope.toString
-                }\nWasm Locals: ${
-                  ctx.getAllWasmLocals.toString
-                }",
+              s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nWasm Locals: ${ctx.getAllWasmLocals.toString}",
             ),
           )
   end getVar

@@ -85,7 +85,7 @@ object Instructions:
 
   /** Creates a `drop` instruction. */
   def drop(value: Expr): FoldedInstr = FoldedInstr(
-    mnemonic = "nop",
+    mnemonic = "drop",
     instrargs = Seq.empty,
     stackargs = Seq(value),
     resultType = N,
