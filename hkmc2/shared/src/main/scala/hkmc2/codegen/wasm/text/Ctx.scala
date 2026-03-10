@@ -215,6 +215,7 @@ object Ctx:
     private def prettyString: Str = ref match
       case idx: CtxIdx => s"type index `${idx.toWat.mkString()}`"
       case sym: Symbol => s"symbol `${sym.toString}`"
+end Ctx
 
 /**
  * Context for [[WatBuilder]].

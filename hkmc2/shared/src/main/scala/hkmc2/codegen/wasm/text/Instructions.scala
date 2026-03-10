@@ -48,6 +48,7 @@ object Instructions:
       stackargs = Seq(condition, thenInstr) ++ elseInstr.toSeq,
       resultTypes = resultTypes.map(_.valtype),
     )
+  end `if`
 
   /** Creates a `call` instruction. */
   def call(

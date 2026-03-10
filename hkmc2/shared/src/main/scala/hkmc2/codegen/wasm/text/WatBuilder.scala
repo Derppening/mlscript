@@ -151,6 +151,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       returnTypes = Seq(Result(RefType.anyref)),
     )
     ctx.addSingletonInitAction(global.set(globalIdx, ref.cast(ctorCall, globalTy)))
+  end registerSingletonInit
 
   /** Recursively declares supported top-level class types (needed for nested function codegen). */
   private def createDefnTypes(b: Block)(using Ctx): Unit = b match
@@ -175,6 +176,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             compType = StructType(fields = allFields, parents = Seq(baseObjectTypeIdx), isSubtype = true),
           ),
         )
+      end if
       createDefnTypes(rst)
     case Define(_, rst) =>
       createDefnTypes(rst)
@@ -269,6 +271,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         id = S(SymIdx(ExternIntrinsics.StringFromUtf16ImportName)),
         typeIdx = importTy,
       )
+  end getOrLoadStrCtorFunction
 
   /**
    * Gets (and caches) the Wasm GC array type used for tuples (`mut` selects mutability).
@@ -710,6 +713,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     ref.i31(i32.const(0))
             case N => ref.i31(i32.const(0))
         case _ => ()
+      end match
       val ctorClsSymOpt = cls match
         case ref: Value.Ref => ref.disamb
         case sel: Select => sel.symbol
@@ -822,6 +826,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       body = body,
     )
     ctx.addFunc(N, funcInfo)
+  end createIntrinsicFunc
 
   /**
    * Builds the body for an Int31 binary operator.
@@ -1065,6 +1070,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       ),
                       extraInfo = S(defn.showAsTree),
                     )
+                  end if
                 case clsLikeDefn: ClsLikeDefn =>
                   // Guard against unsupported features
                   def errUnimplExpr(cond: Str): Nothing = break(errExpr(
@@ -1183,6 +1189,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             children = Seq(res, rstBlk),
             resultTypes = resultClauses(rstBlk),
           )
+      end match
 
     case Return(res, true) =>
       val resWat = result(res)
@@ -1323,6 +1330,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 Ls(msg"WatBuilder::returningTerm for Match(...) with case `${cse.toString}` not implemented yet" -> N),
                 extraInfo = S(cse.toString),
               ))
+          end match
 
         val defaultExpr = dflt match
           case S(defaultBody) => returningTerm(defaultBody)
@@ -1470,6 +1478,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         ),
       )
       ctx.setStartFunc(initFn)
+    end if
 
     ctx.addFunc(S(entrySym), entryFnInfo)
 

@@ -84,6 +84,7 @@ object HeapType:
     def toWat: Document = doc"noextern"
   case object NoFunc extends ToWat:
     def toWat: Document = doc"nofunc"
+end HeapType
 type ValType = NumType | VecType | RefType
 
 /** A Wasm parameter clause. Appears in function signatures. */
