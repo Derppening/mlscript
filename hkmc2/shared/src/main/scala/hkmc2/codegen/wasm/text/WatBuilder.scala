@@ -956,12 +956,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case Assign(l, r, rst) if l is State.noSymbol =>
       val rExpr = result(r)
       val evalExpr = rExpr.resultType match
-        case S(_) => FoldedInstr(
-            mnemonic = "drop",
-            instrargs = Seq.empty,
-            stackargs = Seq(rExpr),
-            resultTypes = Seq.empty,
-          )
+        case S(_) => drop(rExpr)
         case N => rExpr
       val rstBlk = returningTerm(rst)
       Instructions.block(

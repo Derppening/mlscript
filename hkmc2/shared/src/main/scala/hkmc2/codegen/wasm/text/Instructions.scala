@@ -83,6 +83,14 @@ object Instructions:
     resultType = N,
   )
 
+  /** Creates a `drop` instruction. */
+  def drop(value: Expr): FoldedInstr = FoldedInstr(
+    mnemonic = "nop",
+    instrargs = Seq.empty,
+    stackargs = Seq(value),
+    resultType = N,
+  )
+
   /** Creates a `return` instruction with an optional return value. */
   def `return`(value: Opt[Expr]): FoldedInstr = FoldedInstr(
     mnemonic = "return",
