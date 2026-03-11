@@ -1186,9 +1186,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case Match(scrut, arms, dflt, rst) =>
       val matchLabelSym = TempSymbol(N, "match")
       val matchLabel = scope.allocateName(matchLabelSym)
-
+      
       def getScrutExpr: Expr = result(scrut)
-
+      
       // Compile each match arm
       boundary:
         val armExprs = arms.zipWithIndex.flatMap: (caseAndBody, armIdx) =>
@@ -1228,7 +1228,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   extraInfo = S(s"ClassLikeSymbol: ${cls.toString}"),
                 ))
               val clsTypeIdx = ctx.getType_!(clsBlkMemberSym, resolveSymIdx = true)
-
+              
               val expectedTag = clsTypeIdx match
                 case TypeIdx(NumIdx(idx)) => idx
                 case _ => break(errExpr(
@@ -1238,16 +1238,16 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
               val scrutExpr = getScrutExpr
               val isStructCompatible = ref.test(scrutExpr, baseObjectRefType(nullable = true))
-
+              
               val bodyExpr = returningTerm(body)
               val armLabelSym = TempSymbol(N, "arm")
               val armLabel = scope.allocateName(armLabelSym)
-
+              
               // Safe to cast and extract tag since ref.test passed
               val scrutAsObject = ref.cast(getScrutExpr, baseObjectRefType(nullable = false))
               val scrutTag = struct.get(FieldIdx(NumIdx(0)), scrutAsObject, I32Type)
               val tagMatches = i32.eq(scrutTag, i32.const(expectedTag))
-
+              
               S(`if`(
                 condition = isStructCompatible,
                 ifTrue = `if`(
@@ -1274,7 +1274,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 i32.ge_u(arrayLength, i32.const(len))
               else
                 i32.eq(arrayLength, i32.const(len))
-
+              
               val testExpr = i32.and(isArrayTest, lengthTest)
               val bodyExpr = returningTerm(body)
               val armLabelSym = TempSymbol(N, "arm")
@@ -1295,21 +1295,21 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 extraInfo = S(cse.toString),
               ))
           end match
-
+        
         val defaultExpr = dflt match
           case S(defaultBody) => returningTerm(defaultBody)
           case N => unreachable
 
         val rstExpr = returningTerm(rst)
         val matchResultTypes = Seq(Result(RefType.anyref))
-
+        
         // Generate the match block
         val matchBlock = blockInstr(
           label = S(matchLabel),
           children = armExprs :+ defaultExpr,
           resultTypes = matchResultTypes,
         )
-
+        
         // If rst is End (produces no value), the match block is the final result
         rst match
           case End(_) =>
