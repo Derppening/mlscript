@@ -1079,11 +1079,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         case head :: next => (next, head)
                         case Nil => (ctorAuxParams, Nil)
                     case Some(_) => (ctorAuxParams, ctorParams)
-
+                  
                   val tagValue = ctx.getType_!(clsLikeDefn.sym, resolveSymIdx = true) match
                     case TypeIdx(NumIdx(idx)) => idx
                     case _ => lastWords(s"Expected numeric type index for class ${clsLikeDefn.sym}")
-
+                  
                   val ctorCode = blockInstr(
                     label = N,
                     Seq(
@@ -1299,7 +1299,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         val defaultExpr = dflt match
           case S(defaultBody) => returningTerm(defaultBody)
           case N => unreachable
-
+        
         val rstExpr = returningTerm(rst)
         val matchResultTypes = Seq(Result(RefType.anyref))
         
