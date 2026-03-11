@@ -26,7 +26,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
   val fwat = NullaryCommand("fwat")
 
   private val baseScp: utils.Scope =
-    utils.Scope.empty(utils.Scope.Cfg.default)
+    utils.Scope.empty(utils.Scope.Cfg.default.copy(defaultName = ""))
 
   final lazy val wasmSuppFile: io.Path = predefFile.up / "Wasm.mjs"
   final lazy val wasmSuppNme = baseScp.allocateName(Elaborator.State.wasmSymbol)(using throw _)
@@ -78,7 +78,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
 
       if fwat.isSet then
         output("Formatted Wat (Folded):")
-        doc"JSON.stringify(wasm.binaryenFmtWat($modWatJsLit, true));"
+        doc"JSON.stringify($wasmSuppNme.binaryenFmtWat($modWatJsLit, true));"
           .stripBreaks
           .mkString(100)
           .replace('\n', ' ') |> host.execute match
@@ -89,7 +89,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
             return
       if swat.isSet then
         output("Formatted Wat (Stack):")
-        doc"JSON.stringify(wasm.binaryenFmtWat($modWatJsLit, false));"
+        doc"JSON.stringify($wasmSuppNme.binaryenFmtWat($modWatJsLit, false));"
           .stripBreaks
           .mkString(100)
           .replace('\n', ' ') |> host.execute match
@@ -150,7 +150,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
             # const mem = new WebAssembly.Memory({ initial: $systemMemMinPages });
             # const decodeUtf16 = new TextDecoder("utf-16le");
             # const importObj = $importObj;
-            # return wasm.binaryenPrintFuncRes(watSrc, importObj, exports => exports.${mainFnNme}());
+            # return $wasmSuppNme.binaryenPrintFuncRes(watSrc, importObj, exports => exports.${mainFnNme}());
             # })();
         """
           .stripBreaks
