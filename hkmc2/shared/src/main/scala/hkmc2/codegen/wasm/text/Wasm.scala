@@ -28,8 +28,8 @@ sealed abstract class Type extends ToWat:
 
   /** Attempts to convert this type to a [[[ValType]]]. */
   def asValType: Opt[ValType] = this match
-  case ty: ValType => S(ty)
-  case _ => N
+    case ty: ValType => S(ty)
+    case _ => N
 
   /** Same as [[[asValType]]], except throws an exception if this type is not a `ValType`. */
   def asValType_! : ValType = asValType.getOrElse:
@@ -240,9 +240,9 @@ case class FoldedInstr(
 
   /** Returns the result type of this instruction if this instruction only has 0-1 result values. */
   def resultType: Opt[Type] = resultTypes match
-  case Seq() => N
-  case ty :: Seq() => S(ty)
-  case _ => lastWords(s"resultType_! called on instruction with multi-value result type: $this")
+    case Seq() => N
+    case ty :: Seq() => S(ty)
+    case _ => lastWords(s"resultType_! called on instruction with multi-value result type: $this")
 
   /** Returns the singular result type of this instruction, otherwise throws an exception. */
   def resultType_! : Type = resultType.getOrElse:
@@ -251,8 +251,8 @@ case class FoldedInstr(
   def toWat: Document = doc"($mnemonic${
       instrargs.map: a =>
         a match
-        case a: ToWat => a.toWat
-        case a: Document => a
+          case a: ToWat => a.toWat
+          case a: Document => a
       .mkDocument(doc" ").surroundUnlessEmpty(doc" ")
     } #{ ${
       stackargs.map(_.toWat).mkDocument(doc" # ").surroundUnlessEmpty(doc" # ")

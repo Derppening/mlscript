@@ -34,10 +34,10 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
     host.execute(
       s"const $wasmSuppNme = (await import(\"${wasmSuppFile}\")).default;",
     ) match
-    case ReplHost.Result(msg) =>
-      if msg.startsWith(ReplHost.uncaughtErrorHead) then
-        output(s"Failed to load wasm support library: $msg")
-    case r => output(s"Failed to load wasm support library: $r")
+      case ReplHost.Result(msg) =>
+        if msg.startsWith(ReplHost.uncaughtErrorHead) then
+          output(s"Failed to load wasm support library: $msg")
+      case r => output(s"Failed to load wasm support library: $r")
     ()
 
   /** Prettifies a JSON-stringified Binaryen-formatted Wat. */
@@ -82,22 +82,22 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
           .stripBreaks
           .mkString(100)
           .replace('\n', ' ') |> host.execute match
-        case ReplHost.Result(content) =>
-          output(prettifyBinaryenWat(content))
-        case err =>
-          output(s"Error: $err")
-          return
+          case ReplHost.Result(content) =>
+            output(prettifyBinaryenWat(content))
+          case err =>
+            output(s"Error: $err")
+            return
       if swat.isSet then
         output("Formatted Wat (Stack):")
         doc"JSON.stringify(wasm.binaryenFmtWat($modWatJsLit, false));"
           .stripBreaks
           .mkString(100)
           .replace('\n', ' ') |> host.execute match
-        case ReplHost.Result(content) =>
-          output(prettifyBinaryenWat(content))
-        case err =>
-          output(s"Error: $err")
-          return
+          case ReplHost.Result(content) =>
+            output(prettifyBinaryenWat(content))
+          case err =>
+            output(s"Error: $err")
+            return
 
       def mkQuery(preStr: Str, jsStr: Str)(k: Str => Unit) =
         val queryStr = jsStr.replaceAll("\n", " ")
@@ -107,26 +107,26 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
           !expectRuntimeOrCodeGenErrors && fixme.isUnset && todo.isUnset,
         )
         reply match
-        case ReplHost.Result(content) => k(content)
-        case ReplHost.Empty =>
-        case ReplHost.Unexecuted(message) => ???
-        case ReplHost.Error(isSyntaxError, message, otherOutputs) =>
-          if otherOutputs.nonEmpty then
-            otherOutputs.splitSane('\n').foreach: line =>
-              output(s"> ${line}")
-          if isSyntaxError then
-            // If there is a syntax error in the generated code,
-            // it should be a code generation error.
-            raise(ErrorReport(
-              msg"[Uncaught SyntaxError] ${message}" -> N :: Nil,
-              source = Diagnostic.Source.Compilation,
-            ))
-          else
-            // Otherwise, it is considered a simple runtime error.
-            raise(ErrorReport(
-              msg"${message}" -> N :: Nil,
-              source = Diagnostic.Source.Runtime,
-            ))
+          case ReplHost.Result(content) => k(content)
+          case ReplHost.Empty =>
+          case ReplHost.Unexecuted(message) => ???
+          case ReplHost.Error(isSyntaxError, message, otherOutputs) =>
+            if otherOutputs.nonEmpty then
+              otherOutputs.splitSane('\n').foreach: line =>
+                output(s"> ${line}")
+            if isSyntaxError then
+              // If there is a syntax error in the generated code,
+              // it should be a code generation error.
+              raise(ErrorReport(
+                msg"[Uncaught SyntaxError] ${message}" -> N :: Nil,
+                source = Diagnostic.Source.Compilation,
+              ))
+            else
+              // Otherwise, it is considered a simple runtime error.
+              raise(ErrorReport(
+                msg"${message}" -> N :: Nil,
+                source = Diagnostic.Source.Runtime,
+              ))
         end match
         if stderr.nonEmpty then output(s"// Standard Error:\n${stderr}")
       end mkQuery
@@ -159,8 +159,8 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
       mkQuery("", jsStr): out =>
         // Omit the last line which is always "undefined" or the unit.
         val result = out.lastIndexOf('\n') match
-        case n if n >= 0 => out.substring(0, n)
-        case _ => ""
+          case n if n >= 0 => out.substring(0, n)
+          case _ => ""
         output(s"= $result")
     end if
   end processTerm

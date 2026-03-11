@@ -147,8 +147,8 @@ object Instructions:
       stackargs = Seq(lhs, rhs),
       resultType = S(
         (lhs.resultType, rhs.resultType) match
-        case (UnreachableType, _) | (_, UnreachableType) => UnreachableType
-        case _ => I32Type,
+          case (UnreachableType, _) | (_, UnreachableType) => UnreachableType
+          case _ => I32Type,
       ),
     )
 
