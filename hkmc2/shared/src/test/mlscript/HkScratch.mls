@@ -1,12 +1,956 @@
 :js
-// :de
-// :sjs
-// :pt
-// :elt
+//:de
+//:sjs
+//:pt
+//:elt
+//:wasm
+//:wat
+//:fwat
+//:swat
+//:rwasm
+//:showRepl
 
 :global
 // :d
 // :todo
 
 
+// Testing for binaryen
+:silent
+import "binaryen"
+
+
+:silent
+:re
+"Binaryen Type Mapping:" |> print
+("    binaryen.none: " + binaryen.none) |> print
+("    binaryen.unreachable: " + binaryen.unreachable) |> print
+("    binaryen.i32: " + binaryen.i32) |> print
+("    binaryen.i64: " + binaryen.i64) |> print
+("    binaryen.i31ref: " + binaryen.i31ref) |> print
+("    binaryen.stringref: " + binaryen.stringref) |> print
+"Binaryen Packed Type Mapping:" |> print
+("    binaryen.notPacked: " + binaryen.notPacked) |> print
+("    binaryen.i8: " + binaryen.i8) |> print
+("    binaryen.i16: " + binaryen.i16) |> print
+"" |> print
+let mod = new! binaryen.Module()
+mod.setFeatures(binaryen.Features.All)
+//val instr = mod.ref.cast(mod.local.get(0, binaryen.anyref), binaryen.i31ref)
+//val instrType = binaryen.getExpressionType(instr)
+//mod.addFunction(
+//    "foo",
+//    binaryen.createType([binaryen.anyref]),
+//    binaryen.i31ref,
+//    [],
+//    instr,
+//)
+// !! Stringref !!
+//mod.addGlobal("str", binaryen.stringref, 0, mod.string.const("hello world"))
+// !! TypeBuilder - SignatureType !!
+//let funcTb = new binaryen.TypeBuilder(1)
+//funcTb.setSignatureType(0, binaryen.anyref, binaryen.i31ref)
+//let sigTy = funcTb.buildAndDispose()
+//let refFuncInstr = mod.ref.func("foo", sigTy[0])
+//mod.addGlobal("foo", sigTy[0], 0, refFuncInstr)
+//let refFuncInstrTy = binaryen.getExpressionType(refFuncInstr)
+//mod.addGlobal("foo_expr", refFuncInstrTy, 0, refFuncInstr)
+// !! TypeBuilder - StructType !!
+//let structTb = new! binaryen.TypeBuilder(1)
+//structTb.setStructType(
+//    0, 
+//    [
+//        { 
+//            "type": binaryen.i31ref,
+//            "packedType": binaryen.notPacked,
+//            "mutable": true,
+//        },
+//        { 
+//            "type": binaryen.i32,
+//            "packedType": binaryen.notPacked,
+//            "mutable": false,
+//        },
+//    ]
+//)
+//let structTy = structTb.buildAndDispose()
+//val structNewInstr = mod.struct.new([mod.ref.i31(mod.i32.const(0)), mod.i32.const(1)], structTy)
+//mod.addGlobal("foo", structTy[0], 0, structNewInstr)
+mod.emitText() |> print
+assert mod.validate()
+//mod.emitStackIR() |> print
+//│ > Binaryen Type Mapping:
+//│ >     binaryen.none: 0
+//│ >     binaryen.unreachable: 1
+//│ >     binaryen.i32: 2
+//│ >     binaryen.i64: 3
+//│ >     binaryen.i31ref: 50
+//│ >     binaryen.stringref: 82
+//│ > Binaryen Packed Type Mapping:
+//│ >     binaryen.notPacked: 0
+//│ >     binaryen.i8: 1
+//│ >     binaryen.i16: 2
+//│ > 
+//│ > (module
+//│ > )
+//│ ═══[RUNTIME ERROR] Error: Assertion failed (HkScratch.mls:80)
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:wasm
+:wat
+(42 as Int31)
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Return:
+//│     res = Lit of IntLit of 42
+//│     implct = true
+//│ = 42
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 1) (result (ref null any))
+//│     (ref.i31
+//│       (i32.const 42)))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 42
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:wasm
+:wat
+:todo
+fun foo() = 42
+foo() + foo()
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Scoped(syms = {member:foo, tmp:tmp, tmp:tmp}): 
+//│     body = Define:
+//│       defn = FunDefn:
+//│         owner = N
+//│         sym = member:foo
+//│         dSym = term:foo
+//│         params = Ls of 
+//│           ParamList:
+//│             flags = ()
+//│             params = Nil
+//│             restParam = N
+//│         body = Return:
+//│           res = Lit of IntLit of 42
+//│           implct = false
+//│       rest = Assign: \
+//│       lhs = tmp:tmp
+//│       rhs = Call:
+//│         fun = Ref{disamb=term:foo}:
+//│           l = member:foo
+//│           disamb = S of term:foo
+//│         args = Nil
+//│       rest = Assign: \
+//│       lhs = tmp:tmp
+//│       rhs = Call:
+//│         fun = Ref{disamb=term:foo}:
+//│           l = member:foo
+//│           disamb = S of term:foo
+//│         args = Nil
+//│       rest = Return: \
+//│       res = Call:
+//│         fun = Select:
+//│           qual = Ref:
+//│             l = tmp:wasm
+//│             disamb = N
+//│           name = Ident of "plus_impl"
+//│         args = Ls of 
+//│           Arg:
+//│             spread = N
+//│             value = Ref:
+//│               l = tmp:tmp
+//│               disamb = N
+//│           Arg:
+//│             spread = N
+//│             value = Ref:
+//│               l = tmp:tmp
+//│               disamb = N
+//│       implct = true
+//│ ═══[COMPILATION ERROR] No definition found in scope for member 'wasm'
+//│ ═══[RUNTIME ERROR] TypeError: wasm.plus_impl is not a function
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type (func (result (ref null any))))
+//│   (type (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $foo (type 1) (result (ref null any))
+//│     (return
+//│       (ref.i31
+//│         (i32.const 42))))
+//│   (export "foo" (func $foo))
+//│   (elem declare func $foo)
+//│   (func  (type 2) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
+//│     (if (result (ref null any))
+//│       (i32.and
+//│         (ref.test (ref null i31)
+//│           (local.get $lhs))
+//│         (ref.test (ref null i31)
+//│           (local.get $rhs)))
+//│       (then
+//│         (ref.i31
+//│           (i32.add
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $lhs)))
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $rhs))))))
+//│       (else
+//│         (unreachable))))
+//│   (func $entry (type 3) (result (ref null any))
+//│     (local $foo (ref null any))
+//│     (local $tmp (ref null any))
+//│     (local $tmp1 (ref null any))
+//│     (block (result (ref null any))
+//│       (nop)
+//│       (block (result (ref null any))
+//│         (local.set $tmp
+//│           (call_ref 1
+//│             (ref.func $foo)))
+//│         (block (result (ref null any))
+//│           (local.set $tmp1
+//│             (call_ref 1
+//│               (ref.func $foo)))
+//│           (call 1
+//│             (local.get $tmp)
+//│             (local.get $tmp1))))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 84
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:wasm
+:wat
+:todo
+if true then 2 else 3
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Scoped(syms = {tmp:scrut}): 
+//│     body = Assign:
+//│       lhs = tmp:scrut
+//│       rhs = Lit of BoolLit of true
+//│       rest = Match: \
+//│       scrut = Ref:
+//│         l = tmp:scrut
+//│         disamb = N
+//│       arms = Ls of 
+//│         Tuple2:
+//│           _1 = Lit of BoolLit of true
+//│           _2 = Return:
+//│             res = Lit of IntLit of 2
+//│             implct = true
+//│       dflt = S of Return:
+//│         res = Lit of IntLit of 3
+//│         implct = true
+//│       rest = End of ""
+//│ = 2
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type (func (result (ref null any))))
+//│   (func $entry (type 1) (result (ref null any))
+//│     (local $scrut (ref null any))
+//│     (block (result (ref null any))
+//│       (local.set $scrut
+//│         (ref.i31
+//│           (i32.const 1)))
+//│       (block $match (result (ref null any))
+//│         (if
+//│           (i32.eq
+//│             (i31.get_s
+//│               (ref.cast (ref null i31)
+//│                 (local.get $scrut)))
+//│             (i32.const 1))
+//│           (then
+//│             (block $arm
+//│               (ref.i31
+//│                 (i32.const 2))
+//│               (br $match))))
+//│         (ref.i31
+//│           (i32.const 3)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 2
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:wasm
+:wat
+:todo
+fun bar(x) = x
+let foo = 1
+bar(foo)
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Scoped(syms = {member:bar, foo}): 
+//│     body = Define:
+//│       defn = FunDefn:
+//│         owner = N
+//│         sym = member:bar
+//│         dSym = term:bar
+//│         params = Ls of 
+//│           ParamList:
+//│             flags = ()
+//│             params = Ls of 
+//│               Param:
+//│                 flags = ()
+//│                 sym = x
+//│                 sign = N
+//│                 modulefulness = Modulefulness of N
+//│             restParam = N
+//│         body = Return:
+//│           res = Ref:
+//│             l = x
+//│             disamb = N
+//│           implct = false
+//│       rest = Assign: \
+//│       lhs = foo
+//│       rhs = Lit of IntLit of 1
+//│       rest = Return: \
+//│       res = Call:
+//│         fun = Ref{disamb=term:bar}:
+//│           l = member:bar
+//│           disamb = S of term:bar
+//│         args = Ls of 
+//│           Arg:
+//│             spread = N
+//│             value = Ref:
+//│               l = foo
+//│               disamb = N
+//│       implct = true
+//│ = 1
+//│ foo = 1
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type (func (param $x (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $bar (type 1) (param $x (ref null any)) (result (ref null any))
+//│     (return
+//│       (local.get $x)))
+//│   (export "bar" (func $bar))
+//│   (elem declare func $bar)
+//│   (func $entry (type 2) (result (ref null any))
+//│     (local $bar (ref null any))
+//│     (local $foo (ref null any))
+//│     (block (result (ref null any))
+//│       (nop)
+//│       (block (result (ref null any))
+//│         (local.set $foo
+//│           (ref.i31
+//│             (i32.const 1)))
+//│         (call_ref 1
+//│           (local.get $foo)
+//│           (ref.func $bar)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 1
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:wasm
+:wat
+:todo
+if 1 is Int then 2 else 3
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Scoped(syms = {tmp:scrut}): 
+//│     body = Assign:
+//│       lhs = tmp:scrut
+//│       rhs = Lit of IntLit of 1
+//│       rest = Match: \
+//│       scrut = Ref:
+//│         l = tmp:scrut
+//│         disamb = N
+//│       arms = Ls of 
+//│         Tuple2:
+//│           _1 = Cls:
+//│             cls = class:Int
+//│             path = Select{sym=term:unreachable}:
+//│               qual = Ref:
+//│                 l = tmp:runtime
+//│                 disamb = N
+//│               name = Ident of "unreachable"
+//│           _2 = Return:
+//│             res = Lit of IntLit of 2
+//│             implct = true
+//│       dflt = S of Return:
+//│         res = Lit of IntLit of 3
+//│         implct = true
+//│       rest = End of ""
+//│ = 2
+//│ /!!!\ Uncaught error: java.lang.Exception: Internal Error: Missing type definition for symbol `member:Int`
+
+
+:dr
+:rt
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:wasm
+:wat
+:todo
+// wasm.test()
+wasm.plus_impl(1, 2)
+//│ Traversing block: Blk(List(),App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))))
+//│ | Traversing term: App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))) (expect = Any)
+//│ | | Resolving resolvable term: App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))), (prefer = Any, inAppPrefix = false, inCtxPrefix = false, inTyPrefix = false)
+//│ | | | Resolving resolvable term: Sel(Ref(member:wasm‹256›),Ident(plus_impl)), (prefer = Any, inAppPrefix = true, inCtxPrefix = false, inTyPrefix = false)
+//│ | | | | Resolving resolvable term: Ref(member:wasm‹256›), (prefer = Selectable, inAppPrefix = false, inCtxPrefix = false, inTyPrefix = false)
+//│ | | | | | Resolving symbol for term: Ref(member:wasm‹256›) (prefer = Selectable)
+//│ | | | | | | Resolving symbol for reference Ref(member:wasm‹256›) (bsym = member:wasm‹256›)
+//│ | | | | | | Resolving the type for term: Resolved(Ref(member:wasm‹256›),module:wasm‹664›) (prefer = Selectable, sym = Some(module:wasm‹664›))
+//│ | | | | | | | Declaration: Some(ModuleOrObjectDef(None,module:wasm‹664›,member:wasm‹256›,List(),None,List(),None,Mod,{ fun member:plus_impl‹204›; fun member:minus_impl‹195›; fun member:times_impl‹207›; fun member:div_impl‹206›; fun member:mod_impl‹205›; fun member:eq_impl‹208›; fun member:neq_impl‹196›; fun member:lt_impl‹202›; fun member:le_impl‹203›; fun member:gt_impl‹198›; fun member:ge_impl‹200›; fun member:neg_impl‹201›; fun member:pos_impl‹197›; fun member:not_impl‹199›; },None,List(Modifier(keyword 'declare'))))
+//│ | | | | | | -> typ = Some(Ref(module:wasm‹664›,List()))
+//│ | | | | | | Resolved symbol for Ref(member:wasm‹256›): Some(module:wasm‹664›)
+//│ | | | | | -> (sym = Some(module:wasm‹664›), typ = Some(Ref(module:wasm‹664›,List())))
+//│ | | | | | Resolving the type for term: Resolved(Ref(member:wasm‹256›),module:wasm‹664›) (prefer = Selectable, sym = Some(module:wasm‹664›))
+//│ | | | | | | Declaration: Some(ModuleOrObjectDef(None,module:wasm‹664›,member:wasm‹256›,List(),None,List(),None,Mod,{ fun member:plus_impl‹204›; fun member:minus_impl‹195›; fun member:times_impl‹207›; fun member:div_impl‹206›; fun member:mod_impl‹205›; fun member:eq_impl‹208›; fun member:neq_impl‹196›; fun member:lt_impl‹202›; fun member:le_impl‹203›; fun member:gt_impl‹198›; fun member:ge_impl‹200›; fun member:neg_impl‹201›; fun member:pos_impl‹197›; fun member:not_impl‹199›; },None,List(Modifier(keyword 'declare'))))
+//│ | | | | | -> typ = Some(Ref(module:wasm‹664›,List()))
+//│ | | | | | Resolving resolvable term Resolved(Ref(member:wasm‹256›),module:wasm‹664›) with sym = Some(module:wasm‹664›), typ = Some(Ref(module:wasm‹664›,List()))
+//│ | | | | ~> Resolved(Ref(member:wasm‹256›),module:wasm‹664›) (sym = Some(module:wasm‹664›), typ = Some(Ref(module:wasm‹664›,List())))
+//│ | | | | Resolving symbol for term: Sel(Ref(member:wasm‹256›),Ident(plus_impl)) (prefer = Any)
+//│ | | | | | Resolving symbol for selection Sel(Ref(member:wasm‹256›),Ident(plus_impl)), defn = Some(ModuleOrObjectDef(None,module:wasm‹664›,member:wasm‹256›,List(),None,List(),None,Mod,{ fun member:plus_impl‹204›; fun member:minus_impl‹195›; fun member:times_impl‹207›; fun member:div_impl‹206›; fun member:mod_impl‹205›; fun member:eq_impl‹208›; fun member:neq_impl‹196›; fun member:lt_impl‹202›; fun member:le_impl‹203›; fun member:gt_impl‹198›; fun member:ge_impl‹200›; fun member:neg_impl‹201›; fun member:pos_impl‹197›; fun member:not_impl‹199›; },None,List(Modifier(keyword 'declare'))))
+//│ | | | | | Resolving symbol for Sel(Ref(member:wasm‹256›),Ident(plus_impl)), defn = Some(ModuleOrObjectDef(None,module:wasm‹664›,member:wasm‹256›,List(),None,List(),None,Mod,{ fun member:plus_impl‹204›; fun member:minus_impl‹195›; fun member:times_impl‹207›; fun member:div_impl‹206›; fun member:mod_impl‹205›; fun member:eq_impl‹208›; fun member:neq_impl‹196›; fun member:lt_impl‹202›; fun member:le_impl‹203›; fun member:gt_impl‹198›; fun member:ge_impl‹200›; fun member:neg_impl‹201›; fun member:pos_impl‹197›; fun member:not_impl‹199›; },None,List(Modifier(keyword 'declare'))))
+//│ | | | | | Resolved symbol for Sel(Ref(member:wasm‹256›),Ident(plus_impl)): member:plus_impl‹204›
+//│ | | | | | Resolving symbol for Sel(Ref(member:wasm‹256›),Ident(plus_impl)), defn = Some(ModuleOrObjectDef(None,module:wasm‹664›,member:wasm‹256›,List(),None,List(),None,Mod,{ fun member:plus_impl‹204›; fun member:minus_impl‹195›; fun member:times_impl‹207›; fun member:div_impl‹206›; fun member:mod_impl‹205›; fun member:eq_impl‹208›; fun member:neq_impl‹196›; fun member:lt_impl‹202›; fun member:le_impl‹203›; fun member:gt_impl‹198›; fun member:ge_impl‹200›; fun member:neg_impl‹201›; fun member:pos_impl‹197›; fun member:not_impl‹199›; },None,List(Modifier(keyword 'declare'))))
+//│ | | | | | Resolved symbol for Sel(Ref(member:wasm‹256›),Ident(plus_impl)): member:plus_impl‹204›
+//│ | | | | -> (sym = Some(term:wasm⁰.plus_impl‹667›), typ = None)
+//│ | | | | Resolving the type for term: Resolved(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),term:wasm⁰.plus_impl‹667›) (prefer = Any, sym = Some(term:wasm⁰.plus_impl‹667›))
+//│ | | | | | Declaration: Some(TermDefinition(Fun,member:plus_impl‹204›,term:wasm⁰.plus_impl‹667›,List(),None,None,None,‹›,Modulefulness(None),List(),None))
+//│ | | | | -> typ = None
+//│ | | | | Resolving resolvable term Resolved(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),term:wasm⁰.plus_impl‹667›) with sym = Some(term:wasm⁰.plus_impl‹667›), typ = None
+//│ | | | ~> Resolved(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),term:wasm⁰.plus_impl‹667›) (sym = Some(term:wasm⁰.plus_impl‹667›), typ = None)
+//│ | | | Resolving symbol for term: App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))) (prefer = Any)
+//│ | | | -> (sym = None, typ = None)
+//│ | | | Resolving the type for term: App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))) (prefer = Any, sym = None)
+//│ | | | | Declaration: Some(TermDefinition(Fun,member:plus_impl‹204›,term:wasm⁰.plus_impl‹667›,List(),None,None,None,‹›,Modulefulness(None),List(),None))
+//│ | | | -> typ = None
+//│ | | | Resolving resolvable term App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))) with sym = None, typ = None
+//│ | | | Traversing term: Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None))) (expect = NonModule)
+//│ | | | | Traversing term: Lit(IntLit(1)) (expect = NonModule)
+//│ | | | | | Checking Lit(IntLit(1)): expect NonModule, evalsToModule = false, evalsToStaticClass = false
+//│ | | | | Traversing term: Lit(IntLit(2)) (expect = NonModule)
+//│ | | | | | Checking Lit(IntLit(2)): expect NonModule, evalsToModule = false, evalsToStaticClass = false
+//│ | | | | Checking Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None))): expect NonModule, evalsToModule = false, evalsToStaticClass = false
+//│ | | ~> App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))) (sym = None, typ = None)
+//│ | | Checking App(Sel(Ref(member:wasm‹256›),Ident(plus_impl)),Tup(List(Fld(‹›,Lit(IntLit(1)),None), Fld(‹›,Lit(IntLit(2)),None)))): expect Any, evalsToModule = false, evalsToStaticClass = false
+//│ Resolved tree:
+//│ Blk:
+//│   stats = Nil
+//│   res = Unexpanded of App:
+//│     lhs = Resolved{sym=term:wasm⁰.plus_impl‹667›}:
+//│       t = Unexpanded of Sel{sym=member:plus_impl‹204›}:
+//│         prefix = Resolved{sym=module:wasm‹664›,typ=module:wasm‹664›}:
+//│           t = Unexpanded of Ref{sym=member:wasm‹256›} of member:wasm‹256›
+//│           sym = module:wasm‹664›
+//│         nme = Ident of "plus_impl"
+//│       sym = term:wasm⁰.plus_impl‹667›
+//│     rhs = Tup of Ls of 
+//│       Fld:
+//│         flags = ()
+//│         term = Lit of IntLit of 1
+//│         asc = N
+//│       Fld:
+//│         flags = ()
+//│         term = Lit of IntLit of 2
+//│         asc = N
+//│ ╔══[COMPILATION ERROR] Module 'wasm' is virtual (i.e., "compiler fiction"); cannot be used directly
+//│ ║  l.420: 	wasm.plus_impl(1, 2)
+//│ ╙──       	^^^^
+//│ ═══[RUNTIME ERROR] This code cannot be run as its compilation yielded an error.
+//│ ╔══[COMPILATION ERROR] Module 'wasm' is virtual (i.e., "compiler fiction"); cannot be used directly
+//│ ║  l.420: 	wasm.plus_impl(1, 2)
+//│ ╙──       	^^^^
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type (func (param (ref null any)) (param (ref null any)) (result (ref null any))))
+//│   (type (func (param (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (import "system" "mem" (memory 1))
+//│   (import "system" "mlx_str_from_utf16" (func $mlx_str_from_utf16 (type 1)))
+//│   (data (i32.const 0) "\54\00\68\00\69\00\73\00\20\00\63\00\6f\00\64\00\65\00\20\00\63\00\61\00\6e\00\6e\00\6f\00\74\00\20\00\62\00\65\00\20\00\72\00\75\00\6e\00\20\00\61\00\73\00\20\00\69\00\74\00\73\00\20\00\63\00\6f\00\6d\00\70\00\69\00\6c\00\61\00\74\00\69\00\6f\00\6e\00\20\00\79\00\69\00\65\00\6c\00\64\00\65\00\64\00\20\00\61\00\6e\00\20\00\65\00\72\00\72\00\6f\00\72\00\2e\00")
+//│   (tag $mlx_exn (type 2))
+//│   (export "mlx_exn" (tag $mlx_exn))
+//│   (func $entry (type 3) (result (ref null any))
+//│     (throw $mlx_exn
+//│       (call $mlx_str_from_utf16
+//│         (ref.i31
+//│           (i32.const 0))
+//│         (ref.i31
+//│           (i32.const 120)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:sjs
+:wasm
+:wat
+:fwat
+:todo
+class Foo(val x)
+new Foo(0)
+//│ JS (unsanitized):
+//│ let Foo1;
+//│ Foo1 = function Foo(x) {
+//│   return globalThis.Object.freeze(new Foo.class(x));
+//│ };
+//│ (class Foo {
+//│   static {
+//│     Foo1.class = this
+//│   }
+//│   constructor(x) {
+//│     this.x = x;
+//│   }
+//│   toString() { return runtime.render(this); }
+//│   static [definitionMetadata] = ["class", "Foo", ["x"]]; 
+//│ });
+//│ globalThis.Object.freeze(new Foo1.class(0))
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Scoped(syms = {member:Foo}): 
+//│     body = Define:
+//│       defn = ClsLikeDefn:
+//│         owner = N
+//│         isym = class:Foo
+//│         sym = member:Foo
+//│         ctorSym = S of term:Foo⁰.Foo
+//│         k = Cls
+//│         paramsOpt = S of ParamList:
+//│           flags = ()
+//│           params = Ls of 
+//│             Param:
+//│               flags = (val)
+//│               sym = x
+//│               sign = N
+//│               modulefulness = Modulefulness of N
+//│           restParam = N
+//│         auxParams = Nil
+//│         parentPath = N
+//│         methods = Nil
+//│         privateFields = Nil
+//│         publicFields = Ls of 
+//│           Tuple2:
+//│             _1 = member:x
+//│             _2 = term:Foo⁰.x
+//│         preCtor = End of ""
+//│         ctor = Define:
+//│           defn = ValDefn:
+//│             tsym = term:Foo⁰.x
+//│             sym = member:x
+//│             rhs = Ref:
+//│               l = x
+//│               disamb = N
+//│           rest = End of ""
+//│         companion = N
+//│         bufferable = N
+//│       rest = Return: \
+//│       res = Instantiate:
+//│         mut = false
+//│         cls = Ref{disamb=class:Foo}:
+//│           l = member:Foo
+//│           disamb = S of class:Foo
+//│         args = Ls of 
+//│           Arg:
+//│             spread = N
+//│             value = Lit of IntLit of 0
+//│       implct = true
+//│ = Foo(0)
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $x (mut (ref null any))))))
+//│   (type (func (param $x (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $Foo (type 2) (param $x (ref null any)) (result (ref null any))
+//│     (local $this (ref null any))
+//│     (block (result (ref null any))
+//│       (local.set $this
+//│         (struct.new_default $Foo))
+//│       (struct.set $Foo $$tag
+//│         (ref.cast (ref $Foo)
+//│           (local.get $this))
+//│         (i32.const 1))
+//│       (block
+//│         (struct.set $Foo $x
+//│           (ref.cast (ref $Foo)
+//│             (local.get $this))
+//│           (local.get $x))
+//│         (nop))
+//│       (return
+//│         (local.get $this))))
+//│   (export "Foo" (func $Foo))
+//│   (elem declare func $Foo)
+//│   (func $entry (type 3) (result (ref null any))
+//│     (local $Foo (ref null any))
+//│     (block (result (ref null any))
+//│       (nop)
+//│       (call $Foo
+//│         (ref.i31
+//│           (i32.const 0)))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Formatted Wat (Folded):
+//│ (module
+//│  (type $Object (sub (struct (field $$tag (mut i32)))))
+//│  (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $x (mut anyref)))))
+//│  (type $2 (func (param anyref) (result anyref)))
+//│  (type $3 (func (result anyref)))
+//│  (export "Foo" (func $Foo))
+//│  (export "entry" (func $entry))
+//│  (func $Foo (type $2) (param $x anyref) (result anyref)
+//│   (local $this anyref)
+//│   (local.set $this
+//│    (struct.new_default $Foo)
+//│   )
+//│   (struct.set $Foo $$tag
+//│    (ref.cast (ref $Foo)
+//│     (local.get $this)
+//│    )
+//│    (i32.const 1)
+//│   )
+//│   (block
+//│    (struct.set $Foo $x
+//│     (ref.cast (ref $Foo)
+//│      (local.get $this)
+//│     )
+//│     (local.get $x)
+//│    )
+//│    (nop)
+//│   )
+//│   (return
+//│    (local.get $this)
+//│   )
+//│  )
+//│  (func $entry (type $3) (result anyref)
+//│   (local $Foo anyref)
+//│   (nop)
+//│   (call $Foo
+//│    (ref.i31
+//│     (i32.const 0)
+//│    )
+//│   )
+//│  )
+//│ )
+//│ 
+//│ Wasm result:
+//│ = {}
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:sjs
+:wasm
+:wat
+:todo
+class Foo(val a)
+(new Foo(42)).Foo#a
+//│ JS (unsanitized):
+//│ let Foo3, tmp12;
+//│ Foo3 = function Foo(a) {
+//│   return globalThis.Object.freeze(new Foo.class(a));
+//│ };
+//│ (class Foo2 {
+//│   static {
+//│     Foo3.class = this
+//│   }
+//│   constructor(a) {
+//│     this.a = a;
+//│   }
+//│   toString() { return runtime.render(this); }
+//│   static [definitionMetadata] = ["class", "Foo", ["a"]]; 
+//│ });
+//│ tmp12 = globalThis.Object.freeze(new Foo3.class(42));
+//│ tmp12.a
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Scoped(syms = {member:Foo, tmp:tmp}): 
+//│     body = Define:
+//│       defn = ClsLikeDefn:
+//│         owner = N
+//│         isym = class:Foo
+//│         sym = member:Foo
+//│         ctorSym = S of term:Foo¹.Foo
+//│         k = Cls
+//│         paramsOpt = S of ParamList:
+//│           flags = ()
+//│           params = Ls of 
+//│             Param:
+//│               flags = (val)
+//│               sym = a
+//│               sign = N
+//│               modulefulness = Modulefulness of N
+//│           restParam = N
+//│         auxParams = Nil
+//│         parentPath = N
+//│         methods = Nil
+//│         privateFields = Nil
+//│         publicFields = Ls of 
+//│           Tuple2:
+//│             _1 = member:a
+//│             _2 = term:Foo¹.a
+//│         preCtor = End of ""
+//│         ctor = Define:
+//│           defn = ValDefn:
+//│             tsym = term:Foo¹.a
+//│             sym = member:a
+//│             rhs = Ref:
+//│               l = a
+//│               disamb = N
+//│           rest = End of ""
+//│         companion = N
+//│         bufferable = N
+//│       rest = Assign: \
+//│       lhs = tmp:tmp
+//│       rhs = Instantiate:
+//│         mut = false
+//│         cls = Ref{disamb=class:Foo}:
+//│           l = member:Foo
+//│           disamb = S of class:Foo
+//│         args = Ls of 
+//│           Arg:
+//│             spread = N
+//│             value = Lit of IntLit of 42
+//│       rest = Return: \
+//│       res = Select{sym=term:Foo¹.a}:
+//│         qual = Ref:
+//│           l = tmp:tmp
+//│           disamb = N
+//│         name = Ident of "a"
+//│       implct = true
+//│ = 42
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $a (mut (ref null any))))))
+//│   (type (func (param $a (ref null any)) (result (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (func $Foo (type 2) (param $a (ref null any)) (result (ref null any))
+//│     (local $this (ref null any))
+//│     (block (result (ref null any))
+//│       (local.set $this
+//│         (struct.new_default $Foo))
+//│       (struct.set $Foo $$tag
+//│         (ref.cast (ref $Foo)
+//│           (local.get $this))
+//│         (i32.const 1))
+//│       (block
+//│         (struct.set $Foo $a
+//│           (ref.cast (ref $Foo)
+//│             (local.get $this))
+//│           (local.get $a))
+//│         (nop))
+//│       (return
+//│         (local.get $this))))
+//│   (export "Foo" (func $Foo))
+//│   (elem declare func $Foo)
+//│   (func $entry (type 3) (result (ref null any))
+//│     (local $Foo (ref null any))
+//│     (local $tmp (ref null any))
+//│     (block (result (ref null any))
+//│       (nop)
+//│       (block (result (ref null any))
+//│         (local.set $tmp
+//│           (call $Foo
+//│             (ref.i31
+//│               (i32.const 42))))
+//│         (struct.get $Foo $a
+//│           (ref.cast (ref $Foo)
+//│             (local.get $tmp))))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+//│ Wasm result:
+//│ = 42
+
+
+:lot
+:slot
+//│ Option ':slot' is deprecated, use ':sir' instead.
+:wasm
+:wat
+:todo
+class Foo(val x)
+case Foo(a) then a
+//│ Lowered IR:
+//│ Program:
+//│   imports = Nil
+//│   main = Scoped(syms = {member:Foo, member:lambda}): 
+//│     body = Define:
+//│       defn = ClsLikeDefn:
+//│         owner = N
+//│         isym = class:Foo
+//│         sym = member:Foo
+//│         ctorSym = S of term:Foo².Foo
+//│         k = Cls
+//│         paramsOpt = S of ParamList:
+//│           flags = ()
+//│           params = Ls of 
+//│             Param:
+//│               flags = (val)
+//│               sym = x
+//│               sign = N
+//│               modulefulness = Modulefulness of N
+//│           restParam = N
+//│         auxParams = Nil
+//│         parentPath = N
+//│         methods = Nil
+//│         privateFields = Nil
+//│         publicFields = Ls of 
+//│           Tuple2:
+//│             _1 = member:x
+//│             _2 = term:Foo².x
+//│         preCtor = End of ""
+//│         ctor = Define:
+//│           defn = ValDefn:
+//│             tsym = term:Foo².x
+//│             sym = member:x
+//│             rhs = Ref:
+//│               l = x
+//│               disamb = N
+//│           rest = End of ""
+//│         companion = N
+//│         bufferable = N
+//│       rest = Define: \
+//│       defn = FunDefn:
+//│         owner = N
+//│         sym = member:lambda
+//│         dSym = term:lambda
+//│         params = Ls of 
+//│           ParamList:
+//│             flags = ()
+//│             params = Ls of 
+//│               Param:
+//│                 flags = ()
+//│                 sym = caseScrut
+//│                 sign = N
+//│                 modulefulness = Modulefulness of N
+//│             restParam = N
+//│         body = Scoped(syms = {a, tmp:arg$Foo$0$}): 
+//│           body = Match:
+//│             scrut = Ref:
+//│               l = caseScrut
+//│               disamb = N
+//│             arms = Ls of 
+//│               Tuple2:
+//│                 _1 = Cls:
+//│                   cls = class:Foo
+//│                   path = Ref{disamb=class:Foo}:
+//│                     l = member:Foo
+//│                     disamb = S of class:Foo
+//│                 _2 = Assign:
+//│                   lhs = tmp:arg$Foo$0$
+//│                   rhs = Select{sym=term:Foo².x}:
+//│                     qual = Ref:
+//│                       l = caseScrut
+//│                       disamb = N
+//│                     name = Ident of "x"
+//│                   rest = Assign: \
+//│                   lhs = a
+//│                   rhs = Ref:
+//│                     l = tmp:arg$Foo$0$
+//│                     disamb = N
+//│                   rest = Return: \
+//│                   res = Ref:
+//│                     l = a
+//│                     disamb = N
+//│                   implct = false
+//│             dflt = S of Throw of Instantiate:
+//│               mut = false
+//│               cls = Select{sym=class:Error}:
+//│                 qual = Ref{disamb=globalThis:globalThis}:
+//│                   l = globalThis:globalThis
+//│                   disamb = S of globalThis:globalThis
+//│                 name = Ident of "Error"
+//│               args = Ls of 
+//│                 Arg:
+//│                   spread = N
+//│                   value = Lit of StrLit of "match error"
+//│             rest = End of ""
+//│       rest = Return: \
+//│       res = Ref{disamb=term:lambda}:
+//│         l = member:lambda
+//│         disamb = S of term:lambda
+//│       implct = true
+//│ = fun
+//│ ═══[WARNING] WatBuilder::result for Instantiate(...) of `globalThis.Error(...)` with payload `Lit(StrLit(match error))` not implemented yet
+//│ ═══[COMPILATION ERROR] WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet
+//│ Wat:
+//│ (module
+//│   (type $Object (sub (struct (field $$tag (mut i32)))))
+//│   (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $x (mut (ref null any))))))
+//│   (type (func (param $x (ref null any)) (result (ref null any))))
+//│   (type (func (param (ref null any))))
+//│   (type (func (result (ref null any))))
+//│   (tag $mlx_exn (type 3))
+//│   (export "mlx_exn" (tag $mlx_exn))
+//│   (func $Foo (type 2) (param $x (ref null any)) (result (ref null any))
+//│     (local $this (ref null any))
+//│     (block (result (ref null any))
+//│       (local.set $this
+//│         (struct.new_default $Foo))
+//│       (struct.set $Foo $$tag
+//│         (ref.cast (ref $Foo)
+//│           (local.get $this))
+//│         (i32.const 1))
+//│       (block
+//│         (struct.set $Foo $x
+//│           (ref.cast (ref $Foo)
+//│             (local.get $this))
+//│           (local.get $x))
+//│         (nop))
+//│       (return
+//│         (local.get $this))))
+//│   (export "Foo" (func $Foo))
+//│   (elem declare func $Foo)
+//│   (func $entry (type 4) (result (ref null any))
+//│     (local $Foo (ref null any))
+//│     (local $lambda (ref null any))
+//│     (block (result (ref null any))
+//│       (nop)
+//│       (block (result (ref null any))
+//│         (unreachable)
+//│         (local.get $lambda))))
+//│   (export "entry" (func $entry))
+//│   (elem declare func $entry))
+
+
+//:lot
+//:slot
+//val i31 = new (wasm.Int31)(-1)
+//val i31 = new Int31(-1)
+//val i31Zext = i31.zext()
+//val i31Sext = i31.sext()
 
