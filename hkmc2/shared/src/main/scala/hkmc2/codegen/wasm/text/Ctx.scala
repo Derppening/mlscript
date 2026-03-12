@@ -251,12 +251,12 @@ class Ctx(
     functionImports: ArrayBuf[FuncImport],
     dataSegments: ArrayBuf[DataSegment],
     funcs: ArrayBuf[FuncInfo],
-    funcInfosByIndex: MutMap[NumIdx, FuncInfo],
+    funcInfosByIndex: MutMap[Int, FuncInfo],
     globals: ArrayBuf[GlobalInfo],
-    namedFuncs: MutMap[Symbol, NumIdx],
+    namedFuncs: MutMap[Symbol, Int],
     tags: ArrayBuf[TagInfo],
-    namedGlobals: MutMap[Symbol, NumIdx],
-    var locals: Ls[MutMap[Local, NumIdx]],
+    namedGlobals: MutMap[Symbol, Int],
+    var locals: Ls[MutMap[Local, Int]],
     private var startFunc: Opt[FuncIdx],
 ) extends ToWat:
 
@@ -313,9 +313,9 @@ class Ctx(
   def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
     val numIdx = NumIdx(functionImports.size + funcs.size)
     funcs += funcInfo
-    funcInfosByIndex(numIdx) = funcInfo
+    funcInfosByIndex(numIdx.index) = funcInfo
     sym.foreach:
-      namedFuncs(_) = numIdx
+      namedFuncs(_) = numIdx.index
     FuncIdx(funcInfo.id)
 
   /** Adds a function import into this context.
@@ -326,7 +326,7 @@ class Ctx(
     val numIdx = NumIdx(functionImports.size + funcs.size)
     functionImports += funcImport
     sym.foreach:
-      namedFuncs(_) = numIdx
+      namedFuncs(_) = numIdx.index
     FuncIdx(funcImport.id)
 
   /** Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
@@ -373,7 +373,7 @@ class Ctx(
       case FuncIdx(SymIdx(nme)) if resolveSymIdx => 
         funcs.zipWithIndex.find(_._1.id.id == nme).map((_, idx) => FuncIdx(NumIdx(idx)))
       case funcidx: FuncIdx => S(funcidx)
-      case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(FuncIdx(_))
+      case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(idx => FuncIdx(NumIdx(idx)))
       case sym: Symbol =>
         getFunc(sym, resolveSymIdx = true).map: numIdx =>
           getFuncInfo(numIdx).map(_.id).fold(numIdx)(FuncIdx(_))
@@ -403,7 +403,7 @@ class Ctx(
   /** Adds a new local variable into the top-most variable scope. */
   def addLocal(sym: Local): LocalIdx =
     val numIdx = NumIdx(locals.head.size)
-    locals.head(sym) = numIdx
+    locals.head(sym) = numIdx.index
     LocalIdx(numIdx)
 
   /** Adds a [[Seq]] of local variables into the top-most variable scope. */
@@ -417,7 +417,7 @@ class Ctx(
   def addGlobal(sym: Symbol, globalInfo: GlobalInfo): GlobalIdx =
     val numIdx = NumIdx(globals.size)
     globals += globalInfo
-    namedGlobals(sym) = numIdx
+    namedGlobals(sym) = numIdx.index
     GlobalIdx(globalInfo.id)
 
   /** Adds a [[Seq]] of variables into the global variable scope. */
@@ -462,8 +462,8 @@ class Ctx(
   /** Converts a [[Map]] of symbols and their respective numeric identifiers into a [[Seq]] of symbols sorted by its
     * numeric index.
     */
-  private def wasmLocalsToSeq(scope: Map[Symbol, NumIdx]): Seq[Local] =
-    scope.toSeq.sortBy(_._2.index).map(_._1)
+  private def wasmLocalsToSeq(scope: Map[Symbol, Int]): Seq[Local] =
+    scope.toSeq.sortBy(_._2).map(_._1)
 
   /** Returns a tuple containing the variables in the current `global` and `local` scopes respectively.
     */
