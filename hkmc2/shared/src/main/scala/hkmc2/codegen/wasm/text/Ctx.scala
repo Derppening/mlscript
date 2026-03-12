@@ -132,19 +132,19 @@ end GlobalInfo
   * @param compType
   *   The composite type this type definition represents.
   */
-class TypeInfo(val id: Opt[SymIdx], val compType: CompType) extends ToWat:
+class TypeInfo(val id: SymIdx, val compType: CompType) extends ToWat:
 
   /** @param sym
     *   The source [[BlockMemberSymbol]] which this type is generated from.
     * @param compType
     *   The composite type this type definition represents.
     */
-  def this(sym: BlockMemberSymbol, compType: CompType) = this(
-    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
+  def this(sym: BlockMemberSymbol, compType: CompType)(using Raise, Scope) = this(
+    SymIdx(sym.optionIf(_.nameIsMeaningful).fold(summon[Scope].allocateName(sym))(_.nme)),
     compType,
   )
 
-  private def idDoc: Document = id.fold(doc"")(_.toWat)
+  private def idDoc: Document = id.toWat
 
   def toWat: Document = compType match
     case struct: StructType if struct.isSubtype =>
@@ -246,7 +246,7 @@ end Ctx
   */
 class Ctx(
     types: ArrayBuf[TypeInfo],
-    namedTypes: MutMap[BlockMemberSymbol, NumIdx],
+    namedTypes: MutMap[BlockMemberSymbol, Int],
     memoryImports: ArrayBuf[MemoryImport],
     functionImports: ArrayBuf[FuncImport],
     dataSegments: ArrayBuf[DataSegment],
@@ -278,20 +278,20 @@ class Ctx(
     val numIdx = NumIdx(types.size)
     types += typeInfo
     sym.foreach:
-      namedTypes(_) = numIdx
-    TypeIdx(typeInfo.id.getOrElse(numIdx))
+      namedTypes(_) = numIdx.index
+    TypeIdx(typeInfo.id)
 
   /** Returns the [[TypeIdx]] of the given `typeref`, optionally resolving the symbolic index into a numeric index.
     */
   def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): Opt[TypeIdx] =
     typeref match
       case TypeIdx(SymIdx(nme)) if resolveSymIdx =>
-        namedTypes.find(_._1.nme == nme).map(t => TypeIdx(t._2))
+        types.zipWithIndex.find(_._1.id.id == nme).map((_, idx) => TypeIdx(NumIdx(idx)))
       case typeidx: TypeIdx => S(typeidx)
-      case sym: BlockMemberSymbol if resolveSymIdx => namedTypes.get(sym).map(TypeIdx(_))
+      case sym: BlockMemberSymbol if resolveSymIdx => namedTypes.get(sym).map(idx => TypeIdx(NumIdx(idx)))
       case sym: BlockMemberSymbol =>
         getType(sym, resolveSymIdx = true).map: numIdx =>
-          getTypeInfo(numIdx).flatMap(_.id).fold(numIdx)(TypeIdx(_))
+          TypeIdx(getTypeInfo_!(numIdx).id)
 
   /** Same as [[getType]] but throws an exception when the `typeref` is not found. */
   def getType_!(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): TypeIdx =
@@ -301,9 +301,8 @@ class Ctx(
   /** Returns the [[TypeInfo]] instance associated with the given `typeref`. */
   def getTypeInfo(typeref: TypeIdx | BlockMemberSymbol): Opt[TypeInfo] = typeref match
     case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
-    case TypeIdx(SymIdx(nme)) =>
-      namedTypes.find(_._1.nme == nme).flatMap(t => getTypeInfo(TypeIdx(t._2)))
-    case sym: BlockMemberSymbol => namedTypes.get(sym).flatMap(idx => getTypeInfo(TypeIdx(idx)))
+    case TypeIdx(SymIdx(nme)) => types.zipWithIndex.find(_._1.id.id == nme).flatMap((_, idx) => types.unapply(idx))
+    case sym: BlockMemberSymbol => namedTypes.get(sym).flatMap(types.unapply(_))
 
   /** Same as [[getTypeInfo]] but throws an exception when the `typeref` is not found. */
   def getTypeInfo_!(typeref: TypeIdx | BlockMemberSymbol): TypeInfo =
@@ -369,14 +368,15 @@ class Ctx(
 
   /** Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a numeric index.
     */
-  def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = funcref match
-    case FuncIdx(SymIdx(nme)) if resolveSymIdx =>
-      namedFuncs.find(_._1.nme == nme).map(f => FuncIdx(f._2))
-    case funcidx: FuncIdx => S(funcidx)
-    case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(FuncIdx(_))
-    case sym: Symbol =>
-      getFunc(sym, resolveSymIdx = true).map: numIdx =>
-        getFuncInfo(numIdx).map(_.id).fold(numIdx)(FuncIdx(_))
+  def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = 
+    funcref match
+      case FuncIdx(SymIdx(nme)) if resolveSymIdx => 
+        funcs.zipWithIndex.find(_._1.id.id == nme).map((_, idx) => FuncIdx(NumIdx(idx)))
+      case funcidx: FuncIdx => S(funcidx)
+      case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(FuncIdx(_))
+      case sym: Symbol =>
+        getFunc(sym, resolveSymIdx = true).map: numIdx =>
+          getFuncInfo(numIdx).map(_.id).fold(numIdx)(FuncIdx(_))
 
   /** Same as [[getFunc]] but throws an exception when the `funcref` is not found. */
   def getFunc_!(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): FuncIdx =
@@ -384,17 +384,15 @@ class Ctx(
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
   /** Returns the [[FuncInfo]] instance associated with the given `funcref`. */
-  def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
-    case FuncIdx(numIdx @ NumIdx(idx)) =>
-      funcInfosByIndex.get(numIdx).orElse:
-        val localIdx = idx.toInt - functionImports.size
-        if localIdx < 0 then N else funcs.unapply(localIdx)
-    case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))
+  def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = 
+    funcref match
+      case FuncIdx(NumIdx(idx)) => funcs.unapply(idx)
+      case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))
 
   /** Same as [[getFuncInfo]] but throws an exception when the `funcref` is not found. */
   def getFuncInfo_!(funcref: FuncIdx | Symbol): FuncInfo =
     getFuncInfo(funcref).getOrElse:
-      lastWords(s"Missing function definition for ${funcref.prettyString}")
+      lastWords(s"Missing function definition for ${funcref.prettyString}: ${funcs.map(_.id)} ${namedFuncs}")
 
   /** Pushes a new local variable scope into this context. */
   def pushLocal(): Unit = locals = MutMap() :: locals
