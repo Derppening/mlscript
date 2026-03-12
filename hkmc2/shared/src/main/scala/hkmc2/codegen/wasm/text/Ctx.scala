@@ -20,6 +20,8 @@ import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
   *
   * @param id
   *   Symbolic identifier for the function, or `N` if the function is anonymous.
+  * @param exports
+  *   [[Seq]] of export names for this function.
   * @param typeIdx
   *   Index of the function's type in the module's type section.
   * @param params
@@ -32,7 +34,8 @@ import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
   *   The expression of the function body.
   */
 class FuncInfo(
-    val id: Opt[SymIdx],
+    val id: SymIdx,
+    val exports: Seq[Str] = Seq.empty,
     val typeIdx: TypeIdx,
     params: Seq[Local -> Str],
     nResults: Int,
@@ -42,6 +45,8 @@ class FuncInfo(
 
   /** @param sym
     *   The source [[BlockMemberSymbol]] which this function is generated from.
+    * @param exports
+    *   [[Seq]] of export names for this function.
     * @param typeIdx
     *   Index of the function's type in the module's type section.
     * @param params
@@ -55,13 +60,15 @@ class FuncInfo(
     */
   def this(
       sym: BlockMemberSymbol,
+      exports: Seq[Str],
       typeIdx: TypeIdx,
       params: Seq[Local -> Str],
       nResults: Int,
       locals: Seq[Local -> Str],
       body: Expr,
-  ) = this(
-    sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme)),
+  )(using Raise, Scope) = this(
+    SymIdx(sym.optionIf(_.nameIsMeaningful).fold(summon[Scope].allocateName(sym))(_.nme)),
+    exports,
     typeIdx,
     params,
     nResults,
@@ -76,16 +83,19 @@ class FuncInfo(
   )
 
   def toWat: Document =
-    doc"""(func ${id.fold(doc"")(_.toWat)} (type ${typeIdx.toWat})${
+    doc"""(func ${id.toWat} (type ${typeIdx.toWat})${
         getSignatureType.toWat.surroundUnlessEmpty(doc" ")
       } #{ ${
         locals.map: p =>
           doc"(local $$${p._2} ${RefType.anyref.toWat})"
         .mkDocument(doc" # ").surroundUnlessEmpty(doc" # ")
       } # ${body.toWat} #} )${
-        id.fold(doc""): id =>
-          doc""" # (export "${id.id}" (func ${id.toWat})) # (elem declare func ${id.toWat})"""
-      }"""
+          exports
+            .map: e => 
+              doc""" # (export "${e}" (func ${id.toWat}))"""
+            .mkDocument(doc"")
+            .surroundUnlessEmpty(doc"")
+      } # (elem declare func ${id.toWat})"""
 end FuncInfo
 
 /** A Wasm global and its associated information.
@@ -307,7 +317,7 @@ class Ctx(
     funcInfosByIndex(numIdx) = funcInfo
     sym.foreach:
       namedFuncs(_) = numIdx
-    FuncIdx(funcInfo.id.getOrElse(numIdx))
+    FuncIdx(funcInfo.id)
 
   /** Adds a function import into this context.
     *
@@ -318,7 +328,7 @@ class Ctx(
     functionImports += funcImport
     sym.foreach:
       namedFuncs(_) = numIdx
-    FuncIdx(funcImport.id.getOrElse(numIdx))
+    FuncIdx(funcImport.id)
 
   /** Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
     */
@@ -366,7 +376,7 @@ class Ctx(
     case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(FuncIdx(_))
     case sym: Symbol =>
       getFunc(sym, resolveSymIdx = true).map: numIdx =>
-        getFuncInfo(numIdx).flatMap(_.id).fold(numIdx)(FuncIdx(_))
+        getFuncInfo(numIdx).map(_.id).fold(numIdx)(FuncIdx(_))
 
   /** Same as [[getFunc]] but throws an exception when the `funcref` is not found. */
   def getFunc_!(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): FuncIdx =

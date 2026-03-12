@@ -58,7 +58,7 @@ foo() + foo()
 //│         (i32.const 42))))
 //│   (export "foo" (func $foo))
 //│   (elem declare func $foo)
-//│   (func  (type 2) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
+//│   (func $plus_impl (type 2) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and
 //│         (ref.test (ref null i31)
@@ -76,6 +76,7 @@ foo() + foo()
 //│                 (local.get $rhs))))))
 //│       (else
 //│         (unreachable))))
+//│   (elem declare func $plus_impl)
 //│   (func $entry (type 3) (result (ref null any))
 //│     (local $foo (ref null any))
 //│     (local $tmp (ref null any))
@@ -90,7 +91,7 @@ foo() + foo()
 //│           (local.set $tmp1
 //│             (call_ref 1
 //│               (ref.func $foo)))
-//│           (call 1
+//│           (call $plus_impl
 //│             (local.get $tmp)
 //│             (local.get $tmp1))))))
 //│   (export "entry" (func $entry))
@@ -232,8 +233,8 @@ O.y
 //│   (type (func (result (ref null any))))
 //│   (type $start (func))
 //│   (global $O$inst (mut (ref null $O)) (ref.null $O))
-//│   (start 1)
-//│   (func  (type $O_ctor) (result (ref null any))
+//│   (start $init)
+//│   (func $O_ctor (type $O_ctor) (result (ref null any))
 //│     (local $this (ref null any))
 //│     (block (result (ref null any))
 //│       (local.set $this
@@ -258,11 +259,13 @@ O.y
 //│           (nop)))
 //│       (return
 //│         (local.get $this))))
-//│   (func  (type $start)
+//│   (elem declare func $O_ctor)
+//│   (func $init (type $start)
 //│     (block
 //│       (global.set $O$inst
 //│         (ref.cast (ref null $O)
 //│           (call 0)))))
+//│   (elem declare func $init)
 //│   (func $entry (type 3) (result (ref null any))
 //│     (local $O (ref null any))
 //│     (block (result (ref null any))

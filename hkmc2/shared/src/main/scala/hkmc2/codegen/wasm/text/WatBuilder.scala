@@ -263,7 +263,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       FuncImport(
         module = ExternIntrinsics.SystemModule,
         name = ExternIntrinsics.StringFromUtf16ImportName,
-        id = S(SymIdx(ExternIntrinsics.StringFromUtf16ImportName)),
+        id = SymIdx(ExternIntrinsics.StringFromUtf16ImportName),
         typeIdx = importTy,
       )
   end getOrLoadStrCtorFunction
@@ -738,12 +738,12 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Gets (or creates) the intrinsic function implementing the wasm operator `name`.
     */
-  private def getIntrinsic(name: Str)(using Ctx, Scope): FuncIdx =
+  private def getIntrinsic(name: Str)(using Ctx, Raise, Scope): FuncIdx =
     ctx.getOrCreateWasmIntrinsic(name, createIntrinsic(name))
 
   /** Creates the intrinsic definition for `name`.
     */
-  private def createIntrinsic(name: Str)(using Ctx, Scope): FuncIdx =
+  private def createIntrinsic(name: Str)(using Ctx, Raise, Scope): FuncIdx =
     if binaryOps.contains(name) then createBinaryInt31Func(name, binaryOps(name))
     else if unaryOps.contains(name) then createUnaryInt31Func(name, unaryOps(name))
     else lastWords(s"Unsupported wasm intrinsic '$name'")
@@ -753,7 +753,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   private def createBinaryInt31Func(
       name: Str,
       op: (Expr, Expr) => Expr,
-  )(using Ctx, Scope): FuncIdx =
+  )(using Ctx, Raise, Scope): FuncIdx =
     val params = mkIntrinsicParams(name, Seq("lhs", "rhs"))
     val lhsName = params.head._2
     val rhsName = params(1)._2
@@ -762,7 +762,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Creates a unary Int31 intrinsic with a single parameter and body built from `op`.
     */
-  private def createUnaryInt31Func(name: Str, op: Expr => Expr)(using Ctx, Scope): FuncIdx =
+  private def createUnaryInt31Func(name: Str, op: Expr => Expr)(using Ctx, Raise, Scope): FuncIdx =
     val params = mkIntrinsicParams(name, Seq("arg"))
     val argName = params.head._2
     val body = unaryInt31Body(argName, op)
@@ -774,7 +774,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       name: Str,
       params: Seq[(TempSymbol, Str)],
       body: Expr,
-  )(using Ctx): FuncIdx =
+  )(using Ctx, Raise, Scope): FuncIdx =
     val funcTy = ctx.addType(
       sym = N,
       TypeInfo(
@@ -785,8 +785,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         ),
       ),
     )
+    val funcSym = scope.allocateName(TempSymbol(N, name))
     val funcInfo = FuncInfo(
-      id = N,
+      id = SymIdx(funcSym),
+      exports = Seq.empty,
       typeIdx = funcTy,
       params = params,
       nResults = 1,
@@ -1016,6 +1018,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     val funcInfo =
                       FuncInfo(
                         sym,
+                        exports = Seq(sym.nme),
                         typeIdx = funcTy,
                         params = ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
                         nResults = bodyWat.resultTypes.length,
@@ -1120,13 +1123,15 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     ),
                   )
 
-                  val ctorId =
-                    if isSingletonObj then N
-                    else clsLikeDefn.sym.optionIf(_.nameIsMeaningful).map(sym => SymIdx(sym.nme))
+                  val ctorId = clsLikeDefn.sym
+                    .optionIf: sym =>
+                      !isSingletonObj && sym.nameIsMeaningful
+                    .map(_.nme)
                   ctx.addFunc(
                     S(clsLikeDefn.sym),
                     FuncInfo(
-                      id = ctorId,
+                      id = SymIdx(ctorId.getOrElse(scope.allocateName(TempSymbol(N, s"${clsLikeDefn.sym.nme}_ctor")))),
+                      exports = ctorId.toSeq,
                       typeIdx = funcTy,
                       params = ctorParams,
                       nResults = ctorCode.resultTypes.length,
@@ -1405,7 +1410,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       TypeInfo(id = N, FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref)))),
     )
     val entryFnInfo = FuncInfo(
-      id = S(SymIdx(entryNme)),
+      id = SymIdx(entryNme),
+      exports = Seq(entryNme),
       typeIdx = entryFnTy,
       params = Seq.empty,
       nResults = 1,
@@ -1437,7 +1443,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val initFn = ctx.addFunc(
         sym = N,
         FuncInfo(
-          id = N,
+          id = SymIdx(scope.allocateName(TempSymbol(N, "init"))),
           typeIdx = initTy,
           params = Seq.empty,
           nResults = 0,

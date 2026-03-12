@@ -12,8 +12,8 @@
 //│   (type (func (result (ref null any))))
 //│   (type $start (func))
 //│   (global $Unit$inst (mut (ref null $Unit)) (ref.null $Unit))
-//│   (start 1)
-//│   (func  (type $Unit_ctor) (result (ref null any))
+//│   (start $init)
+//│   (func $Unit_ctor (type $Unit_ctor) (result (ref null any))
 //│     (local $this (ref null any))
 //│     (block (result (ref null any))
 //│       (local.set $this
@@ -25,11 +25,13 @@
 //│       (nop)
 //│       (return
 //│         (local.get $this))))
-//│   (func  (type $start)
+//│   (elem declare func $Unit_ctor)
+//│   (func $init (type $start)
 //│     (block
 //│       (global.set $Unit$inst
 //│         (ref.cast (ref null $Unit)
 //│           (call 0)))))
+//│   (elem declare func $init)
 //│   (func $entry (type 3) (result (ref null any))
 //│     (block (result (ref null $Unit))
 //│       (nop)

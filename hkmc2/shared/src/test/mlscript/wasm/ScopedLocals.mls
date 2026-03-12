@@ -12,7 +12,7 @@ topA + topB
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
 //│   (type (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
-//│   (func  (type 1) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
+//│   (func $plus_impl (type 1) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and
 //│         (ref.test (ref null i31)
@@ -30,6 +30,7 @@ topA + topB
 //│                 (local.get $rhs))))))
 //│       (else
 //│         (unreachable))))
+//│   (elem declare func $plus_impl)
 //│   (func $entry (type 2) (result (ref null any))
 //│     (local $topA (ref null any))
 //│     (local $topB (ref null any))
@@ -41,7 +42,7 @@ topA + topB
 //│         (local.set $topB
 //│           (ref.i31
 //│             (i32.const 2)))
-//│         (call 0
+//│         (call $plus_impl
 //│           (local.get $topA)
 //│           (local.get $topB)))))
 //│   (export "entry" (func $entry))
@@ -62,7 +63,7 @@ chain(1)
 //│   (type (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
 //│   (type (func (param $x (ref null any)) (result (ref null any))))
 //│   (type (func (result (ref null any))))
-//│   (func  (type 1) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
+//│   (func $plus_impl (type 1) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and
 //│         (ref.test (ref null i31)
@@ -80,23 +81,24 @@ chain(1)
 //│                 (local.get $rhs))))))
 //│       (else
 //│         (unreachable))))
+//│   (elem declare func $plus_impl)
 //│   (func $chain (type 2) (param $x (ref null any)) (result (ref null any))
 //│     (local $a (ref null any))
 //│     (local $b (ref null any))
 //│     (block (result (ref null any))
 //│       (local.set $a
-//│         (call 0
+//│         (call $plus_impl
 //│           (local.get $x)
 //│           (ref.i31
 //│             (i32.const 1))))
 //│       (block (result (ref null any))
 //│         (local.set $b
-//│           (call 0
+//│           (call $plus_impl
 //│             (local.get $a)
 //│             (ref.i31
 //│               (i32.const 1))))
 //│         (return
-//│           (call 0
+//│           (call $plus_impl
 //│             (local.get $a)
 //│             (local.get $b))))))
 //│   (export "chain" (func $chain))
