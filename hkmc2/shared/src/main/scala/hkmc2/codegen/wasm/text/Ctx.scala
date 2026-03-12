@@ -90,11 +90,11 @@ class FuncInfo(
           doc"(local $$${p._2} ${RefType.anyref.toWat})"
         .mkDocument(doc" # ").surroundUnlessEmpty(doc" # ")
       } # ${body.toWat} #} )${
-          exports
-            .map: e => 
-              doc""" # (export "${e}" (func ${id.toWat}))"""
-            .mkDocument(doc"")
-            .surroundUnlessEmpty(doc"")
+        exports
+          .map: e =>
+            doc""" # (export "${e}" (func ${id.toWat}))"""
+          .mkDocument(doc"")
+          .surroundUnlessEmpty(doc"")
       } # (elem declare func ${id.toWat})"""
 end FuncInfo
 
@@ -368,9 +368,9 @@ class Ctx(
 
   /** Returns the [[FuncIdx]] of the given `funcref`, optionally resolving the symbolic index into a numeric index.
     */
-  def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] = 
+  def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool = false): Opt[FuncIdx] =
     funcref match
-      case FuncIdx(SymIdx(nme)) if resolveSymIdx => 
+      case FuncIdx(SymIdx(nme)) if resolveSymIdx =>
         funcs.zipWithIndex.find(_._1.id.id == nme).map((_, idx) => FuncIdx(NumIdx(idx)))
       case funcidx: FuncIdx => S(funcidx)
       case sym: Symbol if resolveSymIdx => namedFuncs.get(sym).map(idx => FuncIdx(NumIdx(idx)))
@@ -384,7 +384,7 @@ class Ctx(
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
   /** Returns the [[FuncInfo]] instance associated with the given `funcref`. */
-  def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = 
+  def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] =
     funcref match
       case FuncIdx(NumIdx(idx)) => funcs.unapply(idx)
       case funcref => getFunc(funcref, resolveSymIdx = true).flatMap(getFuncInfo(_))

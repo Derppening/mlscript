@@ -1121,7 +1121,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val funcTy = ctx.addType(
                     sym = N,
                     TypeInfo(
-                      id = SymIdx(funcTyId.getOrElse(scope.allocateName(TempSymbol(N, s"${clsLikeDefn.sym.nme}_ctor")))),
+                      id =
+                        SymIdx(funcTyId.getOrElse(scope.allocateName(TempSymbol(N, s"${clsLikeDefn.sym.nme}_ctor")))),
                       FunctionType(
                         params = ctorParams.map(p => WasmParam(S(p._2), RefType.anyref)),
                         results = Seq(Result(RefType.anyref)),
@@ -1261,7 +1262,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 case typeidx: TypeIdx => ctx.getTypeInfo_!(typeidx).compType
               val scrutAsObject = ref.cast(getScrutExpr, scrutBaseType)
               val scrutTag =
-                struct.get(FieldIdx(resolvedScrutBaseType.asInstanceOf[StructType].fields(0)._2.id), scrutAsObject, I32Type)
+                struct.get(
+                  FieldIdx(resolvedScrutBaseType.asInstanceOf[StructType].fields(0)._2.id),
+                  scrutAsObject,
+                  I32Type,
+                )
               val tagMatches = i32.eq(scrutTag, i32.const(expectedTag))
               
               S(`if`(
