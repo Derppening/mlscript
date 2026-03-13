@@ -12,7 +12,7 @@ import semantics.{BlockMemberSymbol, ModuleOrObjectSymbol, Symbol}
 import text.Param as WasmParam
 import Instructions.*
 
-import scala.annotation.targetName
+import scala.annotation.{nowarn, targetName}
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 import scala.reflect.ClassTag
 
@@ -309,6 +309,7 @@ class Ctx extends ToWat:
       lastWords(s"Missing type definition for ${typeref.prettyString}")
 
   /** Returns the [[TypeInfo]] instance associated with the given `typeref`. */
+  @nowarn("cat=deprecation")
   def getTypeInfo(typeref: TypeIdx | BlockMemberSymbol): Opt[TypeInfo] = typeref match
     case TypeIdx(NumIdx(idx)) => types.unapply(idx.toInt)
     case TypeIdx(SymIdx(nme)) => types.find(_.id.id == nme)
@@ -365,8 +366,8 @@ class Ctx extends ToWat:
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
   /** Returns the [[FuncInfo]] instance associated with the given `funcref`. */
-  def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] =
-    funcref match
+  @nowarn("cat=deprecation")
+  def getFuncInfo(funcref: FuncIdx | Symbol): Opt[FuncInfo] = funcref match
       case FuncIdx(NumIdx(idx)) => funcs.unapply(idx)
       case FuncIdx(SymIdx(idx)) => funcs.find(_.id.id == idx)
       case funcref => getFunc(funcref).flatMap(getFuncInfo(_))
