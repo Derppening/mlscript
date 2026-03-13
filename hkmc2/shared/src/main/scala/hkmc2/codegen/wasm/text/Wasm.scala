@@ -190,6 +190,9 @@ case class TypeIdx(idx: Index) extends CtxIdx(idx)
 /** An index bound to the ''global'' index space. */
 case class GlobalIdx(idx: Index) extends CtxIdx(idx)
 
+/** An index bound to the ''memory'' index space. */
+case class MemIdx(idx: Index) extends CtxIdx(idx)
+
 /** An index bound to the ''funcs'' index space. */
 case class FuncIdx(idx: Index) extends CtxIdx(idx)
 
@@ -256,10 +259,29 @@ case class FuncImport(module: Str, name: Str, id: SymIdx, typeuse: TypeUse) exte
   def toWat: Document =
     doc"""(import "$module" "$name" (func ${id.toWat} ${typeuse.toWat}))"""
 
+case class MemUse(idx: MemIdx) extends ToWat:
+  def toWat: Document = doc"(memory ${idx.toWat})"
+
 /** A data segment entry. */
-case class DataSegment(offsetExpr: Expr, bytes: Str) extends ToWat:
-  def toWat: Document =
-    doc"""(data ${offsetExpr.toWat} "$bytes")"""
+object DataSegment:
+  object Passive:
+    def apply(id: SymIdx, bytes: Str): Passive = new Passive(id, Seq(bytes))
+  case class Passive(id: SymIdx, bytes: Seq[Str]) extends DataSegment(id, bytes):
+    def toWat: Document =
+      doc"(data ${id.toWat}${bytes.map(s => s"\"$s\"").mkDocument(doc" ").surroundUnlessEmpty(doc" ")})"
+
+  object Active:
+    def apply(id: SymIdx, offset: Expr, bytes: Str, memuse: Opt[MemUse]): Active =
+      new Active(id, offset, Seq(bytes), memuse)
+  case class Active(id: SymIdx, offset: Expr, bytes: Seq[Str], memuse: Opt[MemUse]) extends DataSegment(id, bytes):
+    def toWat: Document =
+      doc"(data ${id.toWat} ${
+          memuse.fold(doc"(memory 0)")(_.toWat)
+        } (offset ${offset.toWat})${
+          bytes.map(s => s"\"$s\"").mkDocument(doc" ").surroundUnlessEmpty(doc" ")
+        })"
+
+sealed abstract class DataSegment(id: SymIdx, bytes: Seq[Str]) extends ToWat
 
 /** An abstraction over a generic WebAssembly instructions.
   */
