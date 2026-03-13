@@ -8,10 +8,11 @@ import hkmc2.utils.*
 
 import document.*
 import document.Document
-import semantics.*
+import semantics.{BlockMemberSymbol, ModuleOrObjectSymbol, Symbol}
 import text.Param as WasmParam
 import Instructions.*
 
+import scala.annotation.targetName
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
 
 /** A Wasm function and its associated information.
@@ -247,8 +248,8 @@ end Ctx
 class Ctx(
     types: ArrayBuf[TypeInfo],
     namedTypes: MutMap[BlockMemberSymbol, Int],
-    memoryImports: ArrayBuf[MemoryImport],
-    functionImports: ArrayBuf[FuncImport],
+    memoryImports: ArrayBuf[Import[ExternType.Mem]],
+    functionImports: ArrayBuf[Import[ExternType.Func]],
     dataSegments: ArrayBuf[DataSegment],
     funcs: ArrayBuf[FuncInfo],
     funcInfosByIndex: MutMap[Int, FuncInfo],
@@ -322,19 +323,41 @@ class Ctx(
     *
     * Returns the function index in the global function index space.
     */
+  @deprecated("Use the `Import[ExternType.Func]` overload instead.")
   def addFunctionImport(sym: Opt[Symbol], funcImport: FuncImport): FuncIdx =
+    val numIdx = NumIdx(functionImports.size + funcs.size)
+    functionImports += Import(funcImport.module, funcImport.name, ExternType.Func(funcImport.id, funcImport.typeuse))
+    sym.foreach:
+      namedFuncs(_) = numIdx.index
+    FuncIdx(funcImport.id)
+
+  /** Adds a function import into this context.
+    *
+    * Returns the function index in the global function index space.
+    */
+  def addFunctionImport(sym: Opt[Symbol], funcImport: Import[ExternType.Func]): FuncIdx =
     val numIdx = NumIdx(functionImports.size + funcs.size)
     functionImports += funcImport
     sym.foreach:
       namedFuncs(_) = numIdx.index
-    FuncIdx(funcImport.id)
+    FuncIdx(funcImport.externType.id)
+
+  /** Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
+    */
+  @deprecated("Use the `Import[ExternType.Func]` overload instead.")
+  @targetName("getOrCreateFuncImport")
+  def getOrCreateFunctionImport(
+      module: Str,
+      name: Str,
+  )(createImport: => FuncImport): FuncIdx =
+    cachedFunctionImports.getOrElseUpdate((module, name), addFunctionImport(N, createImport))
 
   /** Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
     */
   def getOrCreateFunctionImport(
       module: Str,
       name: Str,
-  )(createImport: => FuncImport): FuncIdx =
+  )(createImport: => Import[ExternType.Func]): FuncIdx =
     cachedFunctionImports.getOrElseUpdate((module, name), addFunctionImport(N, createImport))
 
   /** Adds or updates a memory import. If the import already exists, its minimum pages are increased to at least
@@ -345,17 +368,18 @@ class Ctx(
     cachedMemoryImport.get(key) match
       case S(idx) =>
         val existing = memoryImports(idx)
-        val newMin = existing.minPages max minPages
-        if newMin =/= existing.minPages then
-          memoryImports(idx) = existing.copy(minPages = newMin)
+        val newMin = existing.externType.memtype.lim.min max minPages
+        if newMin > existing.externType.memtype.lim.min then
+          memoryImports(idx) =
+            Import(module, name, ExternType.Mem(SymIdx(name), memtype = MemType(lim = Limits(newMin))))
       case N =>
         val idx = memoryImports.size
-        memoryImports += MemoryImport(module, name, minPages)
+        memoryImports += Import(module, name, ExternType.Mem(SymIdx(name), memtype = MemType(lim = Limits(minPages))))
         cachedMemoryImport(key) = idx
 
-  /** Returns the minimum page requirement of memory import (`module`, `name`) if present. */
-  def getMemoryImportMinPages(module: Str, name: Str): Opt[Int] =
-    memoryImports.find(m => m.module === module && m.name === name).map(_.minPages)
+  /** Returns the page limits of memory import (`module`, `name`) if present. */
+  def getMemoryImportLimits(module: Str, name: Str): Opt[Limits] =
+    memoryImports.find(m => m.module === module && m.name === name).map(_.externType.memtype.lim)
 
   /** Adds a data segment into this context. */
   def addDataSegment(seg: DataSegment): Unit =

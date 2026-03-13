@@ -193,15 +193,58 @@ case class FieldIdx(idx: Index) extends CtxIdx(idx)
 /** An index bound to the ''tags'' index space. */
 case class TagIdx(idx: Index) extends CtxIdx(idx)
 
+/** An import entry. */
+case class Import[ET <: ExternType](module: Str, name: Str, externType: ET) extends ToWat:
+  def toWat: Document =
+    doc"""(import "$module" "$name" ${externType.toWat})"""
+
+/** The address type of a memory type. */
+enum AddrType extends ToWat:
+  case i32
+  case i64
+
+  def toWat: Document = this match
+    case AddrType.i32 => doc"i32"
+    case AddrType.i64 => doc"i64"
+
+/** The size range of resizeable storage. */
+case class Limits(min: Int, max: Opt[Int] = N) extends ToWat:
+  def toWat: Document = doc"$min${max.fold(doc"")(max => doc" $max")}"
+
+/** A linear memory entry. */
+case class MemType(at: AddrType = AddrType.i32, lim: Limits) extends ToWat:
+  def toWat: Document = doc"${at.toWat} ${lim.toWat}"
+
+/** A use site of a type index referencing a composite type. */
+case class TypeUse(typeidx: TypeIdx) extends ToWat:
+  def toWat: Document = doc"(type ${typeidx.toWat})"
+
+object ExternType:
+  /** An linear memory entry that is externally addressable. */
+  case class Mem(id: SymIdx, memtype: MemType) extends ExternType:
+    def toWat: Document = doc"""(memory ${id.toWat} ${memtype.toWat})"""
+    /** An function entry that is externally addressable. */
+  case class Func(id: SymIdx, typeuse: TypeUse) extends ExternType:
+    def toWat: Document = doc"""(func ${id.toWat} ${typeuse.toWat})"""
+
+sealed abstract class ExternType extends ToWat
+
 /** A memory import entry. */
+@deprecated("Use `Import` with `ExternType.Memory` instead.")
 case class MemoryImport(module: Str, name: Str, minPages: Int) extends ToWat:
   def toWat: Document =
     doc"""(import "$module" "$name" (memory $minPages))"""
 
 /** A function import entry. */
-case class FuncImport(module: Str, name: Str, id: SymIdx, typeIdx: TypeIdx) extends ToWat:
+object FuncImport:
+  @deprecated("Use `Import` with `ExternType.Func` instead.")
+  def apply(module: Str, name: Str, id: SymIdx, typeIdx: TypeIdx): FuncImport =
+    new FuncImport(module, name, id, TypeUse(typeIdx))
+
+@deprecated("Use `Import` with `ExternType.Func` instead.")
+case class FuncImport(module: Str, name: Str, id: SymIdx, typeuse: TypeUse) extends ToWat:
   def toWat: Document =
-    doc"""(import "$module" "$name" (func ${id.toWat} (type ${typeIdx.toWat})))"""
+    doc"""(import "$module" "$name" (func ${id.toWat} ${typeuse.toWat}))"""
 
 /** A data segment entry. */
 case class DataSegment(offsetExpr: Expr, bytes: Str) extends ToWat:

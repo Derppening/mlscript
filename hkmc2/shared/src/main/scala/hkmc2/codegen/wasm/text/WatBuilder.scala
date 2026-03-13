@@ -11,7 +11,7 @@ import document.Document
 import js.CodeBuilder
 import semantics.*, Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, StrLit, Ident}
-import text.Param as WasmParam
+import text.{Import as WatImport, Param as WasmParam}
 import Message.MessageContext
 import Scope.scope
 
@@ -262,11 +262,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           ),
         ),
       )
-      FuncImport(
+      WatImport(
         module = ExternIntrinsics.SystemModule,
         name = ExternIntrinsics.StringFromUtf16ImportName,
-        id = SymIdx(ExternIntrinsics.StringFromUtf16ImportName),
-        typeIdx = importTy,
+        ExternType.Func(SymIdx(ExternIntrinsics.StringFromUtf16ImportName), TypeUse(importTy)),
       )
   end getOrLoadStrCtorFunction
 
@@ -1468,9 +1467,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     ctx.addFunc(S(entrySym), entryFnInfo)
 
-    val systemMemMinPages =
-      ctx.getMemoryImportMinPages(ExternIntrinsics.SystemModule, ExternIntrinsics.SystemMemoryImportName).getOrElse(0)
-    (ctx.toWat, entryNme, systemMemMinPages)
+    val systemMemLimits =
+      ctx.getMemoryImportLimits(ExternIntrinsics.SystemModule, ExternIntrinsics.SystemMemoryImportName)
+    (ctx.toWat, entryNme, systemMemLimits.fold(0)(_.min))
   end program
 
   /** Captures the local symbols introduced while compiling `expr`.
