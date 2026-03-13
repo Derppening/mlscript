@@ -278,19 +278,31 @@ class Ctx extends ToWat:
 
   /** Returns the [[TypeIdx]] of the given `typeref`, optionally resolving the symbolic index into a numeric index.
     */
-  def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): Opt[TypeIdx] =
-    typeref match
-      case TypeIdx(SymIdx(nme)) if resolveSymIdx =>
-        types.zipWithIndex.find(_._1.id.id == nme).map((_, idx) => TypeIdx(NumIdx(idx)))
-      case typeidx: TypeIdx => S(typeidx)
-      case sym: BlockMemberSymbol if resolveSymIdx => namedTypes.get(sym).map(idx => TypeIdx(NumIdx(idx)))
-      case sym: BlockMemberSymbol =>
-        getType(sym, resolveSymIdx = true).map: numIdx =>
-          TypeIdx(getTypeInfo_!(numIdx).id)
+  @deprecated("Use the overload without `resolveSymIdx` instead.")
+  def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool): Opt[TypeIdx] =
+    if !resolveSymIdx then getType(typeref)
+    else
+      typeref match
+        case TypeIdx(SymIdx(nme)) if resolveSymIdx =>
+          types.zipWithIndex.find(_._1.id.id == nme).map((_, idx) => TypeIdx(NumIdx(idx)))
+        case typeidx: TypeIdx => S(typeidx)
+        case sym: BlockMemberSymbol => namedTypes.get(sym).map(idx => TypeIdx(NumIdx(idx)))
+
+  /** Returns the [[TypeIdx]] of the given `typeref`.
+    */
+  def getType(typeref: TypeIdx | BlockMemberSymbol): Opt[TypeIdx] = typeref match
+    case typeidx: TypeIdx => S(typeidx)
+    case sym: BlockMemberSymbol => namedTypes.unapply(sym).map(idx => TypeIdx(types(idx).id))
 
   /** Same as [[getType]] but throws an exception when the `typeref` is not found. */
-  def getType_!(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool = false): TypeIdx =
+  @deprecated("Use the overload without `resolveSymIdx` instead.")
+  def getType_!(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool): TypeIdx =
     getType(typeref, resolveSymIdx).getOrElse:
+      lastWords(s"Missing type definition for ${typeref.prettyString}")
+
+  /** Same as [[getType]] but throws an exception when the `typeref` is not found. */
+  def getType_!(typeref: TypeIdx | BlockMemberSymbol): TypeIdx =
+    getType(typeref).getOrElse:
       lastWords(s"Missing type definition for ${typeref.prettyString}")
 
   /** Returns the [[TypeInfo]] instance associated with the given `typeref`. */
