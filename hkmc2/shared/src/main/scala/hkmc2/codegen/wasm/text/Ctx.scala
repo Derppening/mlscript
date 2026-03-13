@@ -133,17 +133,22 @@ end GlobalInfo
   *   Symbolic identifier for the function, or `N` if the function is anonymous.
   * @param compType
   *   The composite type this type definition represents.
+  * @param objectTag
+  *   Optional object tag number associated with this type.
   */
-class TypeInfo(val id: SymIdx, val compType: CompType) extends ToWat:
+class TypeInfo(val id: SymIdx, val compType: CompType, val objectTag: Opt[Int]) extends ToWat:
 
   /** @param sym
     *   The source [[BlockMemberSymbol]] which this type is generated from.
     * @param compType
     *   The composite type this type definition represents.
+    * @param objectTag
+    *   Optional object tag number associated with this type.
     */
-  def this(sym: BlockMemberSymbol, compType: CompType)(using Raise, Scope) = this(
+  def this(sym: BlockMemberSymbol, compType: CompType, objectTag: Opt[Int])(using Raise, Scope) = this(
     SymIdx(sym.optionIf(_.nameIsMeaningful).fold(summon[Scope].allocateName(sym))(_.nme)),
     compType,
+    objectTag,
   )
 
   private def idDoc: Document = id.toWat
@@ -242,6 +247,9 @@ class Ctx extends ToWat:
   private var locals = MutMap.empty[Local, Int] :: Nil
   private var startFunc = N: Opt[FuncIdx]
 
+  /** Monotonically increasing counter for generating object tags. */
+  private var objectTagNum = 0
+
   private val wasmIntrinsicFuncs: MutMap[Str, FuncIdx] = MutMap.empty
   private val wasmIntrinsicTypes: MutMap[WasmIntrinsicType, TypeIdx] = MutMap.empty
   private val wasmIntrinsicTags: MutMap[Str, TagIdx] = MutMap.empty
@@ -257,6 +265,12 @@ class Ctx extends ToWat:
   private def importsWithType[ET <: ExternType](implicit ct: ClassTag[ET]): Seq[Import[ET]] = imports.collect:
     case i if ct.runtimeClass.isInstance(i.externType) => i.asInstanceOf[Import[ET]]
   .toSeq
+
+  /** Returns a new number to be used as an object tag. */
+  def getFreshObjectTag(): Int = 
+    val fresh = objectTagNum
+    objectTagNum += 1
+    fresh
 
   /** Adds a type into this context. */
   def addType(sym: Opt[BlockMemberSymbol], typeInfo: TypeInfo): TypeIdx =

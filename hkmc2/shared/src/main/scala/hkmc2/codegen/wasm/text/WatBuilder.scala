@@ -171,6 +171,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           typeInfo = TypeInfo(
             id = SymIdx(defn.sym.nme),
             compType = StructType(fields = allFields, parents = Seq(baseObjectTypeIdx), isSubtype = true),
+            objectTag = S(ctx.getFreshObjectTag()),
           ),
         )
       end if
@@ -209,6 +210,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           TypeInfo(
             sym,
             FunctionType(params = Seq(WasmParam(N, RefType.anyref)), results = Seq.empty),
+            objectTag = N,
           ),
         ),
       )),
@@ -260,6 +262,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             params = Seq(WasmParam(N, RefType.anyref), WasmParam(N, RefType.anyref)),
             results = Seq(Result(RefType.anyref)),
           ),
+          objectTag = N,
         ),
       )
       WatImport(
@@ -280,6 +283,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         TypeInfo(
           sym,
           ArrayType(elemType = RefType.anyref, mutable = mut),
+          objectTag = N,
         ),
       )
 
@@ -786,6 +790,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           params = params.map((_, nme) => WasmParam(S(nme), RefType.anyref)),
           results = Seq(Result(RefType.anyref)),
         ),
+        objectTag = N,
       ),
     )
     val funcSymNme = scope.allocateName(TempSymbol(N, name))
@@ -1015,6 +1020,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                           params = params.map(_._1),
                           results = Seq.fill(bodyWat.resultTypes.length)(Result(RefType.anyref)),
                         ),
+                        objectTag = N,
                       ),
                     )
 
@@ -1085,9 +1091,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         case Nil => (ctorAuxParams, Nil)
                     case Some(_) => (ctorAuxParams, ctorParams)
                   
-                  val tagValue = ctx.getType_!(clsLikeDefn.sym, resolveSymIdx = true) match
-                    case TypeIdx(NumIdx(idx)) => idx
-                    case _ => lastWords(s"Expected numeric type index for class ${clsLikeDefn.sym}")
+                  val tagValue = ctx.getTypeInfo_!(clsLikeDefn.sym).objectTag getOrElse:
+                    lastWords(s"Expected object tag to be present for `${clsLikeDefn.sym.toString}`") 
                   
                   val ctorCode = blockInstr(
                     label = N,
@@ -1126,6 +1131,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         params = ctorParams.map(p => WasmParam(S(p._2), RefType.anyref)),
                         results = Seq(Result(RefType.anyref)),
                       ),
+                      objectTag = N,
                     ),
                   )
 
@@ -1238,14 +1244,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   Ls(msg"Could not resolve BlockMemberSymbol for class pattern" -> cls.toLoc),
                   extraInfo = S(s"ClassLikeSymbol: ${cls.toString}"),
                 ))
-              val clsTypeIdx = ctx.getType_!(clsBlkMemberSym, resolveSymIdx = true)
-              
-              val expectedTag = clsTypeIdx match
-                case TypeIdx(NumIdx(idx)) => idx
-                case _ => break(errExpr(
-                    Ls(msg"Expected numeric type index for class pattern" -> cls.toLoc),
-                    extraInfo = S(s"TypeIdx: ${clsTypeIdx}"),
-                  ))
+              val expectedTag = ctx.getTypeInfo_!(clsBlkMemberSym).objectTag.getOrElse:
+                break(errExpr(
+                  Ls(msg"Expected object tag for class pattern" -> cls.toLoc),
+                  extraInfo = S(s"TypeIdx: ${ctx.getType_!(clsBlkMemberSym).idx.toWat}"),
+                ))
 
               val scrutExpr = getScrutExpr
               val isStructCompatible = ref.test(scrutExpr, baseObjectRefType(nullable = true))
@@ -1397,6 +1400,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           Seq(tagFieldSym -> Field(I32Type, mutable = true, id = SymIdx("$tag"))),
           isSubtype = true,
         ),
+        objectTag = S(ctx.getFreshObjectTag()),
       ),
     )
     
@@ -1418,7 +1422,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     val entryFnTy = ctx.addType(
       sym = S(entrySym),
-      TypeInfo(id = SymIdx(entryNme), FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref)))),
+      TypeInfo(id = SymIdx(entryNme), FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref))), objectTag = N),
     )
     val entryFnInfo = FuncInfo(
       id = SymIdx(entryNme),
@@ -1444,6 +1448,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         TypeInfo(
           id = SymIdx("start"),
           FunctionType(params = Seq.empty, results = Seq.empty),
+          objectTag = N,
         ),
       )
       val initBody = blockInstr(
