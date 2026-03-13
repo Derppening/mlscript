@@ -1385,7 +1385,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         ),
       )
 
-    val ctx = Ctx.empty
+    val ctx = Ctx()
     given Ctx = ctx
 
     // Create base Object struct with tag field that all other structs will inherit
