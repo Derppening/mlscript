@@ -33,6 +33,11 @@ throw false
 //│ Wasm result:
 //│ ═══[RUNTIME ERROR] 0
 
+:re
+throw "foo"
+//│ Wasm result:
+//│ ═══[RUNTIME ERROR] foo
+
 :ge
 let x = 1
 set x += 1 in x

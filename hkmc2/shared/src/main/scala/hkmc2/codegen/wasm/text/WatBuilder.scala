@@ -676,15 +676,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     case Instantiate(_, cls, as) =>
       cls match
-        // TODO: Implement proper lowering for Errors with string and unit payloads.
+        // TODO: Implement proper lowering for Errors with unit payloads.
         // Currently exceptions are encoded as i31 payloads; unsupported payloads are lossy.
         case Select(Value.Ref(sym, _), id)
             if (sym eq State.globalThisSymbol) && id.name == "Error" =>
           return as.headOption match
             case S(arg) => arg.value match
-                case Value.Lit(BoolLit(value)) => ref.i31(i32.const(if value then 1 else 0))
-                case Value.Lit(IntLit(value)) =>
-                  withValidIntLit(value, arg.value.toLoc)(intVal => ref.i31(i32.const(intVal)))
+                case lit @ Value.Lit(BoolLit(_) | IntLit(_) | StrLit(_)) => result(lit)
                 case unsupported =>
                   warnExpr(
                     msg"WatBuilder::result for Instantiate(...) of `globalThis.Error(...)` with payload `${
@@ -1291,11 +1289,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 resultTypes = Seq.empty,
               ))
             case Case.Tup(len, inf) =>
+              val scrutExpr = getScrutExpr
+              
               val arrayRefType = RefType(HeapType.Array, nullable = true)
-              val isArrayTest = ref.test(getScrutExpr, arrayRefType)
+              val isArrayTest = ref.test(scrutExpr, arrayRefType)
 
               // Length check
-              val scrutArray = ref.cast(getScrutExpr, arrayRefType)
+              val scrutArray = ref.cast(scrutExpr, arrayRefType)
               val arrayLength = array.len(scrutArray)
               val lengthTest = if inf then
                 i32.ge_u(arrayLength, i32.const(len))
