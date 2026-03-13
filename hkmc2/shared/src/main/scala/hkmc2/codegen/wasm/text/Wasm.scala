@@ -223,7 +223,8 @@ object ExternType:
   /** An linear memory entry that is externally addressable. */
   case class Mem(id: SymIdx, memtype: MemType) extends ExternType:
     def toWat: Document = doc"""(memory ${id.toWat} ${memtype.toWat})"""
-    /** An function entry that is externally addressable. */
+
+  /** An function entry that is externally addressable. */
   case class Func(id: SymIdx, typeuse: TypeUse) extends ExternType:
     def toWat: Document = doc"""(func ${id.toWat} ${typeuse.toWat})"""
 
