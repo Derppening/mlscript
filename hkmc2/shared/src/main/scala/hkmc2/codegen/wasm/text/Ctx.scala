@@ -453,9 +453,9 @@ class Ctx extends ToWat:
 
   /** Adds a new local variable into the top-most variable scope. */
   def addLocal(sym: Local): LocalIdx =
-    val numIdx = NumIdx(locals.head.size)
-    locals.head(sym) = numIdx.index
-    LocalIdx(numIdx)
+    val numIdx = locals.head.size
+    locals.head(sym) = numIdx
+    LocalIdx(SymIdx(sym.nme))
 
   /** Adds a [[Seq]] of local variables into the top-most variable scope. */
   def addLocals(syms: Seq[Local]): Seq[LocalIdx] =
@@ -466,9 +466,9 @@ class Ctx extends ToWat:
 
   /** Adds a new variable into the global variable scope. */
   def addGlobal(sym: Symbol, globalInfo: GlobalInfo): GlobalIdx =
-    val numIdx = NumIdx(globals.size)
+    val numIdx = globals.size
     globals += globalInfo
-    namedGlobals(sym) = numIdx.index
+    namedGlobals(sym) = numIdx
     GlobalIdx(globalInfo.id)
 
   /** Adds a [[Seq]] of variables into the global variable scope. */
