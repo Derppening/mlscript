@@ -207,48 +207,38 @@ object Ctx:
       case sym: Symbol => s"symbol `${sym.toString}`"
 end Ctx
 
-/** Context for [[WatBuilder]].
-  */
+/** Context for [[WatBuilder]]. */
 class Ctx extends ToWat:
 
   import Ctx.prettyString
 
-  /** [[ArrayBuf]] containing all type definitions in the module.
-    */
+  /** [[ArrayBuf]] containing all type definitions in the module. */
   private val types = ArrayBuf.empty[TypeInfo]
 
-  /** [[MutMap]] containing type symbols mapped to their corresponding Wasm type indices.
-    */
+  /** [[MutMap]] containing type symbols mapped to their corresponding Wasm type indices. */
   private val namedTypes = MutMap.empty[BlockMemberSymbol, Int]
 
-  /** [[ArrayBuf]] containing all imports in the module.
-    */
+  /** [[ArrayBuf]] containing all imports in the module. */
   private val imports = ArrayBuf.empty[Import[?]]
 
-  /** [[ArrayBuf]] containing all data segments in the module.
-    */
+  /** [[ArrayBuf]] containing all data segments in the module. */
   private val dataSegments = ArrayBuf.empty[DataSegment]
 
-  /** [[ArrayBuf]] containing all function definitions in the module.
-    */
+  /** [[ArrayBuf]] containing all function definitions in the module. */
   private val funcs = ArrayBuf.empty[FuncInfo]
   private val funcInfosByIndex = MutMap.empty[Int, FuncInfo]
 
-  /** [[ArrayBuf]] containing all global definitions in the module.
-    */
+  /** [[ArrayBuf]] containing all global definitions in the module. */
   private val globals = ArrayBuf.empty[GlobalInfo]
 
-  /** [[MutMap]] containing function symbols mapped to their corresponding Wasm function indices.
-    */
+  /** [[MutMap]] containing function symbols mapped to their corresponding Wasm function indices. */
   private val namedFuncs = MutMap.empty[Symbol, Int]
   private val tags = ArrayBuf.empty[TagInfo]
 
-  /** [[MutMap]] containing global symbols mapped to their corresponding Wasm global indices.
-    */
+  /** [[MutMap]] containing global symbols mapped to their corresponding Wasm global indices. */
   private val namedGlobals = MutMap.empty[Symbol, Int]
 
-  /** Stack of [[MutMap]] from local variable symbols to their numeric indices within the current function scope.
-    */
+  /** Stack of [[MutMap]] from local variable symbols to their numeric indices within the current function scope. */
   private var locals = MutMap.empty[Local, Int] :: Nil
   private var startFunc = N: Opt[FuncIdx]
 
