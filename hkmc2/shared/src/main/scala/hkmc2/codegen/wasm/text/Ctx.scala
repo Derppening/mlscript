@@ -131,37 +131,33 @@ end GlobalInfo
   *
   * @param id
   *   Symbolic identifier for the function, or `N` if the function is anonymous.
-  * @param compType
-  *   The composite type this type definition represents.
+  * @param typedef
+  *   The type definition of this type.
   * @param objectTag
   *   Optional object tag number associated with this type.
   */
-class TypeInfo(val id: SymIdx, val compType: CompType, val objectTag: Opt[Int]) extends ToWat:
+class TypeInfo(val id: SymIdx, val subType: SubType, val objectTag: Opt[Int]) extends ToWat:
 
   /** @param sym
     *   The source [[BlockMemberSymbol]] which this type is generated from.
-    * @param compType
-    *   The composite type this type definition represents.
+    * @param subType
+    *   The abstract type this type definition represents.
     * @param objectTag
     *   Optional object tag number associated with this type.
     */
-  def this(sym: BlockMemberSymbol, compType: CompType, objectTag: Opt[Int])(using Raise, Scope) = this(
+  def this(sym: BlockMemberSymbol, subType: SubType, objectTag: Opt[Int])(using Raise, Scope) = this(
     SymIdx(sym.optionIf(_.nameIsMeaningful).fold(summon[Scope].allocateName(sym))(_.nme)),
-    compType,
+    subType,
     objectTag,
   )
 
-  private def idDoc: Document = id.toWat
+  def toTypeDef: TypeDef = TypeDef(id, subType)
 
-  def toWat: Document = compType match
-    case struct: StructType if struct.isSubtype =>
-      val parentsDoc = struct.parents.optionIf(_.nonEmpty).fold(doc""): parents =>
-        parents.map(_.toWat).mkDocument(doc" ")
-      val structDoc = struct.copy(isSubtype = false).toWat
-      doc"(type${idDoc.surroundUnlessEmpty(doc" ")} (sub${parentsDoc.surroundUnlessEmpty(doc" ")} ${structDoc}))"
-    case _ =>
-      doc"(type${idDoc.surroundUnlessEmpty(doc" ")} ${compType.toWat})"
+  def toWat: Document = toTypeDef.toWat
 end TypeInfo
+
+given Conversion[TypeInfo, TypeDef] with
+  def apply(ti: TypeInfo): TypeDef = ti.toTypeDef
 
 /** A WebAssembly exception tag declaration.
   *
@@ -267,7 +263,7 @@ class Ctx extends ToWat:
   .toSeq
 
   /** Returns a new number to be used as an object tag. */
-  def getFreshObjectTag(): Int = 
+  def getFreshObjectTag(): Int =
     val fresh = objectTagNum
     objectTagNum += 1
     fresh

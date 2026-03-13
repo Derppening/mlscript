@@ -125,11 +125,7 @@ case class Field(ty: Type, mutable: Bool, id: SymIdx) extends ToWat:
       })"
 
 /** A type representing a structure type. */
-case class StructType(
-    fields: Seq[DefinitionSymbol[?] -> Field],
-    parents: Seq[TypeIdx] = Seq.empty,
-    isSubtype: Bool = false,
-) extends ToWat:
+case class StructType(fields: Seq[DefinitionSymbol[?] -> Field]) extends ToWat:
 
   lazy val fieldsBySym: Map[DefinitionSymbol[?], Field] = fields.toMap
 
@@ -146,6 +142,19 @@ case class ArrayType(elemType: Type, mutable: Bool) extends ToWat:
 
 /** A composite type. */
 type CompType = StructType | FunctionType | ArrayType
+
+case class SubType(compType: CompType, parents: Seq[TypeIdx] = Seq.empty, isFinal: Bool = false) extends ToWat:
+  def toWat: Document = doc"(sub${
+      if isFinal then doc" final" else doc""
+    }${
+      parents.map(_.toWat).mkDocument(doc" ").surroundUnlessEmpty(doc" ")
+    } ${compType.toWat})"
+
+given Conversion[CompType, SubType] with
+  def apply(compType: CompType): SubType = SubType(compType, isFinal = true)
+
+case class TypeDef(id: SymIdx, subType: SubType) extends ToWat:
+  def toWat: Document = doc"(type ${id.toWat} ${subType.toWat})"
 
 type AbsHeapType =
   HeapType.Func.type

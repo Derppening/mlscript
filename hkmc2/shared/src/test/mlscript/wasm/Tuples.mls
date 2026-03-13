@@ -52,9 +52,9 @@ c.[3]
 //│ Wat:
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
-//│   (type $TupleArray (array (ref null any)))
-//│   (type $TupleArrayMut (array (mut (ref null any))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $TupleArray (sub final (array (ref null any))))
+//│   (type $TupleArrayMut (sub final (array (mut (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $entry (type $entry) (result (ref null any))
 //│     (local $c (ref null any))
 //│     (local $tuple (ref null any))

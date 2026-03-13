@@ -11,7 +11,7 @@ import document.Document
 import js.CodeBuilder
 import semantics.*, Elaborator.State
 import syntax.Tree.{BoolLit, IntLit, StrLit, Ident}
-import text.{Import as WatImport, Param as WasmParam}
+import text.{Import as WatImport, Param as WasmParam, TypeDef as WatTypeDef}
 import Message.MessageContext
 import Scope.scope
 
@@ -53,7 +53,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ctx.getType_!(baseObjectSym)
 
   private def baseObjectStruct(using Ctx): StructType =
-    ctx.getTypeInfo_!(baseObjectSym).compType match
+    ctx.getTypeInfo_!(baseObjectSym).subType.compType match
       case struct: StructType => struct
       case other => lastWords(s"Base Object type must be a struct, found ${other.toWat.mkString()}")
 
@@ -170,7 +170,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           sym = S(defn.sym),
           typeInfo = TypeInfo(
             id = SymIdx(defn.sym.nme),
-            compType = StructType(fields = allFields, parents = Seq(baseObjectTypeIdx), isSubtype = true),
+            subType = SubType(
+              StructType(allFields),
+              parents = Seq(baseObjectTypeIdx),
+              isFinal = false,
+            ),
             objectTag = S(ctx.getFreshObjectTag()),
           ),
         )
@@ -503,9 +507,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       sym: DefinitionSymbol[?],
   )(using Ctx, Raise): FieldIdx =
     val structInfo = ctx.getTypeInfo_!(thisSym)
-    val symToField = structInfo.compType match
+    val symToField = structInfo.subType.compType match
       case ty: StructType => ty.fieldsBySym
-      case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.compType.toWat}")
+      case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.subType.compType.toWat}")
     val fieldIdx = symToField.get(sym)
       .orElse:
         // Workaround: TermSymbols are not correctly resolved, so match the fields by name instead
@@ -607,7 +611,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             target = base,
             operands = wasmArgs.toSeq,
             typeIdx = baseTypeIdx,
-            funcType = baseTypeInfo.compType.asInstanceOf[FunctionType],
+            funcType = baseTypeInfo.subType.compType.asInstanceOf[FunctionType],
           )
 
     case sel @ Select(qual, id) =>
@@ -1099,7 +1103,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     Seq(
                       local.set(thisVar, struct.new_default(typeref)),
                       struct.set(
-                        FieldIdx(ctx.getTypeInfo_!(typeref).compType.asInstanceOf[StructType].fields(0)._2.id),
+                        FieldIdx(ctx.getTypeInfo_!(typeref).subType.compType.asInstanceOf[StructType].fields(0)._2.id),
                         ref.cast(
                           local.get(thisVar, RefType.anyref),
                           RefType(typeref, nullable = false),
@@ -1178,7 +1182,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         case S(RefType(heapType, _)) => heapType match
             case HeapType.Func =>
               errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
-            case typeidx: TypeIdx if ctx.getTypeInfo_!(typeidx).compType.isInstanceOf[FunctionType] =>
+            case typeidx: TypeIdx if ctx.getTypeInfo_!(typeidx).subType.compType.isInstanceOf[FunctionType] =>
               errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case _ => ()
         case _ => ()
@@ -1190,7 +1194,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         case S(RefType(heapType, _)) => heapType match
             case HeapType.Func =>
               errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
-            case typeidx: TypeIdx if ctx.getTypeInfo_!(typeidx).compType.isInstanceOf[FunctionType] =>
+            case typeidx: TypeIdx if ctx.getTypeInfo_!(typeidx).subType.compType.isInstanceOf[FunctionType] =>
               errExpr(Ls(msg"Returning function instances is not supported" -> res.toLoc))
             case _ => ()
         case _ => ()
@@ -1261,7 +1265,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               val scrutBaseType = baseObjectRefType(nullable = false)
               val resolvedScrutBaseType = scrutBaseType.heapType match
                 case aht: AbsHeapType => aht
-                case typeidx: TypeIdx => ctx.getTypeInfo_!(typeidx).compType
+                case typeidx: TypeIdx => ctx.getTypeInfo_!(typeidx).subType.compType
               val scrutAsObject = ref.cast(getScrutExpr, scrutBaseType)
               val scrutTag =
                 struct.get(
@@ -1396,9 +1400,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       sym = S(baseObjectSym),
       TypeInfo(
         id = SymIdx("Object"),
-        StructType(
-          Seq(tagFieldSym -> Field(I32Type, mutable = true, id = SymIdx("$tag"))),
-          isSubtype = true,
+        SubType(
+          StructType(
+            Seq(tagFieldSym -> Field(I32Type, mutable = true, id = SymIdx("$tag"))),
+          ),
+          isFinal = false,
         ),
         objectTag = S(ctx.getFreshObjectTag()),
       ),
@@ -1422,7 +1428,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     val entryFnTy = ctx.addType(
       sym = S(entrySym),
-      TypeInfo(id = SymIdx(entryNme), FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref))), objectTag = N),
+      TypeInfo(
+        id = SymIdx(entryNme),
+        FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref))),
+        objectTag = N,
+      ),
     )
     val entryFnInfo = FuncInfo(
       id = SymIdx(entryNme),

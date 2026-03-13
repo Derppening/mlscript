@@ -49,9 +49,9 @@ foo() + foo()
 //│ Wat:
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
-//│   (type $foo (func (result (ref null any))))
-//│   (type $plus_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $foo (sub final (func (result (ref null any)))))
+//│   (type $plus_impl (sub final (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $foo (type $foo) (result (ref null any))
 //│     (return
 //│       (ref.i31
@@ -119,8 +119,8 @@ class Foo(val a)
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
 //│   (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $a (mut (ref null any))))))
-//│   (type $Foo_ctor (func (param $a (ref null any)) (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $Foo_ctor (sub final (func (param $a (ref null any)) (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $Foo_ctor (type $Foo_ctor) (param $a (ref null any)) (result (ref null any))
 //│     (local $this (ref null any))
 //│     (block (result (ref null any))
@@ -173,8 +173,8 @@ class Foo(val x) with
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
 //│   (type $Foo (sub $Object (struct (field $$tag (mut i32)) (field $x (mut (ref null any))) (field $y (mut (ref null any))))))
-//│   (type $Foo_ctor (func (param $x (ref null any)) (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $Foo_ctor (sub final (func (param $x (ref null any)) (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $Foo_ctor (type $Foo_ctor) (param $x (ref null any)) (result (ref null any))
 //│     (local $this (ref null any))
 //│     (block (result (ref null any))
@@ -229,9 +229,9 @@ O.y
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
 //│   (type $O (sub $Object (struct (field $$tag (mut i32)) (field $x (mut (ref null any))) (field $y (mut (ref null any))))))
-//│   (type $O_ctor (func (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
-//│   (type $start (func))
+//│   (type $O_ctor (sub final (func (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
+//│   (type $start (sub final (func)))
 //│   (global $O$inst (mut (ref null $O)) (ref.null $O))
 //│   (start $init)
 //│   (func $O_ctor1 (type $O_ctor) (result (ref null any))

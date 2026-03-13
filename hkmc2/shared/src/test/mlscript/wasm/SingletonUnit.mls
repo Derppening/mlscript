@@ -8,9 +8,9 @@
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
 //│   (type $Unit (sub $Object (struct (field $$tag (mut i32)))))
-//│   (type $Unit_ctor (func (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
-//│   (type $start (func))
+//│   (type $Unit_ctor (sub final (func (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
+//│   (type $start (sub final (func)))
 //│   (global $Unit$inst (mut (ref null $Unit)) (ref.null $Unit))
 //│   (start $init)
 //│   (func $Unit_ctor1 (type $Unit_ctor) (result (ref null any))
@@ -78,7 +78,7 @@ x
 //│ Wat:
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $entry (type $entry) (result (ref null any))
 //│     (local $x (ref null any))
 //│     (block (result (ref null any))

@@ -7,8 +7,8 @@
 //│ Wat:
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
-//│   (type $plus_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $plus_impl (sub final (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $plus_impl1 (type $plus_impl) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and
@@ -44,8 +44,8 @@
 //│ Wat:
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
-//│   (type $neg_impl (func (param $arg (ref null any)) (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $neg_impl (sub final (func (param $arg (ref null any)) (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $neg_impl1 (type $neg_impl) (param $arg (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (ref.test (ref null i31)
@@ -94,8 +94,8 @@ not true
 //│ Wat:
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
-//│   (type $eq_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
-//│   (type $entry (func (result (ref null any))))
+//│   (type $eq_impl (sub final (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any)))))
+//│   (type $entry (sub final (func (result (ref null any)))))
 //│   (func $eq_impl1 (type $eq_impl) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and
