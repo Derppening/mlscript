@@ -14,6 +14,7 @@ import Instructions.*
 
 import scala.annotation.targetName
 import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
+import scala.reflect.ClassTag
 
 /** A Wasm function and its associated information.
   *
@@ -201,8 +202,7 @@ object Ctx:
   def empty: Ctx = Ctx(
     types = ArrayBuf.empty,
     namedTypes = MutMap.empty,
-    memoryImports = ArrayBuf.empty,
-    functionImports = ArrayBuf.empty,
+    imports = ArrayBuf.empty,
     dataSegments = ArrayBuf.empty,
     funcs = ArrayBuf.empty,
     funcInfosByIndex = MutMap.empty,
@@ -228,10 +228,8 @@ end Ctx
   *   [[ArrayBuf]] containing all type definitions in the module.
   * @param namedTypes
   *   [[MutMap]] containing type symbols mapped to their corresponding Wasm type indices.
-  * @param memoryImports
-  *   [[ArrayBuf]] containing all memory imports in the module.
-  * @param functionImports
-  *   [[ArrayBuf]] containing all function imports in the module.
+  * @param imports
+  *   [[ArrayBuf]] containing all imports in the module.
   * @param dataSegments
   *   [[ArrayBuf]] containing all data segments in the module.
   * @param funcs
@@ -248,8 +246,7 @@ end Ctx
 class Ctx(
     types: ArrayBuf[TypeInfo],
     namedTypes: MutMap[BlockMemberSymbol, Int],
-    memoryImports: ArrayBuf[Import[ExternType.Mem]],
-    functionImports: ArrayBuf[Import[ExternType.Func]],
+    imports: ArrayBuf[Import[?]],
     dataSegments: ArrayBuf[DataSegment],
     funcs: ArrayBuf[FuncInfo],
     funcInfosByIndex: MutMap[Int, FuncInfo],
@@ -273,6 +270,11 @@ class Ctx(
   private val singletonByBms: MutMap[BlockMemberSymbol, Ctx.SingletonInfo] = MutMap.empty
   private val singletonByIsym: MutMap[ModuleOrObjectSymbol, Ctx.SingletonInfo] = MutMap.empty
   private val singletonInitActions: ArrayBuf[Expr] = ArrayBuf.empty
+
+  /** Filters all imports by a given [[ExternType]]. */
+  private def importsWithType[ET <: ExternType](implicit ct: ClassTag[ET]): Seq[Import[ET]] = imports.collect:
+    case i if ct.runtimeClass.isInstance(i.externType) => i.asInstanceOf[Import[ET]]
+  .toSeq
 
   /** Adds a type into this context. */
   def addType(sym: Opt[BlockMemberSymbol], typeInfo: TypeInfo): TypeIdx =
@@ -312,7 +314,7 @@ class Ctx(
 
   /** Adds a function into this context. */
   def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
-    val numIdx = NumIdx(functionImports.size + funcs.size)
+    val numIdx = NumIdx(importsWithType[ExternType.Func].size + funcs.size)
     funcs += funcInfo
     funcInfosByIndex(numIdx.index) = funcInfo
     sym.foreach:
@@ -325,8 +327,8 @@ class Ctx(
     */
   @deprecated("Use the `Import[ExternType.Func]` overload instead.")
   def addFunctionImport(sym: Opt[Symbol], funcImport: FuncImport): FuncIdx =
-    val numIdx = NumIdx(functionImports.size + funcs.size)
-    functionImports += Import(funcImport.module, funcImport.name, ExternType.Func(funcImport.id, funcImport.typeuse))
+    val numIdx = NumIdx(importsWithType[ExternType.Func].size + funcs.size)
+    imports += Import(funcImport.module, funcImport.name, ExternType.Func(funcImport.id, funcImport.typeuse))
     sym.foreach:
       namedFuncs(_) = numIdx.index
     FuncIdx(funcImport.id)
@@ -336,8 +338,8 @@ class Ctx(
     * Returns the function index in the global function index space.
     */
   def addFunctionImport(sym: Opt[Symbol], funcImport: Import[ExternType.Func]): FuncIdx =
-    val numIdx = NumIdx(functionImports.size + funcs.size)
-    functionImports += funcImport
+    val numIdx = NumIdx(importsWithType[ExternType.Func].size + funcs.size)
+    imports += funcImport
     sym.foreach:
       namedFuncs(_) = numIdx.index
     FuncIdx(funcImport.externType.id)
@@ -367,19 +369,21 @@ class Ctx(
     val key = module -> name
     cachedMemoryImport.get(key) match
       case S(idx) =>
-        val existing = memoryImports(idx)
+        val existing = importsWithType[ExternType.Mem].apply(idx)
         val newMin = existing.externType.memtype.lim.min max minPages
         if newMin > existing.externType.memtype.lim.min then
-          memoryImports(idx) =
-            Import(module, name, ExternType.Mem(SymIdx(name), memtype = MemType(lim = Limits(newMin))))
+          imports.update(
+            idx,
+            Import(module, name, ExternType.Mem(SymIdx(name), MemType(lim = Limits(newMin)))),
+          )
       case N =>
-        val idx = memoryImports.size
-        memoryImports += Import(module, name, ExternType.Mem(SymIdx(name), memtype = MemType(lim = Limits(minPages))))
+        val idx = importsWithType[ExternType.Mem].size
+        imports += Import(module, name, ExternType.Mem(SymIdx(name), memtype = MemType(lim = Limits(minPages))))
         cachedMemoryImport(key) = idx
 
   /** Returns the page limits of memory import (`module`, `name`) if present. */
   def getMemoryImportLimits(module: Str, name: Str): Opt[Limits] =
-    memoryImports.find(m => m.module === module && m.name === name).map(_.externType.memtype.lim)
+    importsWithType[ExternType.Mem].find(m => m.module === module && m.name === name).map(_.externType.memtype.lim)
 
   /** Adds a data segment into this context. */
   def addDataSegment(seg: DataSegment): Unit =
@@ -519,8 +523,7 @@ class Ctx(
     doc"(module #{  # ${
         (
           types.toSeq.map(_.toWat)
-            ++ memoryImports.toSeq.map(_.toWat)
-            ++ functionImports.toSeq.map(_.toWat)
+            ++ imports.toSeq.map(_.toWat)
             ++ dataSegments.toSeq.map(_.toWat)
             ++ globals.toSeq.map(_.toWat)
             ++ tags.toSeq.map(_.toWat)
