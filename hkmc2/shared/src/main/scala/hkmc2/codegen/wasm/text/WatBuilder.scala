@@ -40,6 +40,7 @@ object WatBuilder:
 class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   import Ctx.ctx
   import Ctx.{SingletonInfo, binaryOps, unaryOps, wasmIntrinsicArities, wasmIntrinsicNameSet}
+  import FunctionCtxMut.funcCtx
   import Instructions.{block as blockInstr, *}
   import WatBuilder.ExternIntrinsics
 
@@ -104,7 +105,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     )(N)
 
   /** Registers the synthetic `Unit` singleton. */
-  private def RegisterUnitSingleton()(using Ctx, Raise, Scope): Unit =
+  private def RegisterUnitSingleton()(using Ctx, FunctionCtxMut, Raise, Scope): Unit =
     val unitDefn = syntheticUnitDefn
     if ctx.containsSingleton(unitDefn.sym) then return
 
@@ -254,7 +255,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         TypeInfo(
           id = SymIdx(importTyNme),
           FunctionType(
-            params = Seq(WasmParam("glob_offset", RefType.anyref), WasmParam("len", RefType.anyref)),
+            params = Seq(WasmParam(SymIdx("glob_offset"), RefType.anyref), WasmParam(SymIdx("len"), RefType.anyref)),
             results = Seq(Result(RefType.anyref)),
           ),
           objectTag = N,
@@ -287,42 +288,39 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Allocates a fresh temp local (typed `anyref`) and returns its `LocalIdx`.
     */
-  private def mkTempLocal(base: Str)(using Ctx, Scope, Raise): LocalIdx =
+  private def mkTempLocal(base: Str)(using Ctx, FunctionCtxMut, Scope, Raise): LocalIdx =
     val sym = TempSymbol(N, base)
     val nme = scope.allocateName(sym)
-    ctx.addLocal(sym)
+    funcCtx.addLocal(sym, SymIdx(nme))
     LocalIdx(SymIdx(nme))
 
   /** Binds constructor self (`thisSym`) to the Wasm local name `this` in the current scope/context.
     */
-  private def bindCtorThis(thisSym: Local)(using Ctx, Raise, Scope): LocalIdx -> Str =
+  private def bindCtorThis(thisSym: Local)(using Ctx, FunctionCtxMut, Raise, Scope): LocalIdx =
     val thisName = "this"
     scope.lookup(thisSym) match
       case S(`thisName`) => ()
       case _ => scope.addToBindings(thisSym, thisName, shadow = true)
-    if !ctx.containsLocal(thisSym) then
-      ctx.addLocal(thisSym)
-    LocalIdx(SymIdx(thisName)) -> thisName
+    val thisIdx = SymIdx(thisName)
+    if !funcCtx.containsLocal(thisSym) then
+      funcCtx.addLocal(thisSym, thisIdx)
+    LocalIdx(thisIdx)
 
   /** Compiles a class/object constructor body under its own Wasm-local frame.
     */
   private def setupCtorLocals(
       clsLikeDefn: ClsLikeDefn,
-  )(using Ctx, Raise, Scope): (Seq[Local -> Str], LocalIdx, Expr, Seq[Local -> Str]) =
-    ctx.pushLocal()
+  )(using Ctx, Raise, Scope): (Seq[Local -> SymIdx], LocalIdx, Expr, Seq[Local -> SymIdx]) =
     val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
-    val ctorParams = clsParams.map: p =>
-      ctx.addLocal(p)
-      p -> scope.allocateName(p)
-    val (thisVar, thisVarName) = bindCtorThis(clsLikeDefn.isym)
-    val (ctorWat, ctorLocals) = block(clsLikeDefn.ctor)
-    val localsWithNames = (clsLikeDefn.isym -> thisVarName) +: ctorLocals.map(l => l -> scope.lookup_!(l, l.toLoc))
-    ctx.popLocal()
-    (ctorParams, thisVar, ctorWat, localsWithNames)
-
-  /** Returns locals allocated during codegen (e.g., temp locals). */
-  private def getExtraLocals(using Ctx): Seq[Local] =
-    ctx.getWasmLocals._2.getOrElse(Seq.empty)
+    val ((ctorWat, thisIdx), funcCtx) = scope.nest.givenIn:
+      clsParams.foreach: p =>
+        scope.allocateName(p)
+      genFuncBody(clsParams):
+        val thisVar = bindCtorThis(clsLikeDefn.isym)
+        val ctorWat = nonNestedScoped(clsLikeDefn.ctor)(block)
+        // val ctorWat = block(clsLikeDefn.ctor)
+        ctorWat -> thisVar
+    (funcCtx.params, thisIdx, ctorWat, funcCtx.locals)
 
   /** Converts expression result types to WAT result clauses, dropping unreachable types. */
   private def resultClauses(expr: Expr): Seq[Result] =
@@ -330,7 +328,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     else expr.resultTypes.map(ty => Result(ty.asValType_!))
 
   /** Normalizes the exported `entry` body so it always returns single result. */
-  private def normalizeEntryExpr(expr: Expr, isAbortive: Bool)(using Ctx, Raise, Scope): Expr =
+  private def normalizeEntryExpr(expr: Expr, isAbortive: Bool)(using Ctx, FunctionCtxMut, Raise, Scope): Expr =
     if expr.resultTypes.isEmpty && !isAbortive then
       blockInstr(
         label = N,
@@ -355,7 +353,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Emits a tuple element load that works for both mutable and immutable tuple arrays.
     */
-  private def tupleArrayGet(tupleExpr: Expr, idxBuilder: Expr => Expr)(using Ctx, Raise, Scope): Expr =
+  private def tupleArrayGet(tupleExpr: Expr, idxBuilder: Expr => Expr)(using Ctx, FunctionCtxMut, Raise, Scope): Expr =
     val elemType = RefType.anyref
     val mutArrayType = tupleArrayType(true)
     val immArrayType = tupleArrayType(false)
@@ -382,7 +380,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       loc: Opt[Loc],
       errCtx: Str,
       errExtra: => Str,
-  )(using Ctx, Raise, Scope): Expr => Expr =
+  )(using Ctx, FunctionCtxMut, Raise, Scope): Expr => Expr =
     fld match
       case Value.Lit(IntLit(value)) if value.isValidInt =>
         val idx = value.toInt
@@ -441,7 +439,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     raise(ErrorReport(errMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
     unreachable
 
-  def getVar(l: Local, loc: Opt[Loc])(using Ctx, Raise, Scope): Expr =
+  def getVar(l: Local, loc: Opt[Loc])(using Ctx, FunctionCtxMut, Raise, Scope): Expr =
     singletonInfoFor(l) match
       case S(info) => singletonGlobalGet(info)
       case N => l match
@@ -458,19 +456,19 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               extraInfo = S(ts.toString),
             )
           case ts: semantics.InnerSymbol =>
-            if !ctx.containsLocal(l) then
+            if !funcCtx.containsLocal(l) then
               return errExpr(
                 Ls(
                   msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" ->
                     ts.toLoc,
                 ),
                 extraInfo = S(
-                  s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nWasm Locals: ${ctx.getAllWasmLocals.toString}",
+                  s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nWasm Locals: ${funcCtx.getLocals.toString}\nWasm Globals: ${ctx.getGlobals.toString}",
                 ),
               )
             local.get(LocalIdx(SymIdx(scope.lookup_!(ts, ts.toLoc))), RefType.anyref)
           case l =>
-            if ctx.containsLocal(l) then
+            if funcCtx.containsLocal(l) then
               local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
             else if ctx.containsGlobal(l) then
               global.get(GlobalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
@@ -483,12 +481,12 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     l.toLoc,
                 ),
                 extraInfo = S(
-                  s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nWasm Locals: ${ctx.getAllWasmLocals.toString}",
+                  s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nWasm Locals: ${funcCtx.getLocals.toString}\nWasm Globals: ${ctx.getGlobals.toString}",
                 ),
               )
   end getVar
 
-  def argument(a: Arg)(using Ctx, Raise, Scope): Expr =
+  def argument(a: Arg)(using Ctx, FunctionCtxMut, Raise, Scope): Expr =
     if a.spread.nonEmpty then
       errExpr(
         Ls(msg"WatBackend::argument for spread expression not implemented yet" -> a.value.toLoc),
@@ -496,10 +494,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       )
     else result(a.value)
 
-  def operand(a: Arg)(using Ctx, Raise, Scope): Expr =
+  def operand(a: Arg)(using Ctx, FunctionCtxMut, Raise, Scope): Expr =
     if a.spread.nonEmpty then die else subexpression(a.value)
 
-  def subexpression(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
+  def subexpression(r: codegen.Result)(using Ctx, FunctionCtxMut, Raise, Scope): Expr = r match
     case r: Lambda =>
       errExpr(
         Ls(msg"WatBuilder::subexpression for Lambda not implemented yet" -> r.toLoc),
@@ -531,7 +529,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ))
   end fieldSelect
 
-  def result(r: codegen.Result)(using Ctx, Raise, Scope): Expr = r match
+  def result(r: codegen.Result)(using Ctx, FunctionCtxMut, Raise, Scope): Expr = r match
     case Value.This(sym) =>
       // TODO(Derppening): Add type tracking and refinement for locals, remove the `ref.cast`
       ref.cast(
@@ -876,7 +874,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   private def mkIntrinsicParams(name: Str, suffixes: Seq[Str]): Seq[(TempSymbol, SymIdx)] =
     suffixes.map: suffix =>
       val sym = TempSymbol(N, suffix)
-      sym -> suffix
+      sym -> SymIdx(suffix)
 
   /** Loads the local `idx` as an `anyref`.
     */
@@ -888,7 +886,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   private def getI32FromAnyref(idx: SymIdx): Expr =
     i31.get(ref.cast(getLocalAnyref(idx), RefType.i31ref), true)
 
-  def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr =
+  def returningTerm(t: Block)(using Ctx, FunctionCtxMut, Raise, Scope): Expr =
     def isControlTransfer(expr: Expr): Bool =
       expr.resultType.contains(UnreachableType) || expr.mnemonic == "return"
 
@@ -1055,14 +1053,14 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     val result = pss.foldRight(bod):
                       case (ps, block) =>
                         Return(Lambda(ps, block), false)
-                    val (params, bodyWat, locals) = setupFunction(ps, result)
+                    val (bodyWat, funcCtx) = setupFunction(ps, result)
                     if sym.nameIsMeaningful then
                       val funcTy = ctx.addType(
                         sym = N,
                         TypeInfo(
                           id = SymIdx(scope.allocateName(TempSymbol(N, sym.nme))),
                           FunctionType(
-                            params = params.map(_._1),
+                            params = funcCtx.params.map(p => WasmParam(p._2, RefType.anyref)),
                             results = Seq.fill(bodyWat.resultTypes.length)(Result(RefType.anyref)),
                           ),
                           objectTag = N,
@@ -1073,9 +1071,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         FuncInfo(
                           sym,
                           typeUse = TypeUse(funcTy),
-                          params = ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> SymIdx(nme)),
+                          params = funcCtx.params,
                           nResults = bodyWat.resultTypes.length,
-                          locals = locals,
+                          locals = funcCtx.locals,
                           body = bodyWat,
                         )
                       val func = ctx.addFunc(S(defn.sym), funcInfo)
@@ -1174,7 +1172,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       TypeInfo(
                         id = SymIdx(funcTyId),
                         FunctionType(
-                          params = ctorParams.map(p => WasmParam(p._2.id, RefType.anyref)),
+                          params = ctorParams.map(p => WasmParam(p._2, RefType.anyref)),
                           results = Seq(Result(RefType.anyref)),
                         ),
                         objectTag = N,
@@ -1554,11 +1552,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     // Compile the entry function under a dedicated local scope so that any temp locals introduced
     // during codegen (e.g., via `local.tee`) are declared in the entry function.
-    ctx.pushLocal()
-    val (rawEntryFnExpr, entryFnLocals) =
-      block(p.main)
-    val entryFnExpr = normalizeEntryExpr(rawEntryFnExpr, p.main.isAbortive)
-    val entryExtraLocals = getExtraLocals.filterNot(entryFnLocals.toSet.contains)
+    val (entryFnExpr, funcCtx) = genFuncBody(Seq.empty):
+      val rawEntryFnExpr = block(p.main)
+      val entryFnExpr = normalizeEntryExpr(rawEntryFnExpr, p.main.isAbortive)
+      entryFnExpr
 
     val entrySym = BlockMemberSymbol("entry", Nil)
     val entryNme = scope.allocateName(entrySym)
@@ -1571,18 +1568,17 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         objectTag = N,
       ),
     )
+
     val entryFnInfo = FuncInfo(
       id = SymIdx(entryNme),
       typeUse = TypeUse(entryFnTy),
-      params = Seq.empty,
+      params = funcCtx.params,
       nResults = 1,
-      // TODO(Derppening): Should we place top-level scope variables in the global section?
-      locals = (entryFnLocals ++ entryExtraLocals).map(l => l -> SymIdx(scope.allocateOrGetName(l))),
+      locals = funcCtx.locals,
       body = entryFnExpr,
       `export` = S(entryNme),
     )
 
-    ctx.popLocal()
     if stringLits.nonEmpty then
       stringLits.foreach: (s, lit) =>
         if lit.byteLen > 0 then
@@ -1633,60 +1629,32 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     (ctx.toWat, entryNme, systemMemMinPages)
   end program
 
-  /** Captures the local symbols introduced while compiling `expr`.
-    */
-  private def withLocalDelta(expr: => Expr)(using Ctx): (Expr, Seq[Local]) =
-    val before = ctx.getWasmLocals._2.getOrElse(Seq.empty).toSet
-    val compiled = expr
-    val after = ctx.getWasmLocals._2.getOrElse(Seq.empty)
-    (compiled, after.filterNot(before.contains))
+  def blockPreamble(ss: Iterable[Symbol])(using Ctx, FunctionCtxMut, Raise, Scope): Unit =
+    val vars = ss.toArray.sortBy(_.uid).iterator.map: l =>
+      l -> SymIdx(scope.allocateName(l))
+    .toSeq
+    vars.foreach: (l, nme) =>
+      funcCtx.addLocal(l, nme)
 
-  def blockPreamble(ss: Iterable[Symbol])(using Ctx, Raise, Scope): Seq[Local] =
-    val vars = ss
-      .toSeq
-      .toArray
-      .sortBy(_.uid)
-      .iterator
-      .map: l =>
-        scope.allocateName(l)
-        l
-      .toSeq
-    ctx.addLocals(vars)
-    vars
-
-  def nonNestedScoped(blk: Block)(k: Block => Expr)(using Ctx, Raise, Scope): Expr = blk match
+  def nonNestedScoped(blk: Block)(k: Block => Expr)(using Ctx, FunctionCtxMut, Raise, Scope): Expr = blk match
     case Scoped(syms, body) =>
       blockPreamble(syms.view.filter(body.freeVars))
       k(body)
     case _ => k(blk)
 
-  def block(t: Block)(using Ctx, Raise, Scope): (Expr, Seq[Local]) =
-    withLocalDelta:
-      nonNestedScoped(t)(returningTerm)
+  def block(t: Block)(using Ctx, FunctionCtxMut, Raise, Scope): Expr =
+    returningTerm(t)
+
+  def body(t: Block)(using Ctx, FunctionCtxMut, Raise, Scope): Expr = scope.nest givenIn:
+    nonNestedScoped(t)(block)
 
   def setupFunction(
       params: ParamList,
       body: Block,
-  )(using Ctx, Raise, Scope): (Seq[WasmParam -> Str], Expr, Seq[Local -> SymIdx]) =
-    // Add a frame for `ctx.locals`
-    ctx.pushLocal()
-
-    val result = scope.nest givenIn:
-      val wasmParams = params.params.map: p =>
-        val paramNme = scope.allocateName(p.sym)
-        val param = WasmParam(paramNme, RefType.anyref)
-        ctx.addLocal(p.sym)
-        param -> paramNme
-      val (wasmBody, locals) = block(body)
-      val paramSyms: Set[Local] = params.params.map(p => (p.sym: Local)).toSet
-      val extraLocals = getExtraLocals.filterNot((locals.toSet ++ paramSyms).contains)
-      val localsWithNames = (locals ++ extraLocals).map(l => l -> scope.allocateOrGetName(l))
-      (wasmParams.toSeq, wasmBody, localsWithNames.map((l, n) => l -> SymIdx(n)))
-
-    // Restore `ctx.locals`
-    ctx.popLocal()
-
-    result
-  end setupFunction
+  )(using Ctx, Raise, Scope): (Expr, FunctionCtx) =
+    val paramsList = params.params.foreach: p =>
+      scope.allocateName(p.sym)
+    genFuncBody(params.params.map(_.sym).toSeq):
+      this.body(body)
 
 end WatBuilder

@@ -194,6 +194,36 @@ end TagInfo
 enum WasmIntrinsicType:
   case TupleArray(mutable: Bool)
 
+object FunctionCtxMut:
+
+  def funcCtx(using funcCtx: FunctionCtxMut): FunctionCtxMut = funcCtx
+
+class FunctionCtxMut(params: ListMap[Local, SymIdx]):
+
+  private val _params: Seq[Local -> SymIdx] = params.toSeq
+  private var locals: ListMap[Local, SymIdx] = ListMap.empty
+
+  def addLocal(local: Local, symIdx: SymIdx): Unit =
+    require(!containsLocal(local), s"Duplicate local variable `${local.toString}` in the same function scope")
+    locals += (local -> symIdx)
+  def containsLocal(sym: Local): Bool = params.contains(sym) || locals.contains(sym)
+  def getParams: Seq[Local -> SymIdx] = _params.toSeq
+  def getLocals: Seq[Local -> SymIdx] = locals.toSeq
+
+/** Generates a function body, providing an instance of [[FunctionCtxMut]] for parameter and locals tracking.
+  *
+  * Returns the result of the `mkBody` function along with a [[FunctionCtx]] containing the parameters and locals
+  * tracked in the provided [[FunctionCtxMut]].
+  */
+def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtxMut ?=> T)(using Raise, Scope): T -> FunctionCtx =
+  import Scope.scope
+
+  val funcCtx = FunctionCtxMut(params.map(p => p -> SymIdx(scope.allocateOrGetName(p))).to(ListMap))
+  val result = mkBody(using funcCtx)
+  result -> FunctionCtx(funcCtx.getParams, funcCtx.getLocals)
+
+case class FunctionCtx(params: Seq[Local -> SymIdx], locals: Seq[Local -> SymIdx])
+
 object Ctx:
   case class SingletonInfo(
       globalName: Str,
@@ -507,22 +537,27 @@ class Ctx extends ToWat:
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
   /** Pushes a new local variable scope into this context. */
+  @deprecated
   def pushLocal(): Unit = locals = ListMap() :: locals
 
   /** Pops the top-most level local variable scope into this context. */
+  @deprecated
   def popLocal(): Unit = locals = locals.tail
 
   /** Adds a new local variable into the top-most variable scope. */
+  @deprecated
   def addLocal(sym: Local): LocalIdx =
     val idx = SymIdx(sym.nme)
     locals = (locals.head + (sym -> idx)) :: locals.tail
     LocalIdx(idx)
 
   /** Adds a [[Seq]] of local variables into the top-most variable scope. */
+  @deprecated
   def addLocals(syms: Seq[Local]): Seq[LocalIdx] =
     syms.map(addLocal)
 
   /** Checks whether the top-most level local variable scope contains the local variable `sym`. */
+  @deprecated
   def containsLocal(sym: Local): Bool = locals.head.contains(sym)
 
   /** Adds a new variable into the global variable scope. */
@@ -571,12 +606,19 @@ class Ctx extends ToWat:
   def setStartFunc(funcIdx: FuncIdx): Unit =
     startFunc = S(funcIdx)
 
+  /** Returns all globals in this context.
+    */
+  def getGlobals: Seq[Symbol] =
+    namedGlobals.keys.toSeq
+
   /** Returns a tuple containing the variables in the current `global` and `local` scopes respectively.
     */
+  @deprecated
   def getWasmLocals: Seq[Symbol] -> Opt[Seq[Local]] =
     namedGlobals.keys.toSeq -> locals.headOption.map(l => l.keys.toSeq)
 
   /** Returns all local variable scopes and their variables. */
+  @deprecated
   def getAllWasmLocals: Ls[Seq[Local]] = locals match
     case Nil => namedGlobals.keys.toSeq :: Nil
     case locals => locals.init.map(l => l.keys.toSeq) :+ namedGlobals.keys.toSeq
