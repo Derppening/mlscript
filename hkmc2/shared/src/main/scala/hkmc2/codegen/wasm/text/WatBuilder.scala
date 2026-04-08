@@ -111,9 +111,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     if ctx.getType(unitDefn.sym).isEmpty then
       createDefnTypes(Define(unitDefn, End("")))
 
-    ctx.pushLocal()
     returningTerm(Define(unitDefn, End("")))
-    ctx.popLocal()
 
   /** Registers eager singleton runtime state by creating its global and start-init action. */
   private def registerSingletonInit(clsLikeDefn: ClsLikeDefn, typeref: TypeIdx)(using Ctx, Raise, Scope): Unit =
