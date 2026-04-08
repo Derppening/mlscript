@@ -204,7 +204,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           sym = N,
           TypeInfo(
             id = SymIdx(symNme),
-            FunctionType(params = Seq(WasmParam("ex", RefType.anyref)), results = Seq.empty),
+            FunctionType(params = Seq(WasmParam(SymIdx("ex"), RefType.anyref)), results = Seq.empty),
             objectTag = S(ctx.getFreshObjectTag()),
           ),
         )),
@@ -814,7 +814,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     */
   private def createIntrinsicFunc(
       name: Str,
-      params: Seq[(TempSymbol, Str)],
+      params: Seq[(TempSymbol, SymIdx)],
       body: Expr,
   )(using Ctx, Raise, Scope): FuncIdx =
     val funcTy = ctx.addType(
@@ -843,15 +843,15 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   /** Builds the body for an Int31 binary operator.
     */
   private def binaryInt31Body(
-      lhsName: Str,
-      rhsName: Str,
+      lhsIdx: SymIdx,
+      rhsIdx: SymIdx,
       op: (Expr, Expr) => Expr,
   )(using Ctx, Scope): Expr =
     val cond = i32.and(
-      ref.test(getLocalAnyref(lhsName), RefType.i31ref),
-      ref.test(getLocalAnyref(rhsName), RefType.i31ref),
+      ref.test(getLocalAnyref(lhsIdx), RefType.i31ref),
+      ref.test(getLocalAnyref(rhsIdx), RefType.i31ref),
     )
-    val i31Op = ref.i31(op(getI32FromAnyref(lhsName), getI32FromAnyref(rhsName)))
+    val i31Op = ref.i31(op(getI32FromAnyref(lhsIdx), getI32FromAnyref(rhsIdx)))
     `if`(
       condition = cond,
       ifTrue = i31Op,
@@ -861,9 +861,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Builds the body for an Int31 unary operator.
     */
-  private def unaryInt31Body(paramName: Str, op: Expr => Expr)(using Ctx, Scope): Expr =
-    val cond = ref.test(getLocalAnyref(paramName), RefType.i31ref)
-    val i31Op = ref.i31(op(getI32FromAnyref(paramName)))
+  private def unaryInt31Body(paramIdx: SymIdx, op: Expr => Expr)(using Ctx, Scope): Expr =
+    val cond = ref.test(getLocalAnyref(paramIdx), RefType.i31ref)
+    val i31Op = ref.i31(op(getI32FromAnyref(paramIdx)))
     `if`(
       condition = cond,
       ifTrue = i31Op,
@@ -873,20 +873,20 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Creates parameters for an intrinsic.
     */
-  private def mkIntrinsicParams(name: Str, suffixes: Seq[Str]): Seq[(TempSymbol, Str)] =
+  private def mkIntrinsicParams(name: Str, suffixes: Seq[Str]): Seq[(TempSymbol, SymIdx)] =
     suffixes.map: suffix =>
       val sym = TempSymbol(N, suffix)
       sym -> suffix
 
-  /** Loads the local `name` as an `anyref`.
+  /** Loads the local `idx` as an `anyref`.
     */
-  private def getLocalAnyref(name: Str): Expr =
-    local.get(LocalIdx(SymIdx(name)), RefType.anyref)
+  private def getLocalAnyref(idx: SymIdx): Expr =
+    local.get(LocalIdx(idx), RefType.anyref)
 
-  /** Extracts the signed i32 value from the Int31 stored in the local `name`.
+  /** Extracts the signed i32 value from the Int31 stored in the local `idx`.
     */
-  private def getI32FromAnyref(name: Str): Expr =
-    i31.get(ref.cast(getLocalAnyref(name), RefType.i31ref), true)
+  private def getI32FromAnyref(idx: SymIdx): Expr =
+    i31.get(ref.cast(getLocalAnyref(idx), RefType.i31ref), true)
 
   def returningTerm(t: Block)(using Ctx, Raise, Scope): Expr =
     def isControlTransfer(expr: Expr): Bool =
@@ -1073,7 +1073,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         FuncInfo(
                           sym,
                           typeUse = TypeUse(funcTy),
-                          params = ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> nme),
+                          params = ps.params.zip(params.map(_._2)).map((p, nme) => p.sym -> SymIdx(nme)),
                           nResults = bodyWat.resultTypes.length,
                           locals = locals,
                           body = bodyWat,
@@ -1174,7 +1174,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       TypeInfo(
                         id = SymIdx(funcTyId),
                         FunctionType(
-                          params = ctorParams.map(p => WasmParam(p._2, RefType.anyref)),
+                          params = ctorParams.map(p => WasmParam(p._2.id, RefType.anyref)),
                           results = Seq(Result(RefType.anyref)),
                         ),
                         objectTag = N,
@@ -1577,7 +1577,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       params = Seq.empty,
       nResults = 1,
       // TODO(Derppening): Should we place top-level scope variables in the global section?
-      locals = (entryFnLocals ++ entryExtraLocals).map(l => l -> scope.allocateOrGetName(l)),
+      locals = (entryFnLocals ++ entryExtraLocals).map(l => l -> SymIdx(scope.allocateOrGetName(l))),
       body = entryFnExpr,
       `export` = S(entryNme),
     )
@@ -1667,7 +1667,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   def setupFunction(
       params: ParamList,
       body: Block,
-  )(using Ctx, Raise, Scope): (Seq[WasmParam -> Str], Expr, Seq[(Local, Str)]) =
+  )(using Ctx, Raise, Scope): (Seq[WasmParam -> Str], Expr, Seq[Local -> SymIdx]) =
     // Add a frame for `ctx.locals`
     ctx.pushLocal()
 
@@ -1681,7 +1681,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val paramSyms: Set[Local] = params.params.map(p => (p.sym: Local)).toSet
       val extraLocals = getExtraLocals.filterNot((locals.toSet ++ paramSyms).contains)
       val localsWithNames = (locals ++ extraLocals).map(l => l -> scope.allocateOrGetName(l))
-      (wasmParams.toSeq, wasmBody, localsWithNames)
+      (wasmParams.toSeq, wasmBody, localsWithNames.map((l, n) => l -> SymIdx(n)))
 
     // Restore `ctx.locals`
     ctx.popLocal()

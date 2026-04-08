@@ -41,9 +41,9 @@ import scala.reflect.ClassTag
 class FuncInfo(
     val id: SymIdx,
     val typeUse: TypeUse,
-    params: Seq[Local -> Str],
+    params: Seq[Local -> SymIdx],
     nResults: Int,
-    locals: Seq[Local -> Str],
+    locals: Seq[Local -> SymIdx],
     val body: Expr,
     val `export`: Opt[Str],
 ) extends ToWat:
@@ -64,9 +64,9 @@ class FuncInfo(
   def this(
       sym: BlockMemberSymbol,
       typeUse: TypeUse,
-      params: Seq[Local -> Str],
+      params: Seq[Local -> SymIdx],
       nResults: Int,
-      locals: Seq[Local -> Str],
+      locals: Seq[Local -> SymIdx],
       body: Expr,
   )(using Raise, Scope) = this(
     SymIdx(sym.optionIf(_.nameIsMeaningful).fold(summon[Scope].allocateName(sym))(_.nme)),
@@ -81,9 +81,9 @@ class FuncInfo(
   def this(
       id: Opt[SymIdx],
       typeUse: TypeUse,
-      params: Seq[Local -> Str],
+      params: Seq[Local -> SymIdx],
       nResults: Int,
-      locals: Seq[Local -> Str],
+      locals: Seq[Local -> SymIdx],
       body: Expr,
       `export`: Opt[Str],
   )(using Raise, Scope, State) = this(
@@ -110,7 +110,7 @@ class FuncInfo(
         getSignatureType.toWat.surroundUnlessEmpty(doc" ")
       } #{ ${
         locals.map: p =>
-          doc"(local $$${p._2} ${RefType.anyref.toWat})"
+          doc"(local ${p._2.toWat} ${RefType.anyref.toWat})"
         .mkDocument(doc" # ").surroundUnlessEmpty(doc" # ")
       } # ${body.toWat} #} )"""
 end FuncInfo
