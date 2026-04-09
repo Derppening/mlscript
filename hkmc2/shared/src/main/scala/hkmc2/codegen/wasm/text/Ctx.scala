@@ -103,16 +103,18 @@ end FuncInfo
   *
   * Each instance of [[GlobalInfo]] represents a single global definition in a WebAssembly module.
   *
-  * @param id
-  *   Symbolic identifier for the global.
   * @param valType
   *   The value type of the global.
   * @param mutable
   *   Whether the global is mutable.
   * @param init
   *   The initializer expression for the global.
+  * @param sym
+  *   The source [[Symbol]] which this global is generated from.
   */
-class GlobalInfo(val id: SymIdx, val valType: ValType, val mutable: Bool, val init: Expr) extends ToWat:
+class GlobalInfo(val valType: ValType, val mutable: Bool, val init: Expr, val sym: Symbol)(using Ctx, Raise) extends ToWat:
+
+  val id: SymIdx = SymIdx(summon[Ctx].globalScp.allocateName(sym))
 
   def toWat: Document =
     val typeDoc =
@@ -214,9 +216,7 @@ class FunctionCtxMut(private val _params: Seq[Local])(using Raise, State):
   * Returns the result of the `mkBody` function along with a [[FunctionCtx]] containing the parameters and locals
   * tracked in the provided [[FunctionCtxMut]].
   */
-def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtxMut ?=> T)(using Raise, Scope, State): T -> FunctionCtx =
-  import Scope.scope
-
+def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtxMut ?=> T)(using Raise, State): T -> FunctionCtx =
   val funcCtx = FunctionCtxMut(params)
   val result = mkBody(using funcCtx)
   result -> FunctionCtx(funcCtx.params, funcCtx.locals)
@@ -311,6 +311,9 @@ class Ctx(using State) extends ToWat:
 
   /** [[ListMap]] containing all tag definitions in the module. */
   private var tags = ListMap.empty[SymIdx, TagInfo]
+
+  /** [[Scope]] for generating WAT identifiers of globals. */
+  private[text] val globalScp = Scope.empty(Scope.Cfg.default)
 
   /** [[ListMap]] containing all global definitions in the module. */
   private var globals = ListMap.empty[SymIdx, GlobalInfo]
@@ -607,15 +610,15 @@ class Ctx(using State) extends ToWat:
   def containsLocal(sym: Local): Bool = locals.head.contains(sym)
 
   /** Adds a new variable into the global variable scope. */
-  def addGlobal(sym: Symbol, globalInfo: GlobalInfo): GlobalIdx =
+  def addGlobal(globalInfo: GlobalInfo): GlobalIdx =
     val id = globalInfo.id
     globals = globals + (id -> globalInfo)
-    namedGlobals(sym) = globalInfo
+    namedGlobals(globalInfo.sym) = globalInfo
     GlobalIdx(id)
 
   /** Adds a [[Seq]] of variables into the global variable scope. */
-  def addGlobals(globalDefs: Seq[Symbol -> GlobalInfo]): Seq[GlobalIdx] =
-    globalDefs.map(addGlobal.tupled)
+  def addGlobals(globalDefs: Seq[GlobalInfo]): Seq[GlobalIdx] =
+    globalDefs.map(addGlobal)
 
   /** Checks whether the global variable scope contains the variable `sym`. */
   def containsGlobal(sym: Symbol): Bool = namedGlobals.contains(sym)
@@ -651,6 +654,9 @@ class Ctx(using State) extends ToWat:
   /** Configures the module start function. */
   def setStartFunc(funcIdx: FuncIdx): Unit =
     startFunc = S(funcIdx)
+    
+  def getGlobalIndex(sym: Symbol): Opt[GlobalIdx] = globalScp.lookup(sym).map(idx => GlobalIdx(SymIdx(idx)))
+  def getGlobalIndex_!(sym: Symbol, loc: Opt[Loc])(using Raise): GlobalIdx = GlobalIdx(SymIdx(globalScp.lookup_!(sym, loc)))
 
   /** Returns all globals in this context.
     */
