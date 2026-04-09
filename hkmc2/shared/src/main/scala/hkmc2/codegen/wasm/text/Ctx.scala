@@ -153,32 +153,38 @@ end MemInfo
 
 /** A Wasm type and its associated information.
   *
-  * Each instance of [[FuncInfo]] represents a single type defintion in a WebAssembly module.
+  * Each instance of [[TypeInfo]] represents a single type defintion in a WebAssembly module.
   *
-  * @param id
-  *   Symbolic identifier for the function, or `N` if the function is anonymous.
+  * @param sym
+  *   The source [[Symbol]] which this type is generated from.
   * @param compType
   *   The composite type this type definition represents.
   * @param objectTag
   *   An optional object tag number associated with this type.
   */
-class TypeInfo(val id: SymIdx, val compType: CompType, val objectTag: Opt[Int]) extends ToWat:
+class TypeInfo(
+    val sym: BlockMemberSymbol | TempSymbol,
+    val compType: CompType,
+    val objectTag: Opt[Int],
+)(using Ctx, Raise) extends ToWat:
 
-  /** @param sym
-    *   The source [[BlockMemberSymbol]] which this type is generated from.
-    * @param compType
-    *   The composite type this type definition represents.
-    */
-  def this(sym: BlockMemberSymbol, compType: CompType, objectTag: Opt[Int])(using Raise, Scope) = this(
-    SymIdx(sym.optionIf(_.nameIsMeaningful).fold(summon[Scope].allocateName(sym))(_.nme)),
-    compType,
-    objectTag,
-  )
+  @deprecated
+  def this(id: SymIdx, compType: CompType, objectTag: Opt[Int])(using Ctx, Raise, State) =
+    this(TempSymbol(N, id.id), compType, objectTag)
 
-  def this(id: Opt[SymIdx], compType: CompType)(using Raise, Scope, State) =
-    this(id.getOrElse(SymIdx(summon[Scope].allocateName(TempSymbol(N, "")))), compType, N)
+  @deprecated
+  def this(id: Opt[SymIdx], compType: CompType)(using Ctx, Raise, Scope, State) =
+    this(
+      id.getOrElse(SymIdx(summon[Scope].allocateName(TempSymbol(N, "")))),
+      compType,
+      N,
+    )
+
+  /** Symbolic identifier for the type. */
+  val id = SymIdx(summon[Ctx].typeScp.allocateName(sym))
 
   def toWat: Document = doc"(type ${id.toWat} ${compType.toWat})"
+end TypeInfo
 
 /** A WebAssembly exception tag declaration.
   *
@@ -256,7 +262,7 @@ object Ctx:
   val wasmIntrinsicArities: Map[Str, Int] = (binaryOps.keys.map(_ -> 2) ++ unaryOps.keys.map(_ -> 1)).toMap
   val wasmIntrinsicNameSet: Set[Str] = wasmIntrinsicArities.keySet
 
-  def empty: Ctx = Ctx()
+  def empty(using State): Ctx = Ctx()
 
   def ctx(using ctx: Ctx): Ctx = ctx
 
@@ -267,9 +273,12 @@ object Ctx:
 end Ctx
 
 /** Context for [[WatBuilder]]. */
-class Ctx extends ToWat:
+class Ctx(using State) extends ToWat:
 
   import Ctx.prettyString
+
+  /** [[Scope]] for generating WAT identifiers of types. */
+  private[text] val typeScp = Scope.empty(Scope.Cfg.default)
 
   /** [[ListMap]] containing all type definitions in the module mapped by their symbolic identifiers. */
   private var types = ListMap.empty[SymIdx, TypeInfo]
@@ -346,12 +355,18 @@ class Ctx extends ToWat:
     tag
 
   /** Adds a type into this context. */
-  def addType(sym: Opt[BlockMemberSymbol], typeInfo: TypeInfo): TypeIdx =
+  def addType(typeInfo: TypeInfo): TypeIdx =
     val id = typeInfo.id
     types = types + (id -> typeInfo)
-    sym.foreach:
-      namedTypes(_) = typeInfo
+    typeInfo.sym match
+      case bms: BlockMemberSymbol => namedTypes(bms) = typeInfo
+      case _ =>
     TypeIdx(id)
+
+  /** Adds a type into this context. */
+  @deprecated("Directly construct the `TypeInfo` using `sym` instead.")
+  def addType(sym: Opt[BlockMemberSymbol], typeInfo: TypeInfo): TypeIdx =
+    addType(typeInfo)
 
   @deprecated("Use the overload without `resolveSymIdx` instead.")
   def getType(typeref: TypeIdx | BlockMemberSymbol, resolveSymIdx: Bool): Opt[TypeIdx] =
