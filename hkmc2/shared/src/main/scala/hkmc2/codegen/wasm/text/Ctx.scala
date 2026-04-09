@@ -204,29 +204,36 @@ object FunctionCtxMut:
 
   def funcCtx(using funcCtx: FunctionCtxMut): FunctionCtxMut = funcCtx
 
-class FunctionCtxMut(params: ListMap[Local, SymIdx]):
+class FunctionCtxMut(private val _params: Seq[Local])(using Raise, State):
 
-  private val _params: Seq[Local -> SymIdx] = params.toSeq
-  private var locals: ListMap[Local, SymIdx] = ListMap.empty
+  private val scp = Scope.empty(Scope.Cfg.default)
 
-  def addLocal(local: Local, symIdx: SymIdx): Unit =
-    require(!containsLocal(local), s"Duplicate local variable `${local.toString}` in the same function scope")
-    locals += (local -> symIdx)
-  def containsLocal(sym: Local): Bool = params.contains(sym) || locals.contains(sym)
-  def getParams: Seq[Local -> SymIdx] = _params.toSeq
-  def getLocals: Seq[Local -> SymIdx] = locals.toSeq
+  private val _locals = ArrayBuf.empty[Local]
+  val params: Seq[Local -> SymIdx] = _params.map(p => p -> SymIdx(scp.allocateName(p)))
+
+  def addLocal(local: Local): LocalIdx =
+    scp.allocateName(local)
+    _locals += local
+    LocalIdx(SymIdx(scp.lookup_!(local, N)))
+  def containsLocal(sym: Local): Bool = _params.contains(sym) || _locals.contains(sym)
+  def lookupLocal(sym: Local): Opt[LocalIdx] =
+    scp.lookup(sym).map(idx => LocalIdx(SymIdx(idx)))
+  def lookupLocal_!(sym: Local, loc: Opt[Loc]): LocalIdx =
+    LocalIdx(SymIdx(scp.lookup_!(sym, loc)))
+
+  def locals: Seq[Local -> SymIdx] = _locals.map(l => l -> SymIdx(scp.lookup_!(l, N))).toSeq
 
 /** Generates a function body, providing an instance of [[FunctionCtxMut]] for parameter and locals tracking.
   *
   * Returns the result of the `mkBody` function along with a [[FunctionCtx]] containing the parameters and locals
   * tracked in the provided [[FunctionCtxMut]].
   */
-def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtxMut ?=> T)(using Raise, Scope): T -> FunctionCtx =
+def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtxMut ?=> T)(using Raise, Scope, State): T -> FunctionCtx =
   import Scope.scope
 
-  val funcCtx = FunctionCtxMut(params.map(p => p -> SymIdx(scope.allocateOrGetName(p))).to(ListMap))
+  val funcCtx = FunctionCtxMut(params)
   val result = mkBody(using funcCtx)
-  result -> FunctionCtx(funcCtx.getParams, funcCtx.getLocals)
+  result -> FunctionCtx(funcCtx.params, funcCtx.locals)
 
 case class FunctionCtx(params: Seq[Local -> SymIdx], locals: Seq[Local -> SymIdx])
 

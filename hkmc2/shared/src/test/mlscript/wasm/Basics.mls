@@ -126,22 +126,22 @@ class Foo(val a)
 //│   (type $Foo_ctor (func (param $a (ref null any)) (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (func $Foo_ctor (export "Foo_ctor") (type $Foo_ctor) (param $a (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
+//│     (local $Foo (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $this
+//│       (local.set $Foo
 //│         (struct.new_default $Foo))
 //│       (struct.set $Foo $$tag
 //│         (ref.cast (ref $Foo)
-//│           (local.get $this))
+//│           (local.get $Foo))
 //│         (i32.const 1))
 //│       (block
 //│         (struct.set $Foo $a
 //│           (ref.cast (ref $Foo)
-//│             (local.get $this))
+//│             (local.get $Foo))
 //│           (local.get $a))
 //│         (nop))
 //│       (return
-//│         (local.get $this))))
+//│         (local.get $Foo))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $Foo (ref null any))
 //│     (local $tmp (ref null any))
@@ -178,29 +178,29 @@ class Foo(val x) with
 //│   (type $Foo_ctor (func (param $x (ref null any)) (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (func $Foo_ctor (export "Foo_ctor") (type $Foo_ctor) (param $x (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
+//│     (local $Foo (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $this
+//│       (local.set $Foo
 //│         (struct.new_default $Foo))
 //│       (struct.set $Foo $$tag
 //│         (ref.cast (ref $Foo)
-//│           (local.get $this))
+//│           (local.get $Foo))
 //│         (i32.const 1))
 //│       (block
 //│         (struct.set $Foo $x
 //│           (ref.cast (ref $Foo)
-//│             (local.get $this))
+//│             (local.get $Foo))
 //│           (local.get $x))
 //│         (block
 //│           (struct.set $Foo $y
 //│             (ref.cast (ref $Foo)
-//│               (local.get $this))
+//│               (local.get $Foo))
 //│             (struct.get $Foo $x
 //│               (ref.cast (ref $Foo)
-//│                 (local.get $this))))
+//│                 (local.get $Foo))))
 //│           (nop)))
 //│       (return
-//│         (local.get $this))))
+//│         (local.get $Foo))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $Foo (ref null any))
 //│     (local $tmp (ref null any))
@@ -234,30 +234,30 @@ O.y
 //│   (type $start (func))
 //│   (global $O$inst (mut (ref null $O)) (ref.null $O))
 //│   (func $O_ctor (type $O_ctor) (result (ref null any))
-//│     (local $this (ref null any))
+//│     (local $O (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $this
+//│       (local.set $O
 //│         (struct.new_default $O))
 //│       (struct.set $O $$tag
 //│         (ref.cast (ref $O)
-//│           (local.get $this))
+//│           (local.get $O))
 //│         (i32.const 1))
 //│       (block
 //│         (struct.set $O $x
 //│           (ref.cast (ref $O)
-//│             (local.get $this))
+//│             (local.get $O))
 //│           (ref.i31
 //│             (i32.const 1)))
 //│         (block
 //│           (struct.set $O $y
 //│             (ref.cast (ref $O)
-//│               (local.get $this))
+//│               (local.get $O))
 //│             (struct.get $O $x
 //│               (ref.cast (ref $O)
-//│                 (local.get $this))))
+//│                 (local.get $O))))
 //│           (nop)))
 //│       (return
-//│         (local.get $this))))
+//│         (local.get $O))))
 //│   (func $start (type $start)
 //│     (block
 //│       (global.set $O$inst

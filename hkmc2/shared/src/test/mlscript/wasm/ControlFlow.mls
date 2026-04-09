@@ -59,17 +59,17 @@ let i = 0 in
 //│       (else
 //│         (unreachable))))
 //│   (func $Unit_ctor (type $Unit_ctor) (result (ref null any))
-//│     (local $this (ref null any))
+//│     (local $Unit (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $this
+//│       (local.set $Unit
 //│         (struct.new_default $Unit))
 //│       (struct.set $Unit $$tag
 //│         (ref.cast (ref $Unit)
-//│           (local.get $this))
+//│           (local.get $Unit))
 //│         (i32.const 1))
 //│       (nop)
 //│       (return
-//│         (local.get $this))))
+//│         (local.get $Unit))))
 //│   (func $start (type $start)
 //│     (block
 //│       (global.set $Unit$inst

@@ -280,21 +280,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     */
   private def mkTempLocal(base: Str)(using Ctx, FunctionCtxMut, Scope, Raise): LocalIdx =
     val sym = TempSymbol(N, base)
-    val nme = scope.allocateName(sym)
-    funcCtx.addLocal(sym, SymIdx(nme))
-    LocalIdx(SymIdx(nme))
+    funcCtx.addLocal(sym)
 
   /** Binds constructor self (`thisSym`) to the Wasm local name `this` in the current scope/context.
     */
-  private def bindCtorThis(thisSym: Local)(using Ctx, FunctionCtxMut, Raise, Scope): LocalIdx =
-    val thisName = "this"
-    scope.lookup(thisSym) match
-      case S(`thisName`) => ()
-      case _ => scope.addToBindings(thisSym, thisName, shadow = true)
-    val thisIdx = SymIdx(thisName)
-    if !funcCtx.containsLocal(thisSym) then
-      funcCtx.addLocal(thisSym, thisIdx)
-    LocalIdx(thisIdx)
+  private def bindCtorThis(thisSym: Local)(using Ctx, FunctionCtxMut, Raise): LocalIdx =
+    funcCtx.lookupLocal(thisSym).getOrElse:
+      funcCtx.addLocal(thisSym)
 
   /** Compiles a class/object constructor body under its own Wasm-local frame.
     */
@@ -302,14 +294,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       clsLikeDefn: ClsLikeDefn,
   )(using Ctx, Raise, Scope): (Seq[Local -> SymIdx], LocalIdx, Expr, Seq[Local -> SymIdx]) =
     val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
-    val ((ctorWat, thisIdx), funcCtx) = scope.nest.givenIn:
-      clsParams.foreach: p =>
-        scope.allocateName(p)
-      genFuncBody(clsParams):
-        val thisVar = bindCtorThis(clsLikeDefn.isym)
-        val ctorWat = nonNestedScoped(clsLikeDefn.ctor)(block)
-        // val ctorWat = block(clsLikeDefn.ctor)
-        ctorWat -> thisVar
+    val ((ctorWat, thisIdx), funcCtx) = genFuncBody(clsParams):
+      val thisVar = bindCtorThis(clsLikeDefn.isym)
+      val ctorWat = nonNestedScoped(clsLikeDefn.ctor)(block)
+      ctorWat -> thisVar
     (funcCtx.params, thisIdx, ctorWat, funcCtx.locals)
 
   /** Converts expression result types to WAT result clauses, dropping unreachable types. */
@@ -453,13 +441,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     ts.toLoc,
                 ),
                 extraInfo = S(
-                  s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nWasm Locals: ${funcCtx.getLocals.toString}\nWasm Globals: ${ctx.getGlobals.toString}",
+                  s"Block IR: `${ts.toString}`\nScope: ${scope.toString}\nWasm Locals: ${funcCtx.locals.toString}\nWasm Globals: ${ctx.getGlobals.toString}",
                 ),
               )
-            local.get(LocalIdx(SymIdx(scope.lookup_!(ts, ts.toLoc))), RefType.anyref)
+            local.get(funcCtx.lookupLocal_!(ts, ts.toLoc), RefType.anyref)
           case l =>
             if funcCtx.containsLocal(l) then
-              local.get(LocalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
+              local.get(funcCtx.lookupLocal_!(l, l.toLoc), RefType.anyref)
             else if ctx.containsGlobal(l) then
               global.get(GlobalIdx(SymIdx(scope.lookup_!(l, l.toLoc))), RefType.anyref)
             else
@@ -471,7 +459,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     l.toLoc,
                 ),
                 extraInfo = S(
-                  s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nWasm Locals: ${funcCtx.getLocals.toString}\nWasm Globals: ${ctx.getGlobals.toString}",
+                  s"Block IR: `${l.toString}`\nScope: ${scope.toString}\nWasm Locals: ${funcCtx.locals.toString}\nWasm Globals: ${ctx.getGlobals.toString}",
                 ),
               )
   end getVar
@@ -523,7 +511,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     case Value.This(sym) =>
       // TODO(Derppening): Add type tracking and refinement for locals, remove the `ref.cast`
       ref.cast(
-        local.get(LocalIdx(SymIdx(scope.lookup_!(sym, sym.toLoc))), RefType.anyref),
+        local.get(funcCtx.lookupLocal_!(sym, sym.toLoc), RefType.anyref),
         RefType(
           sym.asBlkMember.fold(baseObjectTypeIdx)(ctx.getType_!(_)),
           nullable = false,
@@ -1104,6 +1092,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     if clsLikeDefn.companion.isDefined then
                       break(errUnimplExpr("companion.isDefined"))
 
+                    // TODO(Derppening): We might need to enclose this in `genFuncBody` when implicit `Scope` is removed
                     val ctorAuxParams = clsLikeDefn.auxParams.map: ps =>
                       ps.params.map: p =>
                         p -> scope.allocateName(p.sym)
@@ -1605,14 +1594,12 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     (ctx.toWat, entrySym.nme, systemMemMinPages)
   end program
 
-  def blockPreamble(ss: Iterable[Symbol])(using Ctx, FunctionCtxMut, Raise, Scope): Unit =
-    val vars = ss.toArray.sortBy(_.uid).iterator.map: l =>
-      l -> SymIdx(scope.allocateName(l))
-    .toSeq
-    vars.foreach: (l, nme) =>
-      funcCtx.addLocal(l, nme)
+  def blockPreamble(ss: Iterable[Symbol])(using Ctx, FunctionCtxMut, Raise): Unit =
+    val vars = ss.toArray.sortBy(_.uid).toSeq
+    vars.foreach: l =>
+      funcCtx.addLocal(l)
 
-  def nonNestedScoped(blk: Block)(k: Block => Expr)(using Ctx, FunctionCtxMut, Raise, Scope): Expr = blk match
+  def nonNestedScoped(blk: Block)(k: Block => Expr)(using Ctx, FunctionCtxMut, Raise): Expr = blk match
     case Scoped(syms, body) =>
       blockPreamble(syms.view.filter(body.freeVars))
       k(body)
@@ -1628,8 +1615,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       params: ParamList,
       body: Block,
   )(using Ctx, Raise, Scope): (Expr, FunctionCtx) =
-    val paramsList = params.params.foreach: p =>
-      scope.allocateName(p.sym)
     genFuncBody(params.params.map(_.sym).toSeq):
       this.body(body)
 

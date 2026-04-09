@@ -50,39 +50,39 @@ if Bar(true) is
 //│   (type $Baz_ctor (func (param $z (ref null any)) (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (func $Bar_ctor (export "Bar_ctor") (type $Bar_ctor) (param $y (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
+//│     (local $Bar (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $this
+//│       (local.set $Bar
 //│         (struct.new_default $Bar))
 //│       (struct.set $Bar $$tag
 //│         (ref.cast (ref $Bar)
-//│           (local.get $this))
+//│           (local.get $Bar))
 //│         (i32.const 1))
 //│       (block
 //│         (struct.set $Bar $y
 //│           (ref.cast (ref $Bar)
-//│             (local.get $this))
+//│             (local.get $Bar))
 //│           (local.get $y))
 //│         (nop))
 //│       (return
-//│         (local.get $this))))
+//│         (local.get $Bar))))
 //│   (func $Baz_ctor (export "Baz_ctor") (type $Baz_ctor) (param $z (ref null any)) (result (ref null any))
-//│     (local $this (ref null any))
+//│     (local $Baz (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $this
+//│       (local.set $Baz
 //│         (struct.new_default $Baz))
 //│       (struct.set $Baz $$tag
 //│         (ref.cast (ref $Baz)
-//│           (local.get $this))
+//│           (local.get $Baz))
 //│         (i32.const 2))
 //│       (block
 //│         (struct.set $Baz $z
 //│           (ref.cast (ref $Baz)
-//│             (local.get $this))
+//│             (local.get $Baz))
 //│           (local.get $z))
 //│         (nop))
 //│       (return
-//│         (local.get $this))))
+//│         (local.get $Baz))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $Bar (ref null any))
 //│     (local $Baz (ref null any))
