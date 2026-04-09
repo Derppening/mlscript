@@ -322,8 +322,6 @@ class Ctx(using State) extends ToWat:
   /** [[MutMap]] containing global symbols mapped to their corresponding Wasm global indices. */
   private val namedGlobals = MutMap.empty[Symbol, GlobalInfo]
 
-  /** Stack of [[ListMap]] from local variable symbols to their symbolic indices within the current function scope. */
-  private var locals = ListMap.empty[Local, SymIdx] :: Nil
   private var startFunc = N: Opt[FuncIdx]
 
   /** Counter for generating object tags. */
@@ -586,29 +584,26 @@ class Ctx(using State) extends ToWat:
     getFuncInfo(funcref).getOrElse:
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
-  /** Pushes a new local variable scope into this context. */
-  @deprecated
-  def pushLocal(): Unit = locals = ListMap() :: locals
+  private def lastWordsForLocals(funcName: Str): Nothing = 
+    lastWords(s"$funcName is no longer supported; Please use genFuncBody instead.")
 
-  /** Pops the top-most level local variable scope into this context. */
   @deprecated
-  def popLocal(): Unit = locals = locals.tail
+  def pushLocal(): Unit = lastWordsForLocals("pushLocal")
+
+  @deprecated
+  def popLocal(): Unit = lastWordsForLocals("popLocal")
 
   /** Adds a new local variable into the top-most variable scope. */
   @deprecated
-  def addLocal(sym: Local): LocalIdx =
-    val idx = SymIdx(sym.nme)
-    locals = (locals.head + (sym -> idx)) :: locals.tail
-    LocalIdx(idx)
+  def addLocal(sym: Local): LocalIdx = lastWordsForLocals("addLocal")
 
   /** Adds a [[Seq]] of local variables into the top-most variable scope. */
   @deprecated
-  def addLocals(syms: Seq[Local]): Seq[LocalIdx] =
-    syms.map(addLocal)
+  def addLocals(syms: Seq[Local]): Seq[LocalIdx] = lastWordsForLocals("addLocals")
 
   /** Checks whether the top-most level local variable scope contains the local variable `sym`. */
   @deprecated
-  def containsLocal(sym: Local): Bool = locals.head.contains(sym)
+  def containsLocal(sym: Local): Bool = lastWordsForLocals("containsLocal")
 
   /** Adds a new variable into the global variable scope. */
   def addGlobal(globalInfo: GlobalInfo): GlobalIdx =
@@ -665,17 +660,20 @@ class Ctx(using State) extends ToWat:
   def getGlobals: Seq[Symbol] =
     namedGlobals.keys.toSeq
 
+
+  private def lastWordsForLocalsGlobals(funcName: Str): Nothing = 
+    lastWords(s"$funcName is no longer supported; Please use genFuncBody and global-related functions in Ctx instead.")
+
   /** Returns a tuple containing the variables in the current `global` and `local` scopes respectively.
     */
   @deprecated
   def getWasmLocals: Seq[Symbol] -> Opt[Seq[Local]] =
-    namedGlobals.keys.toSeq -> locals.headOption.map(l => l.keys.toSeq)
+  lastWordsForLocalsGlobals("getWasmLocals")
 
   /** Returns all local variable scopes and their variables. */
   @deprecated
-  def getAllWasmLocals: Ls[Seq[Local]] = locals match
-    case Nil => namedGlobals.keys.toSeq :: Nil
-    case locals => locals.init.map(l => l.keys.toSeq) :+ namedGlobals.keys.toSeq
+  def getAllWasmLocals: Ls[Seq[Local]] = 
+    lastWordsForLocalsGlobals("getAllWasmLocals")
 
   /** Returns the cached [[FuncIdx]] for the intrinsic named `name`, creating it with `createIntrinsic` if it does not
     * yet exist in this context.
