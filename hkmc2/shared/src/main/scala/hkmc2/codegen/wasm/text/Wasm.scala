@@ -265,26 +265,26 @@ case class MemUse(memidx: MemIdx) extends ToWat:
 
 object DataSegment:
   object Passive:
-    def apply(id: SymIdx, bytes: Str): Passive = new Passive(id, Seq(bytes))
+    def apply(bytes: Str, sym: Symbol)(using Ctx, Raise): Passive = new Passive(Seq(bytes), sym)
 
   /** A passive data segment, which is not associated with any memory and must be explicitly loaded with `memory.init`.
     */
-  case class Passive(override val id: SymIdx, bytes: Seq[Str]) extends DataSegment(id, bytes):
+  case class Passive(bytes: Seq[Str], override val sym: Symbol)(using Ctx, Raise) extends DataSegment(bytes, sym):
     def toWat: Document =
       doc"(data ${id.toWat}${bytes.map(s => s"\"$s\"").mkDocument(doc" ").surroundUnlessEmpty(doc" ")})"
 
   object Active:
-    def apply(id: SymIdx, offset: Expr, bytes: Str, memuse: Opt[MemUse]): Active =
-      new Active(id, offset, Seq(bytes), memuse)
+    def apply(offset: Expr, bytes: Str, memuse: Opt[MemUse], sym: Symbol)(using Ctx, Raise): Active =
+      new Active(offset, Seq(bytes), memuse, sym)
 
   /** An active data segment, which is automatically copied into a memory given by `memuse` and `offset`.
     */
   case class Active(
-      override val id: SymIdx,
       offset: Expr,
       bytes: Seq[Str],
       memuse: Opt[MemUse],
-  ) extends DataSegment(id, bytes):
+      override val sym: Symbol,
+  )(using Ctx, Raise) extends DataSegment(bytes, sym):
     def toWat: Document =
       doc"(data ${id.toWat}${
           memuse.fold(doc"")(memuse => doc" ${memuse.toWat}")
@@ -292,44 +292,48 @@ object DataSegment:
           bytes.map(s => s"\"$s\"").mkDocument(doc" ").surroundUnlessEmpty(doc" ")
         })"
 
-  def apply(offsetExpr: Expr, bytes: Str)(using Raise, Scope, State): Active =
-    new Active(SymIdx(summon[Scope].allocateName(TempSymbol(N, ""))), offsetExpr, Seq(bytes), N)
+  def apply(offsetExpr: Expr, bytes: Str)(using Ctx, Raise, State): Active =
+    new Active(offsetExpr, Seq(bytes), N, TempSymbol(N, ""))
 end DataSegment
 
 /** A data segment entry. */
-sealed abstract class DataSegment(val id: SymIdx, bytes: Seq[Str]) extends ToWat
+sealed abstract class DataSegment(bytes: Seq[Str], val sym: Symbol)(using Ctx, Raise) extends ToWat:
+  val id = SymIdx(summon[Ctx].dataSegmentScp.allocateName(sym))
 
 object ElemSegment:
   /** A passive element segment, which is not associated with any table and must be explicitly initialized with
     * `table.init`.
     */
   case class Passive(
-      override val id: SymIdx,
       override val elemlist: RefType -> Seq[Expr],
-  ) extends ElemSegment(id, elemlist):
+      override val sym: Symbol,
+  )(using Ctx, Raise) extends ElemSegment(elemlist, sym):
     def toWat: Document = doc"(elem ${id.toWat} ${abbrevElemList})"
 
   /** An active element segment, which is automatically copied into a table given by `offset. */
   case class Active(
-      override val id: SymIdx,
       offset: Expr,
       override val elemlist: RefType -> Seq[Expr],
+      override val sym: Symbol,
       // TODO(Derppening): Add `tableuse` here if/when we support multiple tables.
-  ) extends ElemSegment(id, elemlist):
+  )(using Ctx, Raise) extends ElemSegment(elemlist, sym):
     def toWat: Document = doc"(elem ${id.toWat} ${offset.toWat} ${abbrevElemList})"
 
   /** A declarative element segment, which is used to forward declare references present in the code (such as using
     * `ref.func`).
     */
   case class Declare(
-      override val id: SymIdx,
       override val elemlist: RefType -> Seq[Expr],
-  ) extends ElemSegment(id, elemlist):
+      override val sym: Symbol,
+  )(using Ctx, Raise) extends ElemSegment(elemlist, sym):
     def toWat: Document = doc"(elem ${id.toWat} declare ${abbrevElemList})"
 end ElemSegment
 
 /** An element segment entry. */
-sealed abstract class ElemSegment(val id: SymIdx, val elemlist: RefType -> Seq[Expr]) extends ToWat:
+sealed abstract class ElemSegment(val elemlist: RefType -> Seq[Expr], val sym: Symbol)(using Ctx, Raise) extends ToWat:
+
+  val id = SymIdx(summon[Ctx].elemSegmentScp.allocateName(sym))
+
   /** Applies abbreviations on the `elemlist` if a simpler replacement is available. */
   protected def abbrevElemList: Document =
     if elemlist._2.forall(_.mnemonic == "ref.func") then

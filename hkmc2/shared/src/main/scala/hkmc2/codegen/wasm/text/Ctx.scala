@@ -277,8 +277,14 @@ class Ctx(using State) extends ToWat:
   /** [[MutMap]] containing type symbols mapped to their corresponding [[TypeInfo]] instance. */
   private val namedTypes = MutMap.empty[BlockMemberSymbol, TypeInfo]
 
+  /** [[Scope]] for generating WAT identifiers of data segments. */
+  private[text] val dataSegmentScp = Scope.empty(Scope.Cfg.default)
+
   /** [[ListMap]] containing all data segments in the module. */
   private var dataSegments = ListMap.empty[SymIdx, DataSegment]
+
+  /** [[Scope]] for generating WAT identifiers of element segments. */
+  private[text] val elemSegmentScp = Scope.empty(Scope.Cfg.default)
 
   /** [[ListMap]] containing all element segments in the module. */
   private var elemSegments = ListMap.empty[SymIdx, ElemSegment]
@@ -506,7 +512,7 @@ class Ctx(using State) extends ToWat:
     TagIdx(id)
 
   /** Adds a function into this context. */
-  def addFunc(funcInfo: FuncInfo): FuncIdx =
+  def addFunc(funcInfo: FuncInfo)(using Ctx, Raise): FuncIdx =
     val id = funcInfo.id
     funcs = funcs + (id -> funcInfo)
     funcInfo.sym match
@@ -515,11 +521,11 @@ class Ctx(using State) extends ToWat:
     val idx = FuncIdx(funcInfo.id)
     val refType = RefType(funcInfo.typeUse.typeIdx, nullable = false)
     elemSegments = elemSegments +
-      (id -> ElemSegment.Declare(id, refType -> Seq(ref.func(idx, refType))))
+      (id -> ElemSegment.Declare(refType -> Seq(ref.func(idx, refType)), funcInfo.sym))
     idx
 
   @deprecated
-  def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
+  def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo)(using Ctx, Raise): FuncIdx =
     addFunc(funcInfo)
 
   @deprecated("Use the overload without `resolveSymIdx` instead.")
