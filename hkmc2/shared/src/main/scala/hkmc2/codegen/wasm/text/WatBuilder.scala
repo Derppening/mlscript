@@ -606,9 +606,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       s"Block IR: `${
                           fun.toString
                         }`\nCompiled WAT: `${
-                          base.toWat.toString
+                          base.toWat.mkString()
                         }`\n... which has type `${
-                          ty.fold("(none)")(_.toWat.toString)
+                          ty.fold("(none)")(_.toWat.mkString())
                         }`",
                     ),
                   )
