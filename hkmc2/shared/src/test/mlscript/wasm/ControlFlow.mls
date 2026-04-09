@@ -58,7 +58,7 @@ let i = 0 in
 //│                 (local.get $rhs))))))
 //│       (else
 //│         (unreachable))))
-//│   (func $Unit_ctor (type $Unit_ctor) (result (ref null any))
+//│   (func $Unit (type $Unit_ctor) (result (ref null any))
 //│     (local $Unit (ref null any))
 //│     (block (result (ref null any))
 //│       (local.set $Unit
@@ -74,7 +74,7 @@ let i = 0 in
 //│     (block
 //│       (global.set $Unit$inst
 //│         (ref.cast (ref null $Unit)
-//│           (call $Unit_ctor)))))
+//│           (call $Unit)))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $i (ref null any))
 //│     (local $scrut (ref null any))
@@ -128,7 +128,7 @@ let i = 0 in
 //│         (local.get $i))))
 //│   (elem $lt_impl declare func $lt_impl)
 //│   (elem $plus_impl declare func $plus_impl)
-//│   (elem $Unit_ctor declare func $Unit_ctor)
+//│   (elem $Unit declare func $Unit)
 //│   (elem $start declare func $start)
 //│   (elem $entry declare func $entry)
 //│   (start $start))

@@ -490,7 +490,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val structInfo = ctx.getTypeInfo_!(thisSym)
     val symToField = structInfo.compType match
       case ty: StructType => ty.fieldsBySym
-      case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.compType.toWat}")
+      case _ => lastWords(s"Cannot select field from non-struct type: ${structInfo.compType.toWat.mkString()}")
     val fieldIdx = symToField.get(sym)
       .orElse:
         // Workaround: TermSymbols are not correctly resolved, so match the fields by name instead
@@ -804,16 +804,15 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         objectTag = N,
       ),
     )
-    val funcInfo = FuncInfo(
-      id = SymIdx(scope.allocateName(funcSym)),
+    ctx.addFunc(FuncInfo(
+      sym = funcSym,
       typeUse = TypeUse(funcTy),
       params = params,
       nResults = 1,
       locals = Seq.empty,
       body = body,
       `export` = N,
-    )
-    ctx.addFunc(N, funcInfo)
+    ))
   end createIntrinsicFunc
 
   /** Builds the body for an Int31 binary operator.
@@ -1033,9 +1032,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         Return(Lambda(ps, block), false)
                     val (bodyWat, funcCtx) = setupFunction(ps, result)
                     if sym.nameIsMeaningful then
-                      val funcTySym = TempSymbol(N, sym.nme)
                       val funcTy = ctx.addType(TypeInfo(
-                        sym = funcTySym,
+                        sym,
                         FunctionType(
                           params = funcCtx.params.map(p => WasmParam(p._2, RefType.anyref)),
                           results = Seq.fill(bodyWat.resultTypes.length)(Result(RefType.anyref)),
@@ -1051,8 +1049,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                           nResults = bodyWat.resultTypes.length,
                           locals = funcCtx.locals,
                           body = bodyWat,
+                          `export` = sym.optionIf(_.nameIsMeaningful).map(_.nme),
                         )
-                      val func = ctx.addFunc(S(defn.sym), funcInfo)
+                      val func = ctx.addFunc(funcInfo)
 
                       nop
                     else
@@ -1159,10 +1158,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       .map: sym =>
                         s"${sym.nme}_ctor"
                     ctx.addFunc(
-                      S(clsLikeDefn.sym),
                       FuncInfo(
-                        id =
-                          SymIdx(ctorId.getOrElse(scope.allocateName(TempSymbol(N, s"${clsLikeDefn.sym.nme}_ctor")))),
+                        sym = clsLikeDefn.sym,
                         typeUse = TypeUse(funcTy),
                         params = ctorParams,
                         nResults = ctorCode.resultTypes.length,
@@ -1537,7 +1534,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ))
 
     val entryFnInfo = FuncInfo(
-      id = SymIdx(entrySym.nme),
+      sym = entrySym,
       typeUse = TypeUse(entryFnTy),
       params = funcCtx.params,
       nResults = 1,
@@ -1558,9 +1555,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
     val singletonInitActions = ctx.getSingletonInitActions
     if singletonInitActions.nonEmpty then
-      val initTySym = TempSymbol(N, "start")
+      val initSym = TempSymbol(N, "start")
       val initTy = ctx.addType(TypeInfo(
-        sym = initTySym,
+        sym = initSym,
         FunctionType(params = Seq.empty, results = Seq.empty),
         objectTag = N,
       ))
@@ -1569,22 +1566,19 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         children = singletonInitActions.toSeq,
         resultTypes = Seq.empty,
       )
-      val initFn = ctx.addFunc(
-        sym = N,
-        FuncInfo(
-          id = SymIdx(scope.allocateName(TempSymbol(N, "start"))),
-          typeUse = TypeUse(initTy),
-          params = Seq.empty,
-          nResults = 0,
-          locals = Seq.empty,
-          body = initBody,
-          `export` = N,
-        ),
-      )
+      val initFn = ctx.addFunc(FuncInfo(
+        sym = initSym,
+        typeUse = TypeUse(initTy),
+        params = Seq.empty,
+        nResults = 0,
+        locals = Seq.empty,
+        body = initBody,
+        `export` = N,
+      ))
       ctx.setStartFunc(initFn)
     end if
 
-    ctx.addFunc(S(entrySym), entryFnInfo)
+    ctx.addFunc(entryFnInfo)
 
     val systemMemMinPages =
       ctx.getMemoryImport(

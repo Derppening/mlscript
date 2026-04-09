@@ -12,7 +12,7 @@
 //│   (type $entry (func (result (ref null any))))
 //│   (type $start (func))
 //│   (global $Unit$inst (mut (ref null $Unit)) (ref.null $Unit))
-//│   (func $Unit_ctor (type $Unit_ctor) (result (ref null any))
+//│   (func $Unit (type $Unit_ctor) (result (ref null any))
 //│     (local $Unit (ref null any))
 //│     (block (result (ref null any))
 //│       (local.set $Unit
@@ -28,10 +28,10 @@
 //│     (block
 //│       (global.set $Unit$inst
 //│         (ref.cast (ref null $Unit)
-//│           (call $Unit_ctor)))))
+//│           (call $Unit)))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (global.get $Unit$inst))
-//│   (elem $Unit_ctor declare func $Unit_ctor)
+//│   (elem $Unit declare func $Unit)
 //│   (elem $start declare func $start)
 //│   (elem $entry declare func $entry)
 //│   (start $start))

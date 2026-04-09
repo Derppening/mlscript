@@ -22,9 +22,8 @@ import scala.reflect.ClassTag
   *
   * Each instance of [[FuncInfo]] represents a single function definition in a WebAssembly module.
   *
-  * @param id
-  *   Symbolic identifier for the function. If the function is an anonymous function, `id` should be generated from a
-  *   fresh name allocated in the current scope.
+  * @param sym
+  *   The source [[BlockMemberSymbol]] which this function is generated from.
   * @param typeUse
   *   [[TypeUse]] of the function's type in the module's type section.
   * @param params
@@ -35,49 +34,31 @@ import scala.reflect.ClassTag
   *   [[Seq]] of local variables (excluding parameters) and their names.
   * @param body
   *   The expression of the function body.
-  * @param exports
+  * @param export
   *   Optional export name for the function.
   */
 class FuncInfo(
-    val id: SymIdx,
+    val sym: BlockMemberSymbol | TempSymbol,
     val typeUse: TypeUse,
     params: Seq[Local -> SymIdx],
     nResults: Int,
     locals: Seq[Local -> SymIdx],
     val body: Expr,
     val `export`: Opt[Str],
-) extends ToWat:
+)(using Ctx, Raise) extends ToWat:
 
-  /** @param sym
-    *   The source [[BlockMemberSymbol]] which this function is generated from.
-    * @param typeIdx
-    *   Index of the function's type in the module's type section.
-    * @param params
-    *   [[Seq]] of parameter local variables and their names.
-    * @param nResults
-    *   Number of results the function returns.
-    * @param locals
-    *   [[Seq]] of local variables (excluding parameters) and their names.
-    * @param body
-    *   The expression of the function body.
-    */
+  @deprecated
   def this(
-      sym: BlockMemberSymbol,
+      id: SymIdx,
       typeUse: TypeUse,
       params: Seq[Local -> SymIdx],
       nResults: Int,
       locals: Seq[Local -> SymIdx],
       body: Expr,
-  )(using Raise, Scope) = this(
-    SymIdx(sym.optionIf(_.nameIsMeaningful).fold(summon[Scope].allocateName(sym))(_.nme)),
-    typeUse,
-    params,
-    nResults,
-    locals,
-    body,
-    sym.optionIf(_.nameIsMeaningful).map(_.nme),
-  )
+      `export`: Opt[Str],
+  )(using Ctx, Raise, State) = this(TempSymbol(N, id.id), typeUse, params, nResults, locals, body, `export`)
 
+  @deprecated
   def this(
       id: Opt[SymIdx],
       typeUse: TypeUse,
@@ -86,8 +67,8 @@ class FuncInfo(
       locals: Seq[Local -> SymIdx],
       body: Expr,
       `export`: Opt[Str],
-  )(using Raise, Scope, State) = this(
-    id.getOrElse(SymIdx(summon[Scope].allocateName(TempSymbol(N, "")))),
+  )(using Ctx, Raise, Scope, State) = this(
+    TempSymbol(N, id.map(_.id).getOrElse("")),
     typeUse,
     params,
     nResults,
@@ -95,6 +76,9 @@ class FuncInfo(
     body,
     `export`,
   )
+
+  /** Symbolic identifier for the type. */
+  val id = SymIdx(summon[Ctx].funcScp.allocateName(sym))
 
   /** Returns the type of this function as a [[SignatureType]]. */
   def getSignatureType: SignatureType = SignatureType(
@@ -173,9 +157,9 @@ class TypeInfo(
     this(TempSymbol(N, id.id), compType, objectTag)
 
   @deprecated
-  def this(id: Opt[SymIdx], compType: CompType)(using Ctx, Raise, Scope, State) =
+  def this(id: Opt[SymIdx], compType: CompType)(using Ctx, Raise, State) =
     this(
-      id.getOrElse(SymIdx(summon[Scope].allocateName(TempSymbol(N, "")))),
+      TempSymbol(N, id.map(_.id).getOrElse("")),
       compType,
       N,
     )
@@ -298,6 +282,9 @@ class Ctx(using State) extends ToWat:
 
   /** [[ListMap]] containing all element segments in the module. */
   private var elemSegments = ListMap.empty[SymIdx, ElemSegment]
+
+  /** [[Scope]] for generating WAT identifiers of functions. */
+  private[text] val funcScp = Scope.empty(Scope.Cfg.default)
 
   /** [[ListMap]] containing all function definitions and imports in the module mapped by their symbolic identifiers. */
   private var funcs = ListMap.empty[SymIdx, FuncInfo | Import[ExternType.Func]]
@@ -498,16 +485,21 @@ class Ctx(using State) extends ToWat:
     TagIdx(id)
 
   /** Adds a function into this context. */
-  def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
+  def addFunc(funcInfo: FuncInfo): FuncIdx =
     val id = funcInfo.id
     funcs = funcs + (id -> funcInfo)
-    sym.foreach:
-      namedFuncs(_) = funcInfo
+    funcInfo.sym match
+      case bms: BlockMemberSymbol => namedFuncs(bms) = funcInfo
+      case _ =>
     val idx = FuncIdx(funcInfo.id)
     val refType = RefType(funcInfo.typeUse.typeIdx, nullable = false)
     elemSegments = elemSegments +
       (id -> ElemSegment.Declare(id, refType -> Seq(ref.func(idx, refType))))
     idx
+
+  @deprecated
+  def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo): FuncIdx =
+    addFunc(funcInfo)
 
   @deprecated("Use the overload without `resolveSymIdx` instead.")
   def getFunc(funcref: FuncIdx | Symbol, resolveSymIdx: Bool): Opt[FuncIdx] =
