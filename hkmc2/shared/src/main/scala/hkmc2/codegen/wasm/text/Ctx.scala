@@ -175,7 +175,9 @@ end TypeInfo
   * In Wasm, a `tag` names an exception kind and points to a function type that describes the payload values carried by
   * `throw tag ...` and extracted by matching `catch tag ...`.
   */
-class TagInfo(val id: SymIdx, val typeUse: TypeUse) extends ToWat:
+class TagInfo(val typeUse: TypeUse, val sym: Symbol)(using Ctx, Raise) extends ToWat:
+
+  val id: SymIdx = SymIdx(summon[Ctx].tagScp.allocateName(sym))
 
   def toWat: Document =
     doc"""(tag ${id.toWat} (export "${id.id}") ${typeUse.toWat})"""
@@ -303,6 +305,9 @@ class Ctx(using State) extends ToWat:
 
   /** [[ListMap]] containing all memory definitions and imports in the module mapped by their symbolic identifiers. */
   private var memories = ListMap.empty[SymIdx, MemInfo | Import[ExternType.Mem]]
+
+  /** [[Scope]] for generating WAT identifiers of tags. */
+  private[text] val tagScp = Scope.empty(Scope.Cfg.default)
 
   /** [[ListMap]] containing all tag definitions in the module. */
   private var tags = ListMap.empty[SymIdx, TagInfo]

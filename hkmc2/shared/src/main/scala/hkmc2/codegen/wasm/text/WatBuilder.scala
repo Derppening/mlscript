@@ -197,7 +197,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ctx.getOrCreateWasmIntrinsicTag(
       "mlx_exn",
       ctx.addTag(TagInfo(
-        id = SymIdx("mlx_exn"),
         typeUse = TypeUse(ctx.addType(
           TypeInfo(
             sym,
@@ -205,6 +204,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             objectTag = S(ctx.getFreshObjectTag()),
           ),
         )),
+        sym,
       )),
     )
 
