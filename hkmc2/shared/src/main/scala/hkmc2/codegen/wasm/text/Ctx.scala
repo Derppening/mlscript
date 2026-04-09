@@ -112,7 +112,8 @@ end FuncInfo
   * @param sym
   *   The source [[Symbol]] which this global is generated from.
   */
-class GlobalInfo(val valType: ValType, val mutable: Bool, val init: Expr, val sym: Symbol)(using Ctx, Raise) extends ToWat:
+class GlobalInfo(val valType: ValType, val mutable: Bool, val init: Expr, val sym: Symbol)(using Ctx, Raise)
+    extends ToWat:
 
   val id: SymIdx = SymIdx(summon[Ctx].globalScp.allocateName(sym))
 
@@ -654,9 +655,10 @@ class Ctx(using State) extends ToWat:
   /** Configures the module start function. */
   def setStartFunc(funcIdx: FuncIdx): Unit =
     startFunc = S(funcIdx)
-    
+
   def getGlobalIndex(sym: Symbol): Opt[GlobalIdx] = globalScp.lookup(sym).map(idx => GlobalIdx(SymIdx(idx)))
-  def getGlobalIndex_!(sym: Symbol, loc: Opt[Loc])(using Raise): GlobalIdx = GlobalIdx(SymIdx(globalScp.lookup_!(sym, loc)))
+  def getGlobalIndex_!(sym: Symbol, loc: Opt[Loc])(using Raise): GlobalIdx =
+    GlobalIdx(SymIdx(globalScp.lookup_!(sym, loc)))
 
   /** Returns all globals in this context.
     */

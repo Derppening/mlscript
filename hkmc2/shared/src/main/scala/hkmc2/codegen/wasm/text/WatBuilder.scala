@@ -121,12 +121,11 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val globalTy = RefType(typeref, nullable = true)
 
     val globalIdx = ctx.addGlobal(GlobalInfo(
-        valType = globalTy,
-        mutable = true,
-        init = ref.`null`(typeref),
-        sym = globalSym,
-      ),
-    )
+      valType = globalTy,
+      mutable = true,
+      init = ref.`null`(typeref),
+      sym = globalSym,
+    ))
     val idx = globalIdx.idx match
       case SymIdx(idx) => idx
       case _ => lastWords(s"Expected symbolic index, got numeric index instead")
