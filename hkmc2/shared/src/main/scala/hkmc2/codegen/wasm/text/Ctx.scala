@@ -292,6 +292,9 @@ class Ctx(using State) extends ToWat:
   /** [[MutMap]] containing function symbols mapped to the corresponding [[FuncInfo]] or [[Import]] instance. */
   private val namedFuncs = MutMap.empty[Symbol, FuncInfo | Import[ExternType.Func]]
 
+  /** [[Scope]] for generating WAT identifiers of memories. */
+  private[text] val memoryScp = Scope.empty(Scope.Cfg.default)
+
   /** [[ListMap]] containing all memory definitions and imports in the module mapped by their symbolic identifiers. */
   private var memories = ListMap.empty[SymIdx, MemInfo | Import[ExternType.Mem]]
 
@@ -404,17 +407,30 @@ class Ctx(using State) extends ToWat:
     getTypeInfo(typeref).getOrElse:
       lastWords(s"Missing type definition for ${typeref.prettyString}")
 
-  @deprecated("Use the `Import[ExternType.Func]` overload instead.")
-  def addFunctionImport(sym: Opt[Symbol], funcImport: FuncImport): FuncIdx =
-    addFunctionImport(
-      sym,
-      Import(funcImport.module, funcImport.name, ExternType.Func(funcImport.id, TypeUse(funcImport.typeIdx))),
-    )
-
   /** Adds a function import into this context.
     *
     * Returns the function index in the global function index space.
     */
+  def addFunctionImport(funcImport: Import[ExternType.Func]): FuncIdx =
+    val id = funcImport.externType.id
+    funcs = funcs + (id -> funcImport)
+    funcImport.externType.sym match
+      case bms: BlockMemberSymbol => namedFuncs(bms) = funcImport
+      case _ =>
+    FuncIdx(id)
+
+  @deprecated("Use the `Import[ExternType.Func]` overload instead.")
+  def addFunctionImport(sym: Opt[Symbol], funcImport: FuncImport)(using Ctx, Raise): FuncIdx =
+    addFunctionImport(
+      sym,
+      Import(
+        funcImport.module,
+        funcImport.name,
+        ExternType.Func(TypeUse(funcImport.typeIdx), sym.getOrElse(TempSymbol(N, funcImport.id.id))),
+      ),
+    )
+
+  @deprecated
   def addFunctionImport(sym: Opt[Symbol], funcImport: Import[ExternType.Func]): FuncIdx =
     val id = funcImport.externType.id
     funcs = funcs + (id -> funcImport)
@@ -427,7 +443,7 @@ class Ctx(using State) extends ToWat:
   def getOrCreateFunctionImport(
       module: Str,
       name: Str,
-  )(createImport: => FuncImport): FuncIdx =
+  )(createImport: => FuncImport)(using Ctx, Raise): FuncIdx =
     cachedFunctionImports.getOrElseUpdate((module, name), addFunctionImport(N, createImport))
 
   /** Returns the cached function import for (`module`, `name`), creating it with `createImport` if needed.
@@ -436,12 +452,12 @@ class Ctx(using State) extends ToWat:
       module: Str,
       name: Str,
   )(createImport: => Import[ExternType.Func]): FuncIdx =
-    cachedFunctionImports.getOrElseUpdate((module, name), addFunctionImport(N, createImport))
+    cachedFunctionImports.getOrElseUpdate((module, name), addFunctionImport(createImport))
 
   /** Adds or updates a memory import. If the import already exists, its minimum pages are increased to at least
     * `minPages`.
     */
-  def ensureMemoryImport(module: Str, name: Str, minPages: Int): Unit =
+  def ensureMemoryImport(module: Str, name: Str, minPages: Int)(using Ctx, Raise): Unit =
     val key = module -> name
     cachedMemoryImport.get(key) match
       case S(idx) =>
@@ -453,15 +469,17 @@ class Ctx(using State) extends ToWat:
         val newMin = existing.externType.memType.lim.min max minPages
         if newMin > existing.externType.memType.lim.min then
           memories = memories +
-            (idx -> Import(
-              module,
-              name,
-              ExternType.Mem(SymIdx(name), MemType(existing.externType.memType.lim.copy(min = minPages))),
+            (idx -> existing.copy(
+              externType = existing.externType.copy(
+                memType = existing.externType.memType.copy(lim = existing.externType.memType.lim.copy(min = newMin)),
+              ),
             ))
       case N =>
         val id = SymIdx(name)
-        memories = memories + (id -> Import(module, name, ExternType.Mem(id, MemType(Limits(minPages)))))
+        memories = memories +
+          (id -> Import(module, name, ExternType.Mem(MemType(Limits(minPages)), TempSymbol(N, id.id))))
         cachedMemoryImport(key) = SymIdx(name)
+    end match
   end ensureMemoryImport
 
   /** Returns the minimum page requirement of memory import (`module`, `name`) if present. */

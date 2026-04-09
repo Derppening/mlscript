@@ -245,9 +245,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       module = ExternIntrinsics.SystemModule,
       name = ExternIntrinsics.StringFromUtf16ImportName,
     ):
+      val importSym = TempSymbol(N, ExternIntrinsics.StringFromUtf16ImportName)
       val importTy = ctx.addType(
         TypeInfo(
-          sym = TempSymbol(N, ExternIntrinsics.StringFromUtf16ImportName),
+          sym = importSym,
           FunctionType(
             params = Seq(WasmParam(SymIdx("glob_offset"), RefType.anyref), WasmParam(SymIdx("len"), RefType.anyref)),
             results = Seq(Result(RefType.anyref)),
@@ -259,8 +260,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         module = ExternIntrinsics.SystemModule,
         name = ExternIntrinsics.StringFromUtf16ImportName,
         externType = ExternType.Func(
-          id = SymIdx(ExternIntrinsics.StringFromUtf16ImportName),
           typeUse = TypeUse(importTy),
+          sym = importSym,
         ),
       )
   end getOrLoadStrCtorFunction

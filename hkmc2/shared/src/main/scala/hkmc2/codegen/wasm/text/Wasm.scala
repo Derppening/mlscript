@@ -5,10 +5,11 @@ package text
 import mlscript.utils.*, shorthands.*
 
 import document.*
-import semantics.{DefinitionSymbol, Elaborator, TempSymbol}, Elaborator.State
+import semantics.{DefinitionSymbol, Elaborator, Symbol, TempSymbol}, Elaborator.State
 import utils.Scope
 
 import scala.collection.Map
+import hkmc2.semantics.BlockMemberSymbol
 
 extension (doc: Document)
   /** Surrounds a document by the given `prefix` and `suffix`, unless the document is empty. */
@@ -230,14 +231,21 @@ case class MemType(lim: Limits, addrType: AddrType = AddrType.i32) extends ToWat
 
 object ExternType:
   /** An linear memory entry that is externally addressable. */
-  case class Mem(override val id: SymIdx, memType: MemType) extends ExternType(id):
+  case class Mem(memType: MemType, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):
+  
+    override val id = SymIdx(summon[Ctx].memoryScp.allocateName(sym))
+  
     def toWat: Document = doc"""(memory ${id.toWat} ${memType.toWat})"""
 
   /** An function entry that is externally addressable. */
-  case class Func(override val id: SymIdx, typeUse: TypeUse) extends ExternType(id):
+  case class Func(typeUse: TypeUse, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):
+  
+    override val id = SymIdx(summon[Ctx].funcScp.allocateName(sym))
+  
     def toWat: Document = doc"""(func ${id.toWat} ${typeUse.toWat})"""
 
-sealed abstract class ExternType(val id: SymIdx) extends ToWat
+sealed abstract class ExternType(val sym: Symbol) extends ToWat:
+  val id: SymIdx
 
 /** A memory import entry. */
 @deprecated("Use `Import` with `ExternType.Mem` instead.")
