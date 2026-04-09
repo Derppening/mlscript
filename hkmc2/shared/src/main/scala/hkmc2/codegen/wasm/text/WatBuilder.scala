@@ -1247,9 +1247,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               extraInfo = S(t.showAsTree),
             )
       case Label(label, loop, body, rst) =>
-        val breakLabel = scope.allocateName(label)
+        val breakLabel = ctx.labelScp.allocateName(label)
         val continueLabel =
-          if loop then S(scope.allocateName(TempSymbol(N, s"${label.nme}_cont")))
+          if loop then S(ctx.labelScp.allocateName(TempSymbol(N, s"${label.nme}_cont")))
           else N
 
         val bodyExpr = ctx.withLabel(
@@ -1288,7 +1288,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         )
       case Match(scrut, arms, dflt, rst) =>
         val matchLabelSym = TempSymbol(N, "match")
-        val matchLabel = scope.allocateName(matchLabelSym)
+        val matchLabel = ctx.labelScp.allocateName(matchLabelSym)
         val tailMode = rst.isInstanceOf[End]
         val matchResLocal =
           if tailMode then S(mkTempLocal("matchRes"))
@@ -1339,7 +1339,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 val bodyExpr = returningTerm(body)
                 val armBodyExpr = lowerMatchBody(bodyExpr)
                 val armLabelSym = TempSymbol(N, "arm")
-                val armLabel = scope.allocateName(armLabelSym)
+                val armLabel = ctx.labelScp.allocateName(armLabelSym)
                 S(`if`(
                   condition = testExpr,
                   ifTrue = blockInstr(
@@ -1369,7 +1369,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 val bodyExpr = returningTerm(body)
                 val armBodyExpr = lowerMatchBody(bodyExpr)
                 val armLabelSym = TempSymbol(N, "arm")
-                val armLabel = scope.allocateName(armLabelSym)
+                val armLabel = ctx.labelScp.allocateName(armLabelSym)
 
                 // Safe to cast and extract tag since ref.test passed
                 val scrutAsObject = ref.cast(scrutExpr, baseObjectRefType(nullable = false))
@@ -1411,7 +1411,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                 val bodyExpr = returningTerm(body)
                 val armBodyExpr = lowerMatchBody(bodyExpr)
                 val armLabelSym = TempSymbol(N, "arm")
-                val armLabel = scope.allocateName(armLabelSym)
+                val armLabel = ctx.labelScp.allocateName(armLabelSym)
                 S(`if`(
                   condition = testExpr,
                   ifTrue = blockInstr(

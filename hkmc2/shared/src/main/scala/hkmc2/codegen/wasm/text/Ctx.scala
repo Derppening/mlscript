@@ -321,7 +321,10 @@ class Ctx(using State) extends ToWat:
   private val cachedMemoryImport = MutMap.empty[(Str, Str), SymIdx]
   private val cachedFunctionImports = MutMap.empty[(Str, Str), FuncIdx]
 
+  /** [[Scope]] for generating WAT identifiers of labels. */
+  private[text] val labelScp = Scope.empty(Scope.Cfg.default)
   private var labelTargets = Nil: List[(LabelSymbol, Ctx.LabelTarget)]
+
   private val singletonByBms = MutMap.empty[BlockMemberSymbol, Ctx.SingletonInfo]
   private val singletonByIsym = MutMap.empty[ModuleOrObjectSymbol, Ctx.SingletonInfo]
   private val singletonInitActions = ArrayBuf.empty[Expr]
