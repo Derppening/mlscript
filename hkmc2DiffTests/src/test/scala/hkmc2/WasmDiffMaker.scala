@@ -64,8 +64,7 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
         codegen.Lowering()
       val le = low.program(trm)
       val (modWat, mainFnNme, systemMemMinPages) = ltl.givenIn:
-        baseScp.nest.givenIn:
-          WatBuilder().program(le, N, wd)
+        WatBuilder().program(le, N, wd)
       val modWatJsLit = JSBuilder.makeStringLiteral(modWat.mkString(output.ColWidth))
 
       if wat.isSet then

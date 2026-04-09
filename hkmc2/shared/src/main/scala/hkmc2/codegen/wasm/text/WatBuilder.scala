@@ -1485,7 +1485,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       p: Program,
       exprt: Opt[BlockMemberSymbol],
       wd: io.Path,
-  )(using Raise, Scope): (Document, Str, Int) =
+  )(using Raise): (Document, Str, Int) =
     for imprt <- p.imports do
       raise(
         ErrorReport(
