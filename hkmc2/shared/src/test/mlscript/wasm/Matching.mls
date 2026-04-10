@@ -124,7 +124,7 @@ if Bar(true) is
 //│                           (local.set $a
 //│                             (local.get $arg$Bar$0$))
 //│                           (block (result (ref null any))
-//│                             (block $match
+//│                             (block $match1
 //│                               (local.set $matchRes1
 //│                                 (ref.null any))
 //│                               (if
@@ -138,7 +138,7 @@ if Bar(true) is
 //│                                     (local.set $matchRes1
 //│                                       (ref.i31
 //│                                         (i32.const 3)))
-//│                                     (br $match))))
+//│                                     (br $match1))))
 //│                               (local.set $matchRes1
 //│                                 (ref.i31
 //│                                   (i32.const 4))))

@@ -204,13 +204,15 @@ object FunctionCtx:
 
   /** Context for tracking control flow jump targets.
     *
+    * @param scp
+    *  [[Scope]] for generating WAT identifiers of labels in this control flow context.
     * @param breakLabel
     *   The label to jump to for exiting this control flow context, e.g. for `break` statements.
     * @param continueLabel
     *   The label to jump to for continuing this control flow context, e.g. for `continue` statements in loops. This is
     *   `None` for non-loop contexts.
     */
-  private case class ControlFlowCtx(breakLabel: LabelSymbol | TempSymbol, continueLabel: Opt[TempSymbol])
+  private case class ControlFlowCtx(scp: Scope, breakLabel: LabelSymbol | TempSymbol, continueLabel: Opt[TempSymbol])
 
 /** Context associated with codegen for a Wasm function.
   *
@@ -221,9 +223,6 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
 
   /** [[Scope]] for generating WAT identifiers of locals. */
   private[text] val localScp = Scope.empty(Scope.Cfg.default)
-
-  /** [[Scope]] for generating WAT identifiers of labels. */
-  private[text] val labelScp = Scope.empty(Scope.Cfg.default)
 
   /** The parameter of this function, represented by a tuple of the symbol representing the parameter and its symbolic
     * identifier.
@@ -273,34 +272,34 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
   def withLabel[T](label: LabelSymbol | TempSymbol, hasContinueLabel: Bool)(body: LabelTarget => T): T =
     import Scope.scope
   
-    val res = labelScp.nest.givenIn:
-      val ctrlFlowCtx = FunctionCtx.ControlFlowCtx(
-        breakLabel = label,
-        continueLabel = if hasContinueLabel then S(TempSymbol(N, s"${label.nme}_cont")) else N,
-      )
-      labels = labels + (label -> ctrlFlowCtx)
-      body(
-        LabelTarget(
-          breakLabel = Label(SymIdx(scope.allocateName(label))),
-          continueLabel = ctrlFlowCtx.continueLabel.map(cl => Label(SymIdx(scope.allocateName(cl)))),
-        ),
-      )
+    val ctrlFlowCtx = FunctionCtx.ControlFlowCtx(
+      scp = labels.lastOption.fold(Scope.empty(Scope.Cfg.default))(_._2.scp.nest),
+      breakLabel = label,
+      continueLabel = if hasContinueLabel then S(TempSymbol(N, s"${label.nme}_cont")) else N,
+    )
+    labels = labels + (label -> ctrlFlowCtx)
+    val res = body(
+      LabelTarget(
+        breakLabel = Label(SymIdx(ctrlFlowCtx.scp.allocateName(label))),
+        continueLabel = ctrlFlowCtx.continueLabel.map(cl => Label(SymIdx(ctrlFlowCtx.scp.allocateName(cl)))),
+      ),
+    )
     labels = labels.init
     res
 
   /** Looks up the nearest in-scope target for `label`. */
   def lookupLabel(label: LabelSymbol | TempSymbol): Opt[LabelTarget] =
-    labelScp.lookup(label)
+    labels.last._2.scp.lookup(label)
       .map: labelId =>
         LabelTarget(
           breakLabel = Label(SymIdx(labelId)),
-          continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labelScp.lookup_!(cl, N)))),
+          continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labels.last._2.scp.lookup_!(cl, N)))),
         )
 
   /** Similar to [[lookupLabel]], but throws an exception if `label` is not in this function context. */
   def lookupLabel_!(label: LabelSymbol | TempSymbol, loc: Opt[Loc]): LabelTarget =
-    val breakLabel = Label(SymIdx(labelScp.lookup_!(label, loc)))
-    val continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labelScp.lookup_!(cl, N))))
+    val breakLabel = Label(SymIdx(labels.last._2.scp.lookup_!(label, loc)))
+    val continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labels.last._2.scp.lookup_!(cl, N))))
     LabelTarget(breakLabel, continueLabel)
 end FunctionCtx
 
