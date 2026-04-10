@@ -235,12 +235,11 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
     *
     * @param customName
     *   An optional name for the local variable. If provided, the local will be emitted with the given name instead of
-    *   an auto-generated one. The `Bool` indicates whether the local shall shadow an existing local with the same name
-    *   in the current scope. See [[Scope.addToBindings]] for details.
+    *   an auto-generated one.
     */
-  def addLocal(local: Local, customName: Opt[Str -> Bool] = N): LocalIdx =
+  def addLocal(local: Local, customName: Opt[Str] = N): LocalIdx =
     customName match
-      case S((name, shadow)) => localScp.addToBindings(local, name, shadow)
+      case S(name) => localScp.addToBindings(local, name, shadow = false)
       case N => localScp.allocateName(local)
     _locals += local
     LocalIdx(SymIdx(localScp.lookup_!(local, N)))

@@ -283,23 +283,19 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val sym = TempSymbol(N, base)
     funcCtx.addLocal(sym)
 
-  /** Binds constructor self (`thisSym`) to the Wasm local name `this` in the current scope/context.
-    */
-  private def bindCtorThis(thisSym: Local)(using Ctx, FunctionCtx, Raise): LocalIdx =
-    funcCtx.lookupLocal(thisSym).getOrElse:
-      funcCtx.addLocal(thisSym, S("this" -> true))
-
   /** Compiles a class/object constructor body under its own Wasm-local frame.
+    *
+    * @return
+    *   A tuple containing the [[FunctionCtx]] instance storing the parameters and locals of the constructor body, the
+    *   [[LocalIdx]] of the `this` reference, and the compiled constructor body as an expression.
     */
-  private def setupCtorLocals(
-      clsLikeDefn: ClsLikeDefn,
-  )(using Ctx, Raise): (Seq[Local -> SymIdx], LocalIdx, Expr, Seq[Local -> SymIdx]) =
+  private def compileCtor(clsLikeDefn: ClsLikeDefn)(using Ctx, Raise): (FunctionCtx, LocalIdx, Expr) =
     val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
-    val ((ctorWat, thisIdx), funcCtx) = genFuncBody(clsParams):
-      val thisVar = bindCtorThis(clsLikeDefn.isym)
+    val ((ctorWat, thisIdx), fnCtx) = genFuncBody(clsParams):
+      val thisVar = funcCtx.addLocal(clsLikeDefn.isym, S("this"))
       val ctorWat = nonNestedScoped(clsLikeDefn.ctor)(block)
       ctorWat -> thisVar
-    (funcCtx.params, thisIdx, ctorWat, funcCtx.locals)
+    (fnCtx, thisIdx, ctorWat)
 
   /** Converts expression result types to WAT result clauses, dropping unreachable types. */
   private def resultClauses(expr: Expr): Seq[Result] =
@@ -1100,14 +1096,14 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val typeref = ctx.getType_!(clsLikeDefn.sym)
                   val typeinfo = ctx.getTypeInfo_!(typeref)
 
-                  val (ctorParams, thisVar, ctorWat, ctorLocals) = setupCtorLocals(clsLikeDefn)
+                  val (fnCtx, thisVar, ctorWat) = compileCtor(clsLikeDefn)
 
                   // * If there are no ctor params, pop one param list off the aux params
                   val (newCtorAuxParams, initialCtorParams) = clsLikeDefn.paramsOpt match
                     case None => ctorAuxParams match
                         case head :: next => (next, head)
                         case Nil => (ctorAuxParams, Nil)
-                    case Some(_) => (ctorAuxParams, ctorParams)
+                    case Some(_) => (ctorAuxParams, fnCtx.params)
 
                   val tagValue = typeinfo.objectTag.getOrElse:
                     lastWords(s"Expected class ${clsLikeDefn.sym} to have an object tag")
@@ -1145,7 +1141,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val funcTy = ctx.addType(TypeInfo(
                     sym = funcTySym,
                     FunctionType(
-                      params = ctorParams.map(p => WasmParam(p._2, RefType.anyref)),
+                      params = fnCtx.params.map(p => WasmParam(p._2, RefType.anyref)),
                       results = Seq(Result(RefType.anyref)),
                     ),
                     objectTag = N,
@@ -1160,9 +1156,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     FuncInfo(
                       sym = clsLikeDefn.sym,
                       typeUse = TypeUse(funcTy),
-                      params = ctorParams,
+                      params = fnCtx.params,
                       nResults = ctorCode.resultTypes.length,
-                      locals = ctorLocals,
+                      locals = fnCtx.locals,
                       body = ctorAux,
                       `export` = ctorId,
                     ),
