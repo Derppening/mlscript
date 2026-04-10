@@ -12,6 +12,12 @@ if 1 === 2 do 2 + 2
 let i = 0 in
   while i < 10 then set i += 1
   i
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:1249)
+//│ FAILURE INFO: Continue of label:lbl⁰
+//│ ╔══[COMPILATION ERROR] WatBuilder::returningTerm for Continue(...) to unknown label `lbl`
+//│ ║  l.13: 	  while i < 10 then set i += 1
+//│ ╙──      	        ^^^^^^^^^^^^^^^^^^^^^^
 //│ Wat:
 //│ (module
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
@@ -116,7 +122,7 @@ let i = 0 in
 //│                               (block
 //│                                 (local.set $i
 //│                                   (local.get $tmp))
-//│                                 (br $lbl_cont)))
+//│                                 (unreachable)))
 //│                             (local.set $matchRes
 //│                               (global.get $Unit$inst)))
 //│                           (br $match))))
@@ -132,8 +138,6 @@ let i = 0 in
 //│   (elem $start declare func $start)
 //│   (elem $entry declare func $entry)
 //│   (start $start))
-//│ Wasm result:
-//│ = 10
 
 
 fun f() =
@@ -146,16 +150,24 @@ f()
 
 let x = true
 while x do set x = false
-//│ Wasm result:
-//│ = {}
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:1249)
+//│ FAILURE INFO: Continue of label:lbl¹
+//│ ╔══[COMPILATION ERROR] WatBuilder::returningTerm for Continue(...) to unknown label `lbl`
+//│ ║  l.152: 	while x do set x = false
+//│ ╙──       	      ^^^^^^^^^^^^^^^^^^
 
 
 fun foo() =
     let x = 1
     while false do set x = 0
 foo()
-//│ Wasm result:
-//│ = {}
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:1249)
+//│ FAILURE INFO: Continue of label:lbl²
+//│ ╔══[COMPILATION ERROR] WatBuilder::returningTerm for Continue(...) to unknown label `lbl`
+//│ ║  l.163: 	    while false do set x = 0
+//│ ╙──       	          ^^^^^^^^^^^^^^^^^^
 
 
 let c = 0
@@ -167,8 +179,30 @@ while x < 5 do
     set y += 1
   set x += 1
 c
-//│ Wasm result:
-//│ = 25
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:1249)
+//│ FAILURE INFO: Continue of label:lbl³
+//│ ╔══[COMPILATION ERROR] WatBuilder::returningTerm for Continue(...) to unknown label `lbl`
+//│ ║  l.177: 	  while y < 5 do
+//│ ║         	        ^^^^^^^^
+//│ ║  l.178: 	    set c += 1
+//│ ║         	^^^^^^^^^^^^^^
+//│ ║  l.179: 	    set y += 1
+//│ ╙──       	^^^^^^^^^^^^^^
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:1249)
+//│ FAILURE INFO: Continue of label:lbl⁴
+//│ ╔══[COMPILATION ERROR] WatBuilder::returningTerm for Continue(...) to unknown label `lbl`
+//│ ║  l.175: 	while x < 5 do
+//│ ║         	      ^^^^^^^^
+//│ ║  l.176: 	  let y = 0
+//│ ║         	^^^^^^^^^^^
+//│ ║  l.177: 	  while y < 5 do
+//│ ║         	^^^^^^^^^^^^^^^^
+//│ ║  l.178: 	    set c += 1
+//│ ║         	^^^^^^^^^^^^^^
+//│ ║  l.179: 	... (more lines omitted) ...
+//│ ╙──       	^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 fun nonTailMatchReturn(x) =
@@ -199,8 +233,18 @@ fun loopMatchReturn() =
         3 then return i
         else set i += 1
 loopMatchReturn()
-//│ Wasm result:
-//│ = 3
+//│ FAILURE: Unexpected compilation error
+//│ FAILURE LOCATION: errExpr (WatBuilder.scala:1249)
+//│ FAILURE INFO: Continue of label:lbl⁵
+//│ ╔══[COMPILATION ERROR] WatBuilder::returningTerm for Continue(...) to unknown label `lbl`
+//│ ║  l.231: 	    while true do
+//│ ║         	          ^^^^^^^
+//│ ║  l.232: 	      if i is
+//│ ║         	^^^^^^^^^^^^^
+//│ ║  l.233: 	        3 then return i
+//│ ║         	^^^^^^^^^^^^^^^^^^^^^^^
+//│ ║  l.234: 	        else set i += 1
+//│ ╙──       	^^^^^^^^^^^^^^^^^^^^^^^
 
 
 :wat
@@ -240,7 +284,7 @@ tailMatchAllValue(1)
 //│                 (local.get $x)))
 //│             (i32.const 1))
 //│           (then
-//│             (block $arm1
+//│             (block $arm
 //│               (return
 //│                 (ref.i31
 //│                   (i32.const 20)))
