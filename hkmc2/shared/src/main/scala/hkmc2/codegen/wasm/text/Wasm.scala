@@ -242,7 +242,7 @@ object ExternType:
   /** An linear memory entry that is externally addressable. */
   case class Mem(memType: MemType, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):
 
-    override val id = SymIdx(summon[Ctx].memoryScp.allocateName(sym))
+    override val id = SymIdx(summon[Ctx].memoryScp.allocateOrGetName(sym))
 
     def toWat: Document = doc"""(memory ${id.toWat} ${memType.toWat})"""
 
@@ -253,7 +253,7 @@ object ExternType:
   /** An function entry that is externally addressable. */
   case class Func(typeUse: TypeUse, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):
 
-    override val id = SymIdx(summon[Ctx].funcScp.allocateName(sym))
+    override val id = SymIdx(summon[Ctx].funcScp.allocateOrGetName(sym))
 
     def toWat: Document = doc"""(func ${id.toWat} ${typeUse.toWat})"""
 end ExternType
