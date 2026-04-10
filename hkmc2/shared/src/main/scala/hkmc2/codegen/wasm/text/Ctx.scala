@@ -205,7 +205,7 @@ object FunctionCtx:
   /** Context for tracking control flow jump targets.
     *
     * @param scp
-    *  [[Scope]] for generating WAT identifiers of labels in this control flow context.
+    *   [[Scope]] for generating WAT identifiers of labels in this control flow context.
     * @param breakLabel
     *   The label to jump to for exiting this control flow context, e.g. for `break` statements.
     * @param continueLabel
@@ -270,7 +270,7 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
     */
   def withLabel[T](label: LabelSymbol, hasContinueLabel: Bool)(body: LabelTarget => T): T =
     import Scope.scope
-  
+
     val ctrlFlowCtx = FunctionCtx.ControlFlowCtx(
       scp = labels.lastOption.fold(Scope.empty(Scope.Cfg.default))(_._2.scp.nest),
       breakLabel = label,
@@ -294,12 +294,6 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
           breakLabel = Label(SymIdx(labelId)),
           continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labels.last._2.scp.lookup_!(cl, N)))),
         )
-
-  /** Similar to [[lookupLabel]], but throws an exception if `label` is not in this function context. */
-  def lookupLabel_!(label: LabelSymbol | TempSymbol, loc: Opt[Loc]): LabelTarget =
-    val breakLabel = Label(SymIdx(labels.last._2.scp.lookup_!(label, loc)))
-    val continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labels.last._2.scp.lookup_!(cl, N))))
-    LabelTarget(breakLabel, continueLabel)
 end FunctionCtx
 
 /** Generates a function body, providing an instance of [[FunctionCtx]] for parameter and locals tracking.
