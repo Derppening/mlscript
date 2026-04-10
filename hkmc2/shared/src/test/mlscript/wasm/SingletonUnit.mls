@@ -13,17 +13,17 @@
 //│   (type $start (func))
 //│   (global $Unit$inst (mut (ref null $Unit)) (ref.null $Unit))
 //│   (func $Unit (type $Unit_ctor) (result (ref null any))
-//│     (local $Unit (ref null any))
+//│     (local $this (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $Unit
+//│       (local.set $this
 //│         (struct.new_default $Unit))
 //│       (struct.set $Unit $$tag
 //│         (ref.cast (ref $Unit)
-//│           (local.get $Unit))
+//│           (local.get $this))
 //│         (i32.const 1))
 //│       (nop)
 //│       (return
-//│         (local.get $Unit))))
+//│         (local.get $this))))
 //│   (func $start (type $start)
 //│     (block
 //│       (global.set $Unit$inst

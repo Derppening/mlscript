@@ -220,10 +220,10 @@ object FunctionCtx:
 class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
 
   /** [[Scope]] for generating WAT identifiers of locals. */
-  private val localScp = Scope.empty(Scope.Cfg.default)
+  private[text] val localScp = Scope.empty(Scope.Cfg.default)
 
   /** [[Scope]] for generating WAT identifiers of labels. */
-  private val labelScp = Scope.empty(Scope.Cfg.default)
+  private[text] val labelScp = Scope.empty(Scope.Cfg.default)
 
   /** The parameter of this function, represented by a tuple of the symbol representing the parameter and its symbolic
     * identifier.
@@ -232,9 +232,17 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
   private val _locals = ArrayBuf.empty[Local]
   private var labels = ListMap.empty[LabelSymbol | TempSymbol, FunctionCtx.ControlFlowCtx]
 
-  /** Adds a Wasm local into this context. */
-  def addLocal(local: Local): LocalIdx =
-    localScp.allocateName(local)
+  /** Adds a Wasm local into this context.
+    *
+    * @param customName
+    *   An optional name for the local variable. If provided, the local will be emitted with the given name instead of
+    *   an auto-generated one. The `Bool` indicates whether the local shall shadow an existing local with the same name
+    *   in the current scope. See [[Scope.addToBindings]] for details.
+    */
+  def addLocal(local: Local, customName: Opt[Str -> Bool] = N): LocalIdx =
+    customName match
+      case S((name, shadow)) => localScp.addToBindings(local, name, shadow)
+      case N => localScp.allocateName(local)
     _locals += local
     LocalIdx(SymIdx(localScp.lookup_!(local, N)))
 

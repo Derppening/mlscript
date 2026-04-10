@@ -287,7 +287,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     */
   private def bindCtorThis(thisSym: Local)(using Ctx, FunctionCtx, Raise): LocalIdx =
     funcCtx.lookupLocal(thisSym).getOrElse:
-      funcCtx.addLocal(thisSym)
+      funcCtx.addLocal(thisSym, S("this" -> true))
 
   /** Compiles a class/object constructor body under its own Wasm-local frame.
     */

@@ -21,41 +21,41 @@ Bar.y
 //│   (global $Foo$inst (mut (ref null $Foo)) (ref.null $Foo))
 //│   (global $Bar$inst (mut (ref null $Bar)) (ref.null $Bar))
 //│   (func $Foo (type $Foo_ctor) (result (ref null any))
-//│     (local $Foo (ref null any))
+//│     (local $this (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $Foo
+//│       (local.set $this
 //│         (struct.new_default $Foo))
 //│       (struct.set $Foo $$tag
 //│         (ref.cast (ref $Foo)
-//│           (local.get $Foo))
+//│           (local.get $this))
 //│         (i32.const 1))
 //│       (block
 //│         (struct.set $Foo $x
 //│           (ref.cast (ref $Foo)
-//│             (local.get $Foo))
+//│             (local.get $this))
 //│           (ref.i31
 //│             (i32.const 1)))
 //│         (nop))
 //│       (return
-//│         (local.get $Foo))))
+//│         (local.get $this))))
 //│   (func $Bar (type $Bar_ctor) (result (ref null any))
-//│     (local $Bar (ref null any))
+//│     (local $this (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $Bar
+//│       (local.set $this
 //│         (struct.new_default $Bar))
 //│       (struct.set $Bar $$tag
 //│         (ref.cast (ref $Bar)
-//│           (local.get $Bar))
+//│           (local.get $this))
 //│         (i32.const 2))
 //│       (block
 //│         (struct.set $Bar $y
 //│           (ref.cast (ref $Bar)
-//│             (local.get $Bar))
+//│             (local.get $this))
 //│           (ref.i31
 //│             (i32.const 2)))
 //│         (nop))
 //│       (return
-//│         (local.get $Bar))))
+//│         (local.get $this))))
 //│   (func $start (type $start)
 //│     (block
 //│       (global.set $Foo$inst

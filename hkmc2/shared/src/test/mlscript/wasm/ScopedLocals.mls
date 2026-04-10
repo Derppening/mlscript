@@ -170,27 +170,27 @@ class Foo(val a, val b)
 //│   (type $Foo_ctor (func (param $a (ref null any)) (param $b (ref null any)) (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (func $Foo (export "Foo_ctor") (type $Foo_ctor) (param $a (ref null any)) (param $b (ref null any)) (result (ref null any))
-//│     (local $Foo (ref null any))
+//│     (local $this (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $Foo
+//│       (local.set $this
 //│         (struct.new_default $Foo))
 //│       (struct.set $Foo $$tag
 //│         (ref.cast (ref $Foo)
-//│           (local.get $Foo))
+//│           (local.get $this))
 //│         (i32.const 1))
 //│       (block
 //│         (struct.set $Foo $a
 //│           (ref.cast (ref $Foo)
-//│             (local.get $Foo))
+//│             (local.get $this))
 //│           (local.get $a))
 //│         (block
 //│           (struct.set $Foo $b
 //│             (ref.cast (ref $Foo)
-//│               (local.get $Foo))
+//│               (local.get $this))
 //│             (local.get $b))
 //│           (nop)))
 //│       (return
-//│         (local.get $Foo))))
+//│         (local.get $this))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $Foo (ref null any))
 //│     (local $tmp (ref null any))
