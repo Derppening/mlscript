@@ -251,11 +251,9 @@ tailMatchAllValue(1)
 //│       (local.get $matchRes)))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $tailMatchAllValue (ref null any))
-//│     (block (result (ref null any))
-//│       (nop)
-//│       (call $tailMatchAllValue
-//│         (ref.i31
-//│           (i32.const 1)))))
+//│     (call $tailMatchAllValue
+//│       (ref.i31
+//│         (i32.const 1))))
 //│   (elem $tailMatchAllValue declare func $tailMatchAllValue)
 //│   (elem $entry declare func $entry))
 //│ Wasm result:

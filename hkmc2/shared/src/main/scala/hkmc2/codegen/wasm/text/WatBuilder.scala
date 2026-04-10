@@ -1019,13 +1019,13 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   lastWords("cannot generate function with no parameter list")
                 case fd @ FunDefn(own, sym, dSym, ps :: pss, bod) =>
                   if own.nonEmpty then
-                    break(errExpr(
+                    break(S(errExpr(
                       Ls(
                         msg"WatBuilder::returningTerm for Define(...) with `owner.nonEmpty` not implemented yet" ->
                           defn.sym.toLoc,
                       ),
                       extraInfo = S(defn.showAsTree),
-                    ))
+                    )))
 
                   val result = pss.foldRight(bod):
                     case (ps, block) =>
@@ -1053,25 +1053,25 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                       )
                     val func = ctx.addFunc(funcInfo)
 
-                    nop
+                    N
                   else
-                    errExpr(
+                    S(errExpr(
                       Ls(
                         msg"WatBuilder::returningTerm for FunDefn(...) where `!sym.nameIsMeaningful` not implemented yet" ->
                           defn.sym.toLoc,
                       ),
                       extraInfo = S(defn.showAsTree),
-                    )
+                    ))
                   end if
                 case clsLikeDefn: ClsLikeDefn =>
                   // Guard against unsupported features
-                  def errUnimplExpr(cond: Str): Nothing = break(errExpr(
+                  def errUnimplExpr(cond: Str): Nothing = break(S(errExpr(
                     Ls(
                       msg"WatBackend::returningTerm for ClsLikeDefn(...) where `$cond` not implemented yet" ->
                         clsLikeDefn.sym.toLoc,
                     ),
                     extraInfo = S(defn.showAsTree),
-                  ))
+                  )))
                   val isSingletonObj = clsLikeDefn.k is syntax.Obj
                   if clsLikeDefn.owner.nonEmpty then
                     break(errUnimplExpr("owner.nonEmpty"))
@@ -1170,21 +1170,24 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   if isSingletonObj then
                     registerSingletonInit(clsLikeDefn, typeref)
 
-                  nop
+                  N
 
                 case defn =>
-                  errExpr(
+                  S(errExpr(
                     Ls(msg"WatBuilder::returningTerm for Define(...) not implemented yet" -> defn.sym.toLoc),
                     extraInfo = S(defn.showAsTree),
-                  )
+                  ))
               end match
 
             val rstBlk = returningTerm(rst)
-            blockInstr(
-              label = N,
-              children = Seq(res, rstBlk),
-              resultTypes = resultClauses(rstBlk),
-            )
+            res match
+              case S(res) =>
+                blockInstr(
+                  label = N,
+                  children = Seq(res, rstBlk),
+                  resultTypes = resultClauses(rstBlk),
+                )
+              case N => rstBlk
         end match
 
       case Return(res, true) =>

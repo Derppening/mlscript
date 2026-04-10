@@ -67,13 +67,9 @@ Bar.y
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $Bar (ref null any))
 //│     (local $Foo (ref null any))
-//│     (block (result (ref null any))
-//│       (nop)
-//│       (block (result (ref null any))
-//│         (nop)
-//│         (struct.get $Bar $y
-//│           (ref.cast (ref $Bar)
-//│             (global.get $Bar$inst))))))
+//│     (struct.get $Bar $y
+//│       (ref.cast (ref $Bar)
+//│         (global.get $Bar$inst))))
 //│   (elem $Foo declare func $Foo)
 //│   (elem $Bar declare func $Bar)
 //│   (elem $start declare func $start)
