@@ -45,9 +45,11 @@ abstract class WasmDiffMaker extends LlirDiffMaker:
   lazy val prettifyBinaryenWat = (content: Str) =>
     content.substring(2, content.length() - 2).replace("\\\\n", "\n").replace("\\\\\"", "\"")
 
-  
-  override def processIRBlock(pgrm: Program, definedValues: ComputeDefinedValues)(using Config, Raise, Elaborator.Ctx): Unit =
-    
+  override def processIRBlock(
+      pgrm: Program,
+      definedValues: ComputeDefinedValues,
+  )(using Config, Raise, Elaborator.Ctx): Unit =
+
     super.processIRBlock(pgrm, definedValues)
 
     val outerRaise: Raise = summon
