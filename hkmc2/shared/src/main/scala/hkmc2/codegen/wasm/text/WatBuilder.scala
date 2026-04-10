@@ -1091,10 +1091,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   if clsLikeDefn.companion.isDefined then
                     break(errUnimplExpr("companion.isDefined"))
 
-                  // TODO(Derppening): We might need to enclose this in `genFuncBody` when implicit `Scope` is removed
                   val ctorAuxParams = clsLikeDefn.auxParams.map: ps =>
                     ps.params.map: p =>
-                      p -> errUnimplExpr("auxParams are not supported yet")
+                      p -> errUnimplExpr("auxParams.nonEmpty")
 
                   // Use the symbolic type reference (e.g. `$Foo`) in emitted WAT for readability.
                   // Numeric indices are only needed for `$tag` values.
