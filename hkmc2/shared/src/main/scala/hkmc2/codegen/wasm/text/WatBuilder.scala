@@ -1278,7 +1278,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           resultTypes = rstResultTypes,
         )
       case Match(scrut, arms, dflt, rst) =>
-        val matchLabelSym = TempSymbol(N, "match")
+        val matchLabelSym = LabelSymbol(N, "match")
         funcCtx.withLabel(matchLabelSym, hasContinueLabel = false): labelTarget =>
           val matchLabel = labelTarget.breakLabel
           val tailMode = rst.isInstanceOf[End]
@@ -1330,7 +1330,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   
                   val bodyExpr = returningTerm(body)
                   val armBodyExpr = lowerMatchBody(bodyExpr)
-                  val armLabelSym = TempSymbol(N, "arm")
+                  val armLabelSym = LabelSymbol(N, "arm")
                   funcCtx.withLabel(armLabelSym, false): armLabelTarget =>
                     val armLabel = armLabelTarget.breakLabel
                     S(`if`(
@@ -1361,7 +1361,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   
                   val bodyExpr = returningTerm(body)
                   val armBodyExpr = lowerMatchBody(bodyExpr)
-                  val armLabelSym = TempSymbol(N, "arm")
+                  val armLabelSym = LabelSymbol(N, "arm")
                   funcCtx.withLabel(armLabelSym, false): armLabelTarget =>
                     val armLabel = armLabelTarget.breakLabel
     
@@ -1405,7 +1405,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val testExpr = i32.and(isArrayTest, lengthTest)
                   val bodyExpr = returningTerm(body)
                   val armBodyExpr = lowerMatchBody(bodyExpr)
-                  val armLabelSym = TempSymbol(N, "arm")
+                  val armLabelSym = LabelSymbol(N, "arm")
                   funcCtx.withLabel(armLabelSym, false): armLabelTarget =>
                     val armLabel = armLabelTarget.breakLabel
                     S(`if`(

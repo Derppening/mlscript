@@ -268,7 +268,7 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
     * @param hasContinueLabel
     *   Indicates whether a `continue` label should be generated for this control flow context, e.g. for loops.
     */
-  def withLabel[T](label: LabelSymbol | TempSymbol, hasContinueLabel: Bool)(body: LabelTarget => T): T =
+  def withLabel[T](label: LabelSymbol, hasContinueLabel: Bool)(body: LabelTarget => T): T =
     import Scope.scope
   
     val ctrlFlowCtx = FunctionCtx.ControlFlowCtx(
@@ -287,7 +287,7 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
     res
 
   /** Looks up the nearest in-scope target for `label`. */
-  def lookupLabel(label: LabelSymbol | TempSymbol): Opt[LabelTarget] =
+  def lookupLabel(label: LabelSymbol): Opt[LabelTarget] =
     labels.last._2.scp.lookup(label)
       .map: labelId =>
         LabelTarget(
