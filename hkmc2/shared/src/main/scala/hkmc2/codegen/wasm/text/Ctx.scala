@@ -189,50 +189,82 @@ end TagInfo
 enum WasmIntrinsicType:
   case TupleArray(mutable: Bool)
 
-object FunctionCtxMut:
+case class LabelTarget(
+    breakLabel: Label,
+    continueLabel: Opt[Label],
+)
 
-  def funcCtx(using funcCtx: FunctionCtxMut): FunctionCtxMut = funcCtx
+object FunctionCtx:
 
-class FunctionCtxMut(private val _params: Seq[Local])(using Raise, State):
+  def funcCtx(using funcCtx: FunctionCtx): FunctionCtx = funcCtx
+  
+  private case class ControlFlowCtx(breakLabel: LabelSymbol | TempSymbol, continueLabel: Opt[TempSymbol])
 
-  private val scp = Scope.empty(Scope.Cfg.default)
+class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
 
+  private val localScp = Scope.empty(Scope.Cfg.default)
+  private val labelScp = Scope.empty(Scope.Cfg.default)
+
+  val params: Seq[Local -> SymIdx] = _params.map(p => p -> SymIdx(localScp.allocateName(p)))
   private val _locals = ArrayBuf.empty[Local]
-  val params: Seq[Local -> SymIdx] = _params.map(p => p -> SymIdx(scp.allocateName(p)))
+  private var labels = ListMap.empty[LabelSymbol | TempSymbol, FunctionCtx.ControlFlowCtx]
 
   def addLocal(local: Local): LocalIdx =
-    scp.allocateName(local)
+    localScp.allocateName(local)
     _locals += local
-    LocalIdx(SymIdx(scp.lookup_!(local, N)))
+    LocalIdx(SymIdx(localScp.lookup_!(local, N)))
   def containsLocal(sym: Local): Bool = _params.contains(sym) || _locals.contains(sym)
   def lookupLocal(sym: Local): Opt[LocalIdx] =
-    scp.lookup(sym).map(idx => LocalIdx(SymIdx(idx)))
+    localScp.lookup(sym).map(idx => LocalIdx(SymIdx(idx)))
   def lookupLocal_!(sym: Local, loc: Opt[Loc]): LocalIdx =
-    LocalIdx(SymIdx(scp.lookup_!(sym, loc)))
+    LocalIdx(SymIdx(localScp.lookup_!(sym, loc)))
+  def locals: Seq[Local -> SymIdx] = _locals.map(l => l -> SymIdx(localScp.lookup_!(l, N))).toSeq
+  
+  /** Pushes a label target for the dynamic extent of `body` and pops it afterwards. */
+  def withLabel[T](label: LabelSymbol | TempSymbol, hasContinueLabel: Bool)(body: LabelTarget => T): T =
+    val res = labelScp.nest.givenIn:
+      val ctrlFlowCtx = FunctionCtx.ControlFlowCtx(
+        breakLabel = label,
+        continueLabel = if hasContinueLabel then S(TempSymbol(N, s"${label.nme}_cont")) else N,
+      )
+      labels = labels + (label -> ctrlFlowCtx)
+      body(
+        LabelTarget(
+          breakLabel = Label(SymIdx(labelScp.allocateName(label))),
+          continueLabel = ctrlFlowCtx.continueLabel.map(cl => Label(SymIdx(labelScp.allocateName(cl)))), 
+        ) 
+      )
+    labels = labels.init
+    res
 
-  def locals: Seq[Local -> SymIdx] = _locals.map(l => l -> SymIdx(scp.lookup_!(l, N))).toSeq
+  /** Looks up the nearest in-scope target for `label`. */
+  def lookupLabel(label: LabelSymbol | TempSymbol): Opt[LabelTarget] =
+    labelScp.lookup(label)
+      .map: labelId =>
+        LabelTarget(
+          breakLabel = Label(SymIdx(labelId)),
+          continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labelScp.lookup_!(cl, N)))), 
+        )
+
+  def lookupLabel_!(label: LabelSymbol | TempSymbol, loc: Opt[Loc]): LabelTarget =
+    val breakLabel = Label(SymIdx(labelScp.lookup_!(label, loc)))
+    val continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labelScp.lookup_!(cl, N))))
+    LabelTarget(breakLabel, continueLabel) 
 
 /** Generates a function body, providing an instance of [[FunctionCtxMut]] for parameter and locals tracking.
   *
   * Returns the result of the `mkBody` function along with a [[FunctionCtx]] containing the parameters and locals
   * tracked in the provided [[FunctionCtxMut]].
   */
-def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtxMut ?=> T)(using Raise, State): T -> FunctionCtx =
-  val funcCtx = FunctionCtxMut(params)
+def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtx ?=> T)(using Raise, State): T -> FunctionCtx =
+  val funcCtx = FunctionCtx(params)
   val result = mkBody(using funcCtx)
-  result -> FunctionCtx(funcCtx.params, funcCtx.locals)
-
-case class FunctionCtx(params: Seq[Local -> SymIdx], locals: Seq[Local -> SymIdx])
+  result -> funcCtx
 
 object Ctx:
   case class SingletonInfo(
       globalName: Str,
       globalTy: RefType,
-  )
-
-  case class LabelTarget(
-      breakLabel: Str,
-      continueLabel: Opt[Str],
   )
 
   val binaryOps: Map[Str, (Expr, Expr) => Expr] = Map(
@@ -335,8 +367,10 @@ class Ctx(using State) extends ToWat:
   private val cachedFunctionImports = MutMap.empty[(Str, Str), FuncIdx]
 
   /** [[Scope]] for generating WAT identifiers of labels. */
+  @deprecated
   private[text] val labelScp = Scope.empty(Scope.Cfg.default)
-  private var labelTargets = Nil: List[(LabelSymbol, Ctx.LabelTarget)]
+  @deprecated
+  private var labelTargets = Nil: List[(LabelSymbol, LabelTarget)]
 
   private val singletonByBms = MutMap.empty[BlockMemberSymbol, Ctx.SingletonInfo]
   private val singletonByIsym = MutMap.empty[ModuleOrObjectSymbol, Ctx.SingletonInfo]
@@ -350,14 +384,16 @@ class Ctx(using State) extends ToWat:
     (importedFuncs ++ importedMems).toSeq
 
   /** Pushes a label target for the dynamic extent of `body` and pops it afterwards. */
-  def withLabel[T](label: LabelSymbol, target: Ctx.LabelTarget)(body: => T): T =
+  @deprecated
+  def withLabel[T](label: LabelSymbol, target: LabelTarget)(body: => T): T =
     labelTargets = (label, target) :: labelTargets
     val res = body
     labelTargets = labelTargets.tail
     res
 
   /** Looks up the nearest in-scope target for `label`. */
-  def lookupLabel(label: LabelSymbol): Opt[Ctx.LabelTarget] =
+  @deprecated
+  def lookupLabel(label: LabelSymbol): Opt[LabelTarget] =
     labelTargets.collectFirst:
       case (sym, target) if sym eq label => target
 

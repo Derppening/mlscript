@@ -206,6 +206,10 @@ case class FieldIdx(idx: Index) extends CtxIdx(idx)
 /** An index bound to the ''tags'' index space. */
 case class TagIdx(idx: Index) extends CtxIdx(idx)
 
+/** A label index. */
+case class Label(idx: SymIdx) extends ToWat:
+  def toWat: Document = doc"${idx.toWat}"
+
 /** An import entry. */
 case class Import[ET <: ExternType](module: Str, name: Str, externType: ET) extends ToWat:
   def toWat: Document =

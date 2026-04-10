@@ -8,30 +8,26 @@ import document.*
 object Instructions:
   /** Creates a `block` instruction. */
   def block(
-      label: Opt[Str],
+      label: Opt[Label],
       children: Seq[Expr],
       resultTypes: Seq[Result],
   ): FoldedInstr =
-    val labelWat = label.map(lbl => doc"$$$lbl")
-
     FoldedInstr(
       mnemonic = "block",
-      instrargs = labelWat.toSeq ++ resultTypes,
+      instrargs = label.toSeq ++ resultTypes,
       stackargs = children,
       resultTypes = resultTypes.map(_.valtype),
     )
 
   /** Creates a `loop` instruction. */
   def loop(
-      label: Opt[Str],
+      label: Opt[Label],
       children: Seq[Expr],
       resultTypes: Seq[Result],
   ): FoldedInstr =
-    val labelWat = label.map(lbl => doc"$$$lbl")
-
     FoldedInstr(
       mnemonic = "loop",
-      instrargs = labelWat.toSeq ++ resultTypes,
+      instrargs = label.toSeq ++ resultTypes,
       stackargs = children,
       resultTypes = resultTypes.map(_.valtype),
     )
@@ -131,9 +127,9 @@ object Instructions:
   )
 
   /** Creates a `br` (branch) instruction. */
-  def br(label: Str): FoldedInstr = FoldedInstr(
+  def br(label: Label): FoldedInstr = FoldedInstr(
     mnemonic = "br",
-    instrargs = Seq(doc"$$$label"),
+    instrargs = Seq(label),
     stackargs = Seq.empty,
     resultType = S(UnreachableType),
   )
