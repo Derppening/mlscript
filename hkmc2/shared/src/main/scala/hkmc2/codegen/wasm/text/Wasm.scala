@@ -234,6 +234,11 @@ case class MemType(lim: Limits, addrType: AddrType = AddrType.i32) extends ToWat
     doc"${addrType.optionIf(_ != AddrType.i32).fold(doc"")(at => doc"${at.toWat} ")}${lim.toWat}"
 
 object ExternType:
+
+  object Mem:
+    @deprecated("Use `ExternType.Mem` with `Symbol` instead.")
+    def apply(id: SymIdx, memType: MemType)(using Ctx, Raise, State): Mem = new Mem(memType, TempSymbol(N, id.id))
+
   /** An linear memory entry that is externally addressable. */
   case class Mem(memType: MemType, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):
 
@@ -241,12 +246,17 @@ object ExternType:
 
     def toWat: Document = doc"""(memory ${id.toWat} ${memType.toWat})"""
 
+  object Func:
+    @deprecated("Use `ExternType.Func` with `Symbol` instead.")
+    def apply(typeUse: TypeUse, id: SymIdx)(using Ctx, Raise, State): Func = new Func(typeUse, TempSymbol(N, id.id))
+
   /** An function entry that is externally addressable. */
   case class Func(typeUse: TypeUse, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):
 
     override val id = SymIdx(summon[Ctx].funcScp.allocateName(sym))
 
     def toWat: Document = doc"""(func ${id.toWat} ${typeUse.toWat})"""
+end ExternType
 
 sealed abstract class ExternType(val sym: Symbol) extends ToWat:
   val id: SymIdx
@@ -269,6 +279,12 @@ case class MemUse(memidx: MemIdx) extends ToWat:
 
 object DataSegment:
   object Passive:
+    @deprecated("Use `DataSegment.Passive` with `Symbol` instead.")
+    def apply(id: SymIdx, bytes: Str)(using Ctx, Raise, State): Passive = new Passive(Seq(bytes), TempSymbol(N, id.id))
+    
+    @deprecated("Use `DataSegment.Passive` with `Symbol` instead.")
+    def apply(id: SymIdx, bytes: Seq[Str])(using Ctx, Raise, State): Passive = new Passive(bytes, TempSymbol(N, id.id))
+    
     def apply(bytes: Str, sym: Symbol)(using Ctx, Raise): Passive = new Passive(Seq(bytes), sym)
 
   /** A passive data segment, which is not associated with any memory and must be explicitly loaded with `memory.init`.
@@ -278,6 +294,14 @@ object DataSegment:
       doc"(data ${id.toWat}${bytes.map(s => s"\"$s\"").mkDocument(doc" ").surroundUnlessEmpty(doc" ")})"
 
   object Active:
+    @deprecated("Use `DataSegment.Active` with `Symbol` instead.")
+    def apply(id: SymIdx, offset: Expr, bytes: Str, memuse: Opt[MemUse])(using Ctx, Raise, State): Active = 
+      new Active(offset, Seq(bytes), memuse, TempSymbol(N, id.id))
+      
+    @deprecated("Use `DataSegment.Active` with `Symbol` instead.")
+    def apply(id: SymIdx, offset: Expr, bytes: Seq[Str], memuse: Opt[MemUse])(using Ctx, Raise, State): Active = 
+      new Active(offset, bytes, memuse, TempSymbol(N, id.id))
+    
     def apply(offset: Expr, bytes: Str, memuse: Opt[MemUse], sym: Symbol)(using Ctx, Raise): Active =
       new Active(offset, Seq(bytes), memuse, sym)
 
@@ -305,6 +329,12 @@ sealed abstract class DataSegment(bytes: Seq[Str], val sym: Symbol)(using Ctx, R
   val id = SymIdx(summon[Ctx].dataSegmentScp.allocateName(sym))
 
 object ElemSegment:
+
+  object Passive:
+    @deprecated("Use `ElemSegment.Passive` with `Symbol` instead.")
+    def apply(id: SymIdx, elemlist: RefType -> Seq[Expr])(using Ctx, Raise, State): Passive =
+      new Passive(elemlist, TempSymbol(N, id.id))
+
   /** A passive element segment, which is not associated with any table and must be explicitly initialized with
     * `table.init`.
     */
@@ -314,6 +344,11 @@ object ElemSegment:
   )(using Ctx, Raise) extends ElemSegment(elemlist, sym):
     def toWat: Document = doc"(elem ${id.toWat} ${abbrevElemList})"
 
+  object Active:
+    @deprecated("Use `ElemSegment.Active` with `Symbol` instead.")
+    def apply(id: SymIdx, offset: Expr, elemlist: RefType -> Seq[Expr])(using Ctx, Raise, State): Active =
+      new Active(offset, elemlist, TempSymbol(N, id.id))
+
   /** An active element segment, which is automatically copied into a table given by `offset. */
   case class Active(
       offset: Expr,
@@ -322,6 +357,11 @@ object ElemSegment:
       // TODO(Derppening): Add `tableuse` here if/when we support multiple tables.
   )(using Ctx, Raise) extends ElemSegment(elemlist, sym):
     def toWat: Document = doc"(elem ${id.toWat} ${offset.toWat} ${abbrevElemList})"
+
+  object Declare:
+    @deprecated("Use `ElemSegment.Declare` with `Symbol` instead.")
+    def apply(id: SymIdx, elemlist: RefType -> Seq[Expr])(using Ctx, Raise, State): Declare =
+      new Declare(elemlist, TempSymbol(N, id.id))
 
   /** A declarative element segment, which is used to forward declare references present in the code (such as using
     * `ref.func`).

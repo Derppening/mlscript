@@ -47,7 +47,7 @@ class FuncInfo(
     val `export`: Opt[Str],
 )(using Ctx, Raise) extends ToWat:
 
-  @deprecated
+  @deprecated("Use the overload that takes `sym` directly instead.")
   def this(
       id: SymIdx,
       typeUse: TypeUse,
@@ -58,7 +58,7 @@ class FuncInfo(
       `export`: Opt[Str],
   )(using Ctx, Raise, State) = this(TempSymbol(N, id.id), typeUse, params, nResults, locals, body, `export`)
 
-  @deprecated
+  @deprecated("Use the overload that takes `sym` directly instead.")
   def this(
       id: Opt[SymIdx],
       typeUse: TypeUse,
@@ -180,6 +180,10 @@ end TypeInfo
   */
 class TagInfo(val typeUse: TypeUse, val sym: Symbol)(using Ctx, Raise) extends ToWat:
 
+  @deprecated("Use the overload that takes `sym` directly instead.")
+  def this(id: SymIdx, typeUse: TypeUse)(using Ctx, Raise, State) =
+    this(typeUse, TempSymbol(N, id.id))
+
   val id: SymIdx = SymIdx(summon[Ctx].tagScp.allocateName(sym))
 
   def toWat: Document =
@@ -197,30 +201,67 @@ case class LabelTarget(
 object FunctionCtx:
 
   def funcCtx(using funcCtx: FunctionCtx): FunctionCtx = funcCtx
-  
+
+  /** Context for tracking control flow jump targets.
+    *
+    * @param breakLabel
+    *   The label to jump to for exiting this control flow context, e.g. for `break` statements.
+    * @param continueLabel
+    *   The label to jump to for continuing this control flow context, e.g. for `continue` statements in loops. This is
+    *   `None` for non-loop contexts.
+    */
   private case class ControlFlowCtx(breakLabel: LabelSymbol | TempSymbol, continueLabel: Opt[TempSymbol])
 
+/** Context associated with codegen for a Wasm function.
+  *
+  * @param _params
+  *   The parameters of this function.
+  */
 class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
 
+  /** [[Scope]] for generating WAT identifiers of locals. */
   private val localScp = Scope.empty(Scope.Cfg.default)
+
+  /** [[Scope]] for generating WAT identifiers of labels. */
   private val labelScp = Scope.empty(Scope.Cfg.default)
 
+  /** The parameter of this function, represented by a tuple of the symbol representing the parameter and its symbolic
+    * identifier.
+    */
   val params: Seq[Local -> SymIdx] = _params.map(p => p -> SymIdx(localScp.allocateName(p)))
   private val _locals = ArrayBuf.empty[Local]
   private var labels = ListMap.empty[LabelSymbol | TempSymbol, FunctionCtx.ControlFlowCtx]
 
+  /** Adds a Wasm local into this context. */
   def addLocal(local: Local): LocalIdx =
     localScp.allocateName(local)
     _locals += local
     LocalIdx(SymIdx(localScp.lookup_!(local, N)))
+
+  /** Returns `true` if a local or a parameter is already defined in this function context. */
   def containsLocal(sym: Local): Bool = _params.contains(sym) || _locals.contains(sym)
+
+  /** Looks up the given `sym` in this function context, returning its [[LocalIdx]] if it exists. */
   def lookupLocal(sym: Local): Opt[LocalIdx] =
     localScp.lookup(sym).map(idx => LocalIdx(SymIdx(idx)))
+
+  /** Similar to [[lookupLocal]], but throws an exception if `sym` is not in this context. */
   def lookupLocal_!(sym: Local, loc: Opt[Loc]): LocalIdx =
     LocalIdx(SymIdx(localScp.lookup_!(sym, loc)))
+
+  /** The locals of this function, represented by a tuple of the symbol representing the parameter and its symbolic
+    * identifier.
+    */
   def locals: Seq[Local -> SymIdx] = _locals.map(l => l -> SymIdx(localScp.lookup_!(l, N))).toSeq
-  
-  /** Pushes a label target for the dynamic extent of `body` and pops it afterwards. */
+
+  /** Pushes a label target for the dynamic extent of `body` and pops it afterwards.
+    *
+    * The `body` function is given a [[LabelTarget]] containing the `break` and `continue` labels corresponding to
+    * `label`.
+    *
+    * @param hasContinueLabel
+    *   Indicates whether a `continue` label should be generated for this control flow context, e.g. for loops.
+    */
   def withLabel[T](label: LabelSymbol | TempSymbol, hasContinueLabel: Bool)(body: LabelTarget => T): T =
     val res = labelScp.nest.givenIn:
       val ctrlFlowCtx = FunctionCtx.ControlFlowCtx(
@@ -231,8 +272,8 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
       body(
         LabelTarget(
           breakLabel = Label(SymIdx(labelScp.allocateName(label))),
-          continueLabel = ctrlFlowCtx.continueLabel.map(cl => Label(SymIdx(labelScp.allocateName(cl)))), 
-        ) 
+          continueLabel = ctrlFlowCtx.continueLabel.map(cl => Label(SymIdx(labelScp.allocateName(cl)))),
+        ),
       )
     labels = labels.init
     res
@@ -243,18 +284,19 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
       .map: labelId =>
         LabelTarget(
           breakLabel = Label(SymIdx(labelId)),
-          continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labelScp.lookup_!(cl, N)))), 
+          continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labelScp.lookup_!(cl, N)))),
         )
 
+  /** Similar to [[lookupLabel]], but throws an exception if `label` is not in this function context. */
   def lookupLabel_!(label: LabelSymbol | TempSymbol, loc: Opt[Loc]): LabelTarget =
     val breakLabel = Label(SymIdx(labelScp.lookup_!(label, loc)))
     val continueLabel = labels(label).continueLabel.map(cl => Label(SymIdx(labelScp.lookup_!(cl, N))))
-    LabelTarget(breakLabel, continueLabel) 
+    LabelTarget(breakLabel, continueLabel)
+end FunctionCtx
 
-/** Generates a function body, providing an instance of [[FunctionCtxMut]] for parameter and locals tracking.
+/** Generates a function body, providing an instance of [[FunctionCtx]] for parameter and locals tracking.
   *
-  * Returns the result of the `mkBody` function along with a [[FunctionCtx]] containing the parameters and locals
-  * tracked in the provided [[FunctionCtxMut]].
+  * Returns the result of the `mkBody` function along with the [[FunctionCtx]].
   */
 def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtx ?=> T)(using Raise, State): T -> FunctionCtx =
   val funcCtx = FunctionCtx(params)
@@ -367,9 +409,8 @@ class Ctx(using State) extends ToWat:
   private val cachedFunctionImports = MutMap.empty[(Str, Str), FuncIdx]
 
   /** [[Scope]] for generating WAT identifiers of labels. */
-  @deprecated
+  @deprecated("Use the label management functions in FunctionCtx instead.")
   private[text] val labelScp = Scope.empty(Scope.Cfg.default)
-  @deprecated
   private var labelTargets = Nil: List[(LabelSymbol, LabelTarget)]
 
   private val singletonByBms = MutMap.empty[BlockMemberSymbol, Ctx.SingletonInfo]
@@ -383,19 +424,18 @@ class Ctx(using State) extends ToWat:
       case (_, imp: Import[ExternType.Mem]) => imp
     (importedFuncs ++ importedMems).toSeq
 
+  private def lastWordsForLabel(funcName: Str): Nothing =
+    lastWords(s"$funcName is no longer supported; Please use label management functions in FunctionCtx instead.")
+
   /** Pushes a label target for the dynamic extent of `body` and pops it afterwards. */
-  @deprecated
+  @deprecated("Use `withLabel` in FunctionCtx instead to manage labels within function bodies.")
   def withLabel[T](label: LabelSymbol, target: LabelTarget)(body: => T): T =
-    labelTargets = (label, target) :: labelTargets
-    val res = body
-    labelTargets = labelTargets.tail
-    res
+    lastWordsForLabel("withLabel")
 
   /** Looks up the nearest in-scope target for `label`. */
-  @deprecated
+  @deprecated("Use `withLabel` in FunctionCtx instead to manage labels within function bodies.")
   def lookupLabel(label: LabelSymbol): Opt[LabelTarget] =
-    labelTargets.collectFirst:
-      case (sym, target) if sym eq label => target
+    lastWordsForLabel("lookupLabel")
 
   /** Returns a new number to be used as an object tag. */
   def getFreshObjectTag(): Int =
@@ -482,7 +522,7 @@ class Ctx(using State) extends ToWat:
       ),
     )
 
-  @deprecated
+  @deprecated("Use the overload that takes `Import[ExternType.Func]` directly instead.")
   def addFunctionImport(sym: Opt[Symbol], funcImport: Import[ExternType.Func]): FuncIdx =
     val id = funcImport.externType.id
     funcs = funcs + (id -> funcImport)
@@ -567,7 +607,7 @@ class Ctx(using State) extends ToWat:
       (id -> ElemSegment.Declare(refType -> Seq(ref.func(idx, refType)), funcInfo.sym))
     idx
 
-  @deprecated
+  @deprecated("Use the overload that takes `FuncInfo` directly instead.")
   def addFunc(sym: Opt[Symbol], funcInfo: FuncInfo)(using Ctx, Raise): FuncIdx =
     addFunc(funcInfo)
 
@@ -620,25 +660,25 @@ class Ctx(using State) extends ToWat:
     getFuncInfo(funcref).getOrElse:
       lastWords(s"Missing function definition for ${funcref.prettyString}")
 
-  private def lastWordsForLocals(funcName: Str): Nothing = 
+  private def lastWordsForLocals(funcName: Str): Nothing =
     lastWords(s"$funcName is no longer supported; Please use genFuncBody instead.")
 
-  @deprecated
+  @deprecated("Use genFuncBody instead to manage local variables within function bodies.")
   def pushLocal(): Unit = lastWordsForLocals("pushLocal")
 
-  @deprecated
+  @deprecated("Use genFuncBody instead to manage local variables within function bodies.")
   def popLocal(): Unit = lastWordsForLocals("popLocal")
 
   /** Adds a new local variable into the top-most variable scope. */
-  @deprecated
+  @deprecated("Use genFuncBody instead to manage local variables within function bodies.")
   def addLocal(sym: Local): LocalIdx = lastWordsForLocals("addLocal")
 
   /** Adds a [[Seq]] of local variables into the top-most variable scope. */
-  @deprecated
+  @deprecated("Use genFuncBody instead to manage local variables within function bodies.")
   def addLocals(syms: Seq[Local]): Seq[LocalIdx] = lastWordsForLocals("addLocals")
 
   /** Checks whether the top-most level local variable scope contains the local variable `sym`. */
-  @deprecated
+  @deprecated("Use genFuncBody instead to manage local variables within function bodies.")
   def containsLocal(sym: Local): Bool = lastWordsForLocals("containsLocal")
 
   /** Adds a new variable into the global variable scope. */
@@ -687,7 +727,10 @@ class Ctx(using State) extends ToWat:
   def setStartFunc(funcIdx: FuncIdx): Unit =
     startFunc = S(funcIdx)
 
+  /** Returns the symbolic index for a global symbol, or `None` if the symbol does not represent a global variable. */
   def getGlobalIndex(sym: Symbol): Opt[GlobalIdx] = globalScp.lookup(sym).map(idx => GlobalIdx(SymIdx(idx)))
+
+  /** Similar to [[getGlobalIndex]] but throws an exception if `sym` is not found. */
   def getGlobalIndex_!(sym: Symbol, loc: Opt[Loc])(using Raise): GlobalIdx =
     GlobalIdx(SymIdx(globalScp.lookup_!(sym, loc)))
 
@@ -696,19 +739,18 @@ class Ctx(using State) extends ToWat:
   def getGlobals: Seq[Symbol] =
     namedGlobals.keys.toSeq
 
-
-  private def lastWordsForLocalsGlobals(funcName: Str): Nothing = 
+  private def lastWordsForLocalsGlobals(funcName: Str): Nothing =
     lastWords(s"$funcName is no longer supported; Please use genFuncBody and global-related functions in Ctx instead.")
 
   /** Returns a tuple containing the variables in the current `global` and `local` scopes respectively.
     */
-  @deprecated
+  @deprecated("Use `getGlobals` and `FunctionCtx` instead to get the variables in global and local scopes separately.")
   def getWasmLocals: Seq[Symbol] -> Opt[Seq[Local]] =
-  lastWordsForLocalsGlobals("getWasmLocals")
+    lastWordsForLocalsGlobals("getWasmLocals")
 
   /** Returns all local variable scopes and their variables. */
-  @deprecated
-  def getAllWasmLocals: Ls[Seq[Local]] = 
+  @deprecated("Use `getGlobals` and `FunctionCtx` instead to get the variables in global and local scopes separately.")
+  def getAllWasmLocals: Ls[Seq[Local]] =
     lastWordsForLocalsGlobals("getAllWasmLocals")
 
   /** Returns the cached [[FuncIdx]] for the intrinsic named `name`, creating it with `createIntrinsic` if it does not
