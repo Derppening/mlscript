@@ -248,7 +248,8 @@ object ExternType:
 
   object Func:
     @deprecated("Use `ExternType.Func` with `Symbol` instead.")
-    def apply(typeUse: TypeUse, id: SymIdx)(using Ctx, Raise, State): Func = new Func(typeUse, TempSymbol(N, id.id))
+    def apply(typeUse: TypeUse, id: SymIdx)(using Ctx, Raise, State): Func =
+      new Func(typeUse, BlockMemberSymbol(id.id, Nil, nameIsMeaningful = true))
 
   /** An function entry that is externally addressable. */
   case class Func(typeUse: TypeUse, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):

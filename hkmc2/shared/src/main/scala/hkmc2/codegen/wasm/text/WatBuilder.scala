@@ -193,7 +193,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Gets (and caches) the exception tag used for MLX `throw`. */
   private def exnTagIdx(using Ctx, Raise): TagIdx =
-    val sym = TempSymbol(N, "mlx_exn")
+    val sym = BlockMemberSymbol("mlx_exn", Nil, nameIsMeaningful = false)
     ctx.getOrCreateWasmIntrinsicTag(
       "mlx_exn",
       ctx.addTag(TagInfo(
@@ -245,7 +245,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       module = ExternIntrinsics.SystemModule,
       name = ExternIntrinsics.StringFromUtf16ImportName,
     ):
-      val importSym = TempSymbol(N, ExternIntrinsics.StringFromUtf16ImportName)
+      val importSym = BlockMemberSymbol(ExternIntrinsics.StringFromUtf16ImportName, Nil, nameIsMeaningful = false)
       val importTy = ctx.addType(
         TypeInfo(
           sym = importSym,
@@ -790,7 +790,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       params: Seq[(TempSymbol, SymIdx)],
       body: Expr,
   )(using Ctx, Raise): FuncIdx =
-    val funcSym = TempSymbol(N, name)
+    val funcSym = BlockMemberSymbol(name, Nil, nameIsMeaningful = false)
     val funcTy = ctx.addType(
       TypeInfo(
         sym = funcSym,
@@ -1134,10 +1134,8 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val funcTySym = clsLikeDefn.sym
                     .optionIf: sym =>
                       !isSingletonObj && sym.nameIsMeaningful
-                    .map: sym =>
-                      TempSymbol(N, s"${sym.nme}_ctor")
-                    .getOrElse:
-                      TempSymbol(N, s"${clsLikeDefn.sym.nme}_ctor")
+                    .fold(BlockMemberSymbol(s"${clsLikeDefn.sym.nme}_ctor", Nil, nameIsMeaningful = false)): sym =>
+                      BlockMemberSymbol(s"${sym.nme}_ctor", Nil, nameIsMeaningful = true)
                   val funcTy = ctx.addType(TypeInfo(
                     sym = funcTySym,
                     FunctionType(
@@ -1547,12 +1545,12 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
             offset = i32.const(lit.offset),
             bytes = lit.watBytes,
             memuse = N,
-            sym = TempSymbol(N, s.take(WatBuilder.StringConstantIdentMaxLength)),
+            sym = BlockMemberSymbol(s.take(WatBuilder.StringConstantIdentMaxLength), Nil, nameIsMeaningful = false),
           ))
 
     val singletonInitActions = ctx.getSingletonInitActions
     if singletonInitActions.nonEmpty then
-      val initSym = TempSymbol(N, "start")
+      val initSym = BlockMemberSymbol("start", Nil, nameIsMeaningful = false)
       val initTy = ctx.addType(TypeInfo(
         sym = initSym,
         FunctionType(params = Seq.empty, results = Seq.empty),

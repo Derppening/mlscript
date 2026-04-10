@@ -38,7 +38,7 @@ import scala.reflect.ClassTag
   *   Optional export name for the function.
   */
 class FuncInfo(
-    val sym: BlockMemberSymbol | TempSymbol,
+    val sym: BlockMemberSymbol,
     val typeUse: TypeUse,
     params: Seq[Local -> SymIdx],
     nResults: Int,
@@ -56,7 +56,8 @@ class FuncInfo(
       locals: Seq[Local -> SymIdx],
       body: Expr,
       `export`: Opt[Str],
-  )(using Ctx, Raise, State) = this(TempSymbol(N, id.id), typeUse, params, nResults, locals, body, `export`)
+  )(using Ctx, Raise, State) =
+    this(BlockMemberSymbol(id.id, Nil, nameIsMeaningful = true), typeUse, params, nResults, locals, body, `export`)
 
   @deprecated("Use the overload that takes `sym` directly instead.")
   def this(
@@ -68,7 +69,7 @@ class FuncInfo(
       body: Expr,
       `export`: Opt[Str],
   )(using Ctx, Raise, Scope, State) = this(
-    TempSymbol(N, id.map(_.id).getOrElse("")),
+    BlockMemberSymbol(id.map(_.id).getOrElse(""), Nil, nameIsMeaningful = id.isDefined),
     typeUse,
     params,
     nResults,
@@ -150,19 +151,19 @@ end MemInfo
   *   An optional object tag number associated with this type.
   */
 class TypeInfo(
-    val sym: BlockMemberSymbol | TempSymbol,
+    val sym: BlockMemberSymbol,
     val compType: CompType,
     val objectTag: Opt[Int],
 )(using Ctx, Raise) extends ToWat:
 
   @deprecated
   def this(id: SymIdx, compType: CompType, objectTag: Opt[Int])(using Ctx, Raise, State) =
-    this(TempSymbol(N, id.id), compType, objectTag)
+    this(BlockMemberSymbol(id.id, Nil, nameIsMeaningful = true), compType, objectTag)
 
   @deprecated
   def this(id: Opt[SymIdx], compType: CompType)(using Ctx, Raise, State) =
     this(
-      TempSymbol(N, id.map(_.id).getOrElse("")),
+      BlockMemberSymbol(id.map(_.id).getOrElse(""), Nil, nameIsMeaningful = id.isDefined),
       compType,
       N,
     )
@@ -182,7 +183,7 @@ class TagInfo(val typeUse: TypeUse, val sym: Symbol)(using Ctx, Raise) extends T
 
   @deprecated("Use the overload that takes `sym` directly instead.")
   def this(id: SymIdx, typeUse: TypeUse)(using Ctx, Raise, State) =
-    this(typeUse, TempSymbol(N, id.id))
+    this(typeUse, BlockMemberSymbol(id.id, Nil, nameIsMeaningful = true))
 
   val id: SymIdx = SymIdx(summon[Ctx].tagScp.allocateName(sym))
 
@@ -449,9 +450,7 @@ class Ctx(using State) extends ToWat:
   def addType(typeInfo: TypeInfo): TypeIdx =
     val id = typeInfo.id
     types = types + (id -> typeInfo)
-    typeInfo.sym match
-      case bms: BlockMemberSymbol => namedTypes(bms) = typeInfo
-      case _ =>
+    namedTypes(typeInfo.sym) = typeInfo
     TypeIdx(id)
 
   /** Adds a type into this context. */
@@ -520,7 +519,10 @@ class Ctx(using State) extends ToWat:
       Import(
         funcImport.module,
         funcImport.name,
-        ExternType.Func(TypeUse(funcImport.typeIdx), sym.getOrElse(TempSymbol(N, funcImport.id.id))),
+        ExternType.Func(
+          TypeUse(funcImport.typeIdx),
+          sym.getOrElse(BlockMemberSymbol(funcImport.id.id, Nil, nameIsMeaningful = false)),
+        ),
       ),
     )
 
@@ -600,9 +602,7 @@ class Ctx(using State) extends ToWat:
   def addFunc(funcInfo: FuncInfo)(using Ctx, Raise): FuncIdx =
     val id = funcInfo.id
     funcs = funcs + (id -> funcInfo)
-    funcInfo.sym match
-      case bms: BlockMemberSymbol => namedFuncs(bms) = funcInfo
-      case _ =>
+    namedFuncs(funcInfo.sym) = funcInfo
     val idx = FuncIdx(funcInfo.id)
     val refType = RefType(funcInfo.typeUse.typeIdx, nullable = false)
     elemSegments = elemSegments +
