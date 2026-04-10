@@ -212,7 +212,7 @@ object FunctionCtx:
     *   The label to jump to for continuing this control flow context, e.g. for `continue` statements in loops. This is
     *   `None` for non-loop contexts.
     */
-  private case class ControlFlowCtx(scp: Scope, breakLabel: LabelSymbol | TempSymbol, continueLabel: Opt[TempSymbol])
+  private case class ControlFlowCtx(scp: Scope, breakLabel: LabelSymbol, continueLabel: Opt[LabelSymbol])
 
 /** Context associated with codegen for a Wasm function.
   *
@@ -229,7 +229,7 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
     */
   val params: Seq[Local -> SymIdx] = _params.map(p => p -> SymIdx(localScp.allocateName(p)))
   private val _locals = ArrayBuf.empty[Local]
-  private var labels = ListMap.empty[LabelSymbol | TempSymbol, FunctionCtx.ControlFlowCtx]
+  private var labels = ListMap.empty[LabelSymbol, FunctionCtx.ControlFlowCtx]
 
   /** Adds a Wasm local into this context.
     *
@@ -274,7 +274,7 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
     val ctrlFlowCtx = FunctionCtx.ControlFlowCtx(
       scp = labels.lastOption.fold(Scope.empty(Scope.Cfg.default))(_._2.scp.nest),
       breakLabel = label,
-      continueLabel = if hasContinueLabel then S(TempSymbol(N, s"${label.nme}_cont")) else N,
+      continueLabel = if hasContinueLabel then S(LabelSymbol(N, s"${label.nme}_cont")) else N,
     )
     labels = labels + (label -> ctrlFlowCtx)
     val res = body(
