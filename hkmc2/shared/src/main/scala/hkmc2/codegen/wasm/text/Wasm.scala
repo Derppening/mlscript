@@ -248,7 +248,7 @@ object ExternType:
 
   object Func:
     @deprecated("Use `ExternType.Func` with `Symbol` instead.")
-    def apply(typeUse: TypeUse, id: SymIdx)(using Ctx, Raise, State): Func =
+    def apply(id: SymIdx, typeUse: TypeUse)(using Ctx, Raise, State): Func =
       new Func(typeUse, BlockMemberSymbol(id.id, Nil, nameIsMeaningful = true))
 
   /** An function entry that is externally addressable. */
@@ -327,7 +327,7 @@ end DataSegment
 
 /** A data segment entry. */
 sealed abstract class DataSegment(bytes: Seq[Str], val sym: Symbol)(using Ctx, Raise) extends ToWat:
-  val id = SymIdx(summon[Ctx].dataSegmentScp.allocateName(sym))
+  val id = SymIdx(summon[Ctx].dataSegmentScp.allocateOrGetName(sym))
 
 object ElemSegment:
 
@@ -377,7 +377,7 @@ end ElemSegment
 /** An element segment entry. */
 sealed abstract class ElemSegment(val elemlist: RefType -> Seq[Expr], val sym: Symbol)(using Ctx, Raise) extends ToWat:
 
-  val id = SymIdx(summon[Ctx].elemSegmentScp.allocateName(sym))
+  val id = SymIdx(summon[Ctx].elemSegmentScp.allocateOrGetName(sym))
 
   /** Applies abbreviations on the `elemlist` if a simpler replacement is available. */
   protected def abbrevElemList: Document =

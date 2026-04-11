@@ -15,7 +15,7 @@ import Instructions.*
 
 import scala.annotation.{nowarn, targetName}
 import scala.collection.immutable.ListMap
-import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap}
+import scala.collection.mutable.{ArrayBuffer as ArrayBuf, Map as MutMap, LinkedHashSet}
 import scala.reflect.ClassTag
 
 /** A Wasm function and its associated information.
@@ -79,7 +79,7 @@ class FuncInfo(
   )
 
   /** Symbolic identifier for the type. */
-  val id = SymIdx(summon[Ctx].funcScp.allocateName(sym))
+  val id = SymIdx(summon[Ctx].funcScp.allocateOrGetName(sym))
 
   /** Returns the type of this function as a [[SignatureType]]. */
   def getSignatureType: SignatureType = SignatureType(
@@ -116,7 +116,7 @@ end FuncInfo
 class GlobalInfo(val valType: ValType, val mutable: Bool, val init: Expr, val sym: Symbol)(using Ctx, Raise)
     extends ToWat:
 
-  val id: SymIdx = SymIdx(summon[Ctx].globalScp.allocateName(sym))
+  val id: SymIdx = SymIdx(summon[Ctx].globalScp.allocateOrGetName(sym))
 
   def toWat: Document =
     val typeDoc =
@@ -169,7 +169,7 @@ class TypeInfo(
     )
 
   /** Symbolic identifier for the type. */
-  val id = SymIdx(summon[Ctx].typeScp.allocateName(sym))
+  val id = SymIdx(summon[Ctx].typeScp.allocateOrGetName(sym))
 
   def toWat: Document = doc"(type ${id.toWat} ${compType.toWat})"
 end TypeInfo
@@ -185,7 +185,7 @@ class TagInfo(val typeUse: TypeUse, val sym: Symbol)(using Ctx, Raise) extends T
   def this(id: SymIdx, typeUse: TypeUse)(using Ctx, Raise, State) =
     this(typeUse, BlockMemberSymbol(id.id, Nil, nameIsMeaningful = true))
 
-  val id: SymIdx = SymIdx(summon[Ctx].tagScp.allocateName(sym))
+  val id: SymIdx = SymIdx(summon[Ctx].tagScp.allocateOrGetName(sym))
 
   def toWat: Document =
     doc"""(tag ${id.toWat} (export "${id.id}") ${typeUse.toWat})"""
@@ -220,7 +220,7 @@ object FunctionCtx:
   * @param _params
   *   The parameters of this function.
   */
-class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
+class FunctionCtx(_params: Seq[Local], thisSym: Opt[Symbol])(using Raise, State):
 
   /** [[Scope]] for generating WAT identifiers of locals. */
   private[text] val localScp = Scope.empty(Scope.Cfg.default)
@@ -228,7 +228,14 @@ class FunctionCtx(private val _params: Seq[Local])(using Raise, State):
   /** The parameter of this function, represented by a tuple of the symbol representing the parameter and its symbolic
     * identifier.
     */
-  val params: Seq[Local -> SymIdx] = _params.map(p => p -> SymIdx(localScp.allocateName(p)))
+  val params: Seq[Local -> SymIdx] = 
+    // val thisParam = thisSym.map: thisSym =>
+    //   val symIdx = SymIdx(localScp.addToBindings(thisSym, "this", shadow = false))
+    //   thisSym -> symIdx
+    // thisSym.map(dis => dis -> SymIdx(localScp.allocateName(dis))).toSeq ++ _params.map(p => p -> SymIdx(localScp.allocateName(p)))
+    val thisParam = thisSym.map: dis =>
+      dis -> SymIdx(localScp.addToBindings(dis, "this", shadow = false))
+    thisParam.toSeq ++ _params.map(p => p -> SymIdx(localScp.allocateName(p)))
   private val _locals = ArrayBuf.empty[Local]
   private var labels = ListMap.empty[LabelSymbol, FunctionCtx.ControlFlowCtx]
 
@@ -301,8 +308,8 @@ end FunctionCtx
   *
   * Returns the result of the `mkBody` function along with the [[FunctionCtx]].
   */
-def genFuncBody[T](params: Seq[Local])(mkBody: FunctionCtx ?=> T)(using Raise, State): T -> FunctionCtx =
-  val funcCtx = FunctionCtx(params)
+def genFuncBody[T](params: Seq[Local], thisSym: Opt[Symbol] = N)(mkBody: FunctionCtx ?=> T)(using Raise, State): T -> FunctionCtx =
+  val funcCtx = FunctionCtx(params, thisSym)
   val result = mkBody(using funcCtx)
   result -> funcCtx
 
@@ -419,6 +426,7 @@ class Ctx(using State) extends ToWat:
   private val singletonByBms = MutMap.empty[BlockMemberSymbol, Ctx.SingletonInfo]
   private val singletonByIsym = MutMap.empty[ModuleOrObjectSymbol, Ctx.SingletonInfo]
   private val singletonInitActions = ArrayBuf.empty[Expr]
+  private val runtimeClassTags = MutMap.empty[BlockMemberSymbol, LinkedHashSet[Int]]
 
   private def imports: Seq[Import[?]] =
     val importedFuncs = funcs.collect:
@@ -499,6 +507,12 @@ class Ctx(using State) extends ToWat:
   def getTypeInfo_!(typeref: TypeIdx | BlockMemberSymbol): TypeInfo =
     getTypeInfo(typeref).getOrElse:
       lastWords(s"Missing type definition for ${typeref.prettyString}")
+
+  def registerRuntimeClassTags(sym: BlockMemberSymbol, tags: LinkedHashSet[Int]): Unit =
+    runtimeClassTags(sym) = tags
+
+  def getRuntimeClassTags(sym: BlockMemberSymbol): Opt[LinkedHashSet[Int]] =
+    runtimeClassTags.get(sym)
 
   /** Adds a function import into this context.
     *
@@ -645,7 +659,12 @@ class Ctx(using State) extends ToWat:
   /** Same as [[getFunc]] but throws an exception when the `funcref` is not found. */
   def getFunc_!(funcref: FuncIdx | Symbol): FuncIdx =
     getFunc(funcref).getOrElse:
-      lastWords(s"Missing function definition for ${funcref.prettyString}")
+      lastWords(s"Missing function definition for ${funcref.prettyString}\n${namedFuncs.map(
+        (sym, func) => s"  - ${sym.toString} -> ${func match
+            case fi: FuncInfo => s"FuncInfo(${fi.id.toWat.mkString()})"
+            case imp: Import[ExternType.Func] => s"Import(${imp.externType.id.toWat.mkString()})"
+          }",
+      ).mkString("Available functions:\n", "\n", "")}")
 
   /** Returns the [[FuncInfo]] instance associated with the given `funcref`. */
   @nowarn("cat=deprecation")

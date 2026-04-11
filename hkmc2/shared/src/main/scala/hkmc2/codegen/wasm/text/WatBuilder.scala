@@ -15,7 +15,7 @@ import syntax.Tree.{BoolLit, IntLit, StrLit, Ident}
 import text.{Import as WasmImport, Label as WasmLabel, Param as WasmParam}
 import Message.MessageContext
 
-import scala.collection.mutable.{ArrayBuffer as ArrayBuf, LinkedHashMap}
+import scala.collection.mutable.{ArrayBuffer as ArrayBuf, LinkedHashMap, LinkedHashSet, Queue}
 import scala.util.boundary, boundary.break
 import sourcecode.Line
 
@@ -51,6 +51,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   private case class StringLitInfo(offset: Int, byteLen: Int, watBytes: Str)
   private val stringLits: LinkedHashMap[Str, StringLitInfo] = LinkedHashMap.empty
+  private val initFuncSyms: LinkedHashMap[BlockMemberSymbol, BlockMemberSymbol] = LinkedHashMap.empty
   private var nextStringDataOffset: Int = 0
 
   private def baseObjectTypeIdx(using Ctx): TypeIdx =
@@ -69,12 +70,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     defn.owner.isEmpty
       && ((defn.k is syntax.Cls) || (defn.k is syntax.Obj))
       && defn.auxParams.isEmpty
-      && defn.parentPath.isEmpty
+      && (!(defn.k is syntax.Obj) || defn.parentPath.isEmpty)
       && defn.methods.isEmpty
       && defn.companion.isEmpty
-      && (defn.preCtor match
-        case End(_) => true
-        case _ => false)
 
   /** Returns singleton metadata when `sym` resolves to a registered singleton object. */
   private def singletonInfoFor(sym: Local)(using Ctx): Opt[SingletonInfo] =
@@ -110,7 +108,9 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     if ctx.containsSingleton(unitDefn.sym) then return
 
     if ctx.getType(unitDefn.sym).isEmpty then
-      createDefnTypes(Define(unitDefn, End("")))
+      predeclareClassType(unitDefn)
+      predeclareClassInit(unitDefn)
+      predeclareClassConstructor(unitDefn)
 
     returningTerm(Define(unitDefn, End("")))
 
@@ -145,51 +145,215 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     ctx.addSingletonInitAction(global.set(globalIdx, ref.cast(ctorCall, globalTy)))
   end registerSingletonInit
 
-  /** Recursively declares supported top-level class types (needed for nested function codegen). */
-  private def createDefnTypes(b: Block)(using Ctx, Raise): Unit = b match
-    case Define(defn: ClsLikeDefn, rst) =>
-      if isSupportedTopLevelClass(defn) then
-        val inheritedFields = baseObjectStruct.fields
-        val inheritedSize = inheritedFields.size
+  /** Collects only top-level class definitions in `block`. */
+  private def collectTopLevelClassDefns(block: Block): List[ClsLikeDefn] =
+    val acc = ArrayBuf.empty[ClsLikeDefn]
+    new BlockTraverserShallow:
+      applyBlock(block)
+      override def applyBlock(b: Block): Unit = b match
+        case Match(_, _, _, rst) => applySubBlock(rst)
+        case Label(_, _, _, rst) => applySubBlock(rst)
+        case TryBlock(_, _, rst) => applySubBlock(rst)
+        case _ => super.applyBlock(b)
+      override def applyDefn(defn: Defn): Unit = defn match
+        case clsLikeDefn: ClsLikeDefn =>
+          clsLikeDefn.optionIf(isSupportedTopLevelClass).foreach(acc += _)
+        case _ => ()
+    acc.toList
 
-        val classFields = (defn.publicFields.map(_._2) ++ defn.privateFields)
-          .map: f =>
-            f -> Field(RefType.anyref, mutable = true, id = f.nme)
+  /** Resolves the parent symbol for a top-level class definition, if present. */
+  private def resolveParentSym(defn: ClsLikeDefn)(using Raise): Opt[BlockMemberSymbol] =
+    def unsupportedParent(): Opt[BlockMemberSymbol] =
+      raise(ErrorReport(
+        msg"Wasm inheritance ordering only supports direct resolved parent class references." ->
+          defn.parentPath.flatMap(_.toLoc) :: Nil,
+        extraInfo = S(defn.showAsTree),
+        source = Diagnostic.Source.Compilation,
+      ))
+      N
 
-        val allFields = inheritedFields ++ classFields
+    defn.parentPath match
+      case N => N
+      case S(Value.Ref(sym, _)) =>
+        sym.asCls.flatMap(_.asBlkMember).orElse(unsupportedParent())
+      case S(sel: Select) =>
+        sel.symbol.flatMap(_.asCls).flatMap(_.asBlkMember).orElse(unsupportedParent())
+      case S(_) =>
+        unsupportedParent()
 
-        // Only parent is base Object for now. For general inheritance add other parents.
-        ctx.addType(TypeInfo(
-          sym = defn.sym,
-          compType = StructType(fields = allFields, parents = Seq(baseObjectTypeIdx)),
-          objectTag = S(ctx.getFreshObjectTag()),
-        ))
-      end if
-      createDefnTypes(rst)
-    case Define(_, rst) =>
-      createDefnTypes(rst)
-    case Match(_, arms, dflt, rst) =>
-      arms.foreach((_, body) => createDefnTypes(body))
-      dflt.foreach(createDefnTypes)
-      createDefnTypes(rst)
-    case Begin(_, rst) =>
-      createDefnTypes(rst)
-    case TryBlock(_, _, rst) =>
-      createDefnTypes(rst)
-    case Assign(_, _, rst) =>
-      createDefnTypes(rst)
-    case af @ AssignField(_, _, _, rst) =>
-      createDefnTypes(rst)
-    case AssignDynField(_, _, _, _, rst) =>
-      createDefnTypes(rst)
-    case HandleBlock(_, _, _, _, _, _, _, rst) =>
-      createDefnTypes(rst)
-    case Label(_, _, body, rst) =>
-      createDefnTypes(body)
-      createDefnTypes(rst)
-    case Scoped(_, body) =>
-      createDefnTypes(body)
-    case _: BlockTail => ()
+  /** Orders top-level classes using a Kahn topological sort. */
+  private def sortTopLevelClasses(defns: List[ClsLikeDefn])(using Raise): List[ClsLikeDefn] =
+    val defnsBySym = defns.iterator.map(defn => defn.sym -> defn).toMap
+    val childrenBySym = LinkedHashMap.empty[BlockMemberSymbol, ArrayBuf[BlockMemberSymbol]]
+    val indegrees = LinkedHashMap.empty[BlockMemberSymbol, Int]
+
+    defns.foreach: defn =>
+      childrenBySym(defn.sym) = ArrayBuf.empty
+      indegrees(defn.sym) = 0
+
+    defns.foreach: defn =>
+      if defn.parentPath.nonEmpty then
+        val parentSym = resolveParentSym(defn).getOrElse(lastWords("unreachable"))
+        if defnsBySym.contains(parentSym) then
+          childrenBySym(parentSym) += defn.sym
+          indegrees(defn.sym) += 1
+        else
+          raise(ErrorReport(
+            msg"Wasm inheritance ordering requires parent classes to be supported top-level classes." ->
+              defn.parentPath.flatMap(_.toLoc) :: Nil,
+            extraInfo = S(s"${defn.sym.nme} extends ${parentSym.nme}"),
+            source = Diagnostic.Source.Compilation,
+          ))
+
+    val zeroIndegree = Queue.from:
+      defns.iterator.collect:
+        case defn if indegrees(defn.sym) == 0 => defn.sym
+
+    val ordered = ArrayBuf.empty[ClsLikeDefn]
+    while zeroIndegree.nonEmpty do
+      val sym = zeroIndegree.dequeue()
+      ordered += defnsBySym(sym)
+      childrenBySym(sym).foreach: childSym =>
+        indegrees(childSym) -= 1
+        if indegrees(childSym) == 0 then
+          zeroIndegree.enqueue(childSym)
+
+    if ordered.size != defns.size then
+      raise(ErrorReport(
+        msg"Inheritance cycles are not supported." ->
+          defns.flatMap(_.sym.toLoc).headOption :: Nil,
+        extraInfo = S(
+          defns.iterator
+            .filter(defn => indegrees(defn.sym) > 0)
+            .map(_.sym.nme)
+            .mkString(", ")
+        ),
+        source = Diagnostic.Source.Compilation,
+      ))
+
+    ordered.toList
+
+  /** Declares one supported top-level class type for early wasm registration. */
+  private def predeclareClassType(defn: ClsLikeDefn)(using Ctx, Raise): Unit =
+    val parentTypeIdx =
+      if defn.parentPath.isEmpty then baseObjectTypeIdx
+      else ctx.getType_!(resolveParentSym(defn).getOrElse:
+        lastWords(s"Expected resolved parent class symbol when predeclaring ${defn.sym.nme}"))
+    val inheritedFields = ctx.getTypeInfo_!(parentTypeIdx).compType match
+      case struct: StructType => struct.fields
+      case other => lastWords(s"Parent type must be a struct, found ${other.toWat.mkString()}")
+
+    val classFields = (defn.publicFields.map(_._2) ++ defn.privateFields)
+      .map: f =>
+        f -> Field(RefType.anyref, mutable = true, id = f.nme)
+
+    val allFields = inheritedFields ++ classFields
+
+    ctx.addType(TypeInfo(
+        sym = defn.sym,
+        compType = StructType(fields = allFields, parents = Seq(parentTypeIdx)),
+        objectTag = S(ctx.getFreshObjectTag()),
+    ))
+
+  /** Records the runtime tag accepted by each class pattern: the class's own tag and descendant tags. */
+  private def predeclareClassTags(
+      orderedDefns: List[ClsLikeDefn],
+  )(using Ctx, Raise): Unit =
+    val childrenBySym = LinkedHashMap.empty[BlockMemberSymbol, ArrayBuf[BlockMemberSymbol]]
+    orderedDefns.foreach: defn =>
+      childrenBySym(defn.sym) = ArrayBuf.empty
+    orderedDefns.foreach: defn =>
+      resolveParentSym(defn).foreach: parentSym =>
+        childrenBySym(parentSym) += defn.sym
+    orderedDefns.reverseIterator.foreach: defn =>
+      val ownTag = ctx.getTypeInfo_!(defn.sym).objectTag.getOrElse:
+        lastWords(s"Expected class ${defn.sym} to have an object tag")
+      val childTags = childrenBySym(defn.sym).flatMap: childSym =>
+        ctx.getRuntimeClassTags(childSym).getOrElse(lastWords("unreachable"))
+      ctx.registerRuntimeClassTags(defn.sym, LinkedHashSet(ownTag) ++ childTags)
+
+  /** Declares the shared Wasm function type used by a class ctor/init placeholder. */
+  private def declareClassFuncType(
+      // defn: ClsLikeDefn,
+      // suffix: Str,
+      sym: BlockMemberSymbol,
+      suffix: Str,
+      params: Seq[Local -> SymIdx],
+  )(using Ctx, Raise): TypeIdx =
+    // val isSingletonObj = defn.k is syntax.Obj
+    // val funcTyId = defn.sym
+    //   .optionIf: sym =>
+    //     !isSingletonObj && sym.nameIsMeaningful
+    //   .map: sym =>
+    //     s"${sym.nme}_$suffixCannot sele"
+    //   .getOrElse:
+    //     scope.allocateName(TempSymbol(N, s"${defn.sym.nme}_$suffix"))
+    ctx.addType(TypeInfo(
+        sym,
+        FunctionType(
+          params = params.map(p => WasmParam(p._2, RefType.anyref)),
+          results = Seq(Result(RefType.anyref)),
+        ),
+        objectTag = N,
+    ))
+
+  /** Returns the symbol used to predeclare and later overwrite a class init function. */
+  private def initFuncSym(sym: BlockMemberSymbol): BlockMemberSymbol =
+    initFuncSyms(sym)
+
+  /** Registers a placeholder class ctor/init function so later lowering can overwrite it. */
+  private def predeclareClassFunc(
+      defn: ClsLikeDefn,
+      suffix: Str,
+      params: Seq[Local -> SymIdx],
+      // id: Opt[Str],
+      `export`: Opt[Str],
+  )(using Ctx, Raise): Unit =
+    val funcSym = BlockMemberSymbol(s"${defn.sym.nme}_$suffix", Nil, nameIsMeaningful = false)
+    // TODO(Derppening): Hax
+    if suffix == "init" then
+      initFuncSyms(defn.sym) = funcSym
+    val funcTy = declareClassFuncType(funcSym, suffix, params)
+    ctx.addFunc(
+      FuncInfo(
+        // id = SymIdx(id.orElse(`export`).getOrElse(scope.allocateName(TempSymbol(N, s"${defn.sym.nme}_$suffix")))),
+        // TODO(Derppening): Hax
+        sym = if suffix == "ctor" then defn.sym else funcSym,
+        typeUse = TypeUse(funcTy),
+        params = params,
+        nResults = 1,
+        locals = Seq.empty,
+        body = ref.`null`(ctx.getType_!(defn.sym)),
+        `export` = `export`,
+      ),
+    )
+
+  /** Declares one top-level class init function. */
+  private def predeclareClassInit(defn: ClsLikeDefn)(using Ctx, Raise): Unit =
+    val initParams = (defn.isym -> SymIdx("this")) +:
+      defn.paramsOpt.fold(Nil): ps =>
+        ps.params.map: p =>
+          p.sym -> SymIdx(p.sym.nme)
+    // val initId = defn.sym
+    //   .optionIf: sym =>
+    //     !(defn.k is syntax.Obj) && sym.nameIsMeaningful
+    //   .map: sym =>
+    //     s"${sym.nme}_init"
+    // predeclareClassFunc(defn, "init", initParams, S(initFuncSym(defn.sym)), initId, N)
+    predeclareClassFunc(defn, "init", initParams, N)
+
+  /** Declares one top-level class constructor. */
+  private def predeclareClassConstructor(defn: ClsLikeDefn)(using Ctx, Raise): Unit =
+    val ctorParams = defn.paramsOpt.fold(Nil): ps =>
+      ps.params.map: p =>
+        p.sym -> SymIdx(p.sym.nme)
+    // predeclareClassFunc(defn, "ctor", ctorParams, S(defn.sym), N, ctorId)
+    val ctorId = defn.sym
+      .optionIf: sym =>
+        !(defn.k is syntax.Obj) && sym.nameIsMeaningful
+      .map: sym =>
+        s"${sym.nme}_ctor"
+    predeclareClassFunc(defn, "ctor", ctorParams, ctorId)
 
   /** Gets (and caches) the exception tag used for MLX `throw`. */
   private def exnTagIdx(using Ctx, Raise): TagIdx =
@@ -283,19 +447,97 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val sym = TempSymbol(N, base)
     funcCtx.addLocal(sym)
 
-  /** Compiles a class/object constructor body under its own Wasm-local frame.
-    *
-    * @return
-    *   A tuple containing the [[FunctionCtx]] instance storing the parameters and locals of the constructor body, the
-    *   [[LocalIdx]] of the `this` reference, and the compiled constructor body as an expression.
-    */
-  private def compileCtor(clsLikeDefn: ClsLikeDefn)(using Ctx, Raise): (FunctionCtx, LocalIdx, Expr) =
+  private def bindCtorThis(thisSym: Local)(using Ctx, FunctionCtx, Raise): LocalIdx =
+    funcCtx.addLocal(thisSym, S("this"))
+
+  /** Sets up an allocating constructor wrapper with a local `this`. */
+  // TODO(Derppening): Rename to `setupCtorWrapperThis`
+  private def setupCtorWrapperLocals(
+      clsLikeDefn: ClsLikeDefn,
+  )(using Ctx, FunctionCtx, Raise): LocalIdx =
+    funcCtx.addLocal(clsLikeDefn.isym, S("this"))
+
+  /** Compiles a class init body under its own Wasm-local frame with explicit `this`. */
+  private def setupInitLocals(
+      clsLikeDefn: ClsLikeDefn,
+  )(using Ctx, Raise): (FunctionCtx, Expr) =
     val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
-    val ((ctorWat, thisIdx), fnCtx) = genFuncBody(clsParams):
-      val thisVar = funcCtx.addLocal(clsLikeDefn.isym, S("this"))
-      val ctorWat = nonNestedScoped(clsLikeDefn.ctor)(block)
-      ctorWat -> thisVar
-    (fnCtx, thisIdx, ctorWat)
+    val (initWat, fnCtx) = genFuncBody(clsParams, S(clsLikeDefn.isym)):
+      // val (thisVar, thisVarName) = bindCtorThis(clsLikeDefn.isym)
+      // val thisVar = setupCtorWrapperLocals(clsLikeDefn)
+      val thisVar = funcCtx.lookupLocal_!(clsLikeDefn.isym, N)
+      val preCtorWat = compilePreCtor(clsLikeDefn, thisVar)
+      val ctorWat = block(clsLikeDefn.ctor)
+      blockInstr(
+        label = N,
+        children = Seq(
+          preCtorWat,
+          ctorWat,
+          `return`(S(local.get(thisVar, RefType.anyref))),
+        ),
+        resultTypes = Seq(Result(RefType.anyref)),
+      )
+      // val initLocals = preCtorLocals ++ ctorLocals.filterNot(preCtorLocals.toSet)
+      // val localsWithNames = initLocals.map(l => l -> scope.lookup_!(l, l.toLoc))
+    // ((clsLikeDefn.isym -> thisVarName) +: initParams, initWat, localsWithNames)
+    (fnCtx, initWat)
+
+  /** Lowers an inherited pre-constructor by preserving its setup code and rewriting the final `super(...)` into `Parent_init(this, ...)`. */
+  private def compilePreCtor(
+      clsLikeDefn: ClsLikeDefn,
+      thisVar: LocalIdx,
+  )(using Ctx, FunctionCtx, Raise): Expr =
+    def withRest(block: NonBlockTail, rest: Block): Block = block match
+      case Scoped(syms, _) => Scoped(syms, rest)
+      case Begin(sub, _) => Begin(sub, rest)
+      case TryBlock(sub, finallyDo, _) => TryBlock(sub, finallyDo, rest)
+      case Assign(lhs, rhs, _) => Assign(lhs, rhs, rest)
+      case af @ AssignField(lhs, nme, rhs, _) => AssignField(lhs, nme, rhs, rest)(af.symbol)
+      case AssignDynField(lhs, fld, arrayIdx, rhs, _) => AssignDynField(lhs, fld, arrayIdx, rhs, rest)
+      case Define(defn, _) => Define(defn, rest)
+      case Match(scrut, arms, dflt, _) => Match(scrut, arms, dflt, rest)
+      case HandleBlock(lhs, res, par, args0, cls, handlers, body, _) =>
+        HandleBlock(lhs, res, par, args0, cls, handlers, body, rest)
+      case Label(label, loop, body, _) => Label(label, loop, body, rest)
+
+    def splitSuperTail(block: Block): Opt[Block -> Ls[Arg]] = block match
+      case End(_) => N
+      case Return(Call(Value.Ref(bs: BuiltinSymbol, _), args), true) if bs eq State.builtinOpsMap("super") =>
+        S(End("") -> args)
+      case b: NonBlockTail =>
+        splitSuperTail(b.rest).map: (prefix, args) =>
+          withRest(b, prefix) -> args
+      case _ => N
+
+    clsLikeDefn.preCtor match
+      case End(_) => nop
+      case _ =>
+        splitSuperTail(clsLikeDefn.preCtor) match
+          case S((prefixBlock, args)) =>
+            val prefixWat = block(prefixBlock)
+            resolveParentSym(clsLikeDefn) match
+              case S(parentSym) =>
+                val parentInitFunc = initFuncSym(parentSym)
+                val superCall = call(
+                  funcidx = ctx.getFunc_!(parentInitFunc),
+                  operands = local.get(thisVar, RefType.anyref) +: args.map(argument),
+                  returnTypes = Seq(Result(RefType.anyref)),
+                )
+                blockInstr(
+                  label = N,
+                  children = Seq(asStatement(prefixWat), drop(superCall)),
+                  resultTypes = Seq.empty,
+                )
+              case N =>
+                nop
+          case N =>
+            raise(ErrorReport(
+              msg"Wasm preCtor lowering only supports lowered super(...) shapes." ->
+                clsLikeDefn.sym.toLoc :: Nil,
+              extraInfo = S(clsLikeDefn.preCtor.showAsTree),
+              source = Diagnostic.Source.Compilation,
+            ))
+            nop
 
   /** Converts expression result types to WAT result clauses, dropping unreachable types. */
   private def resultClauses(expr: Expr): Seq[Result] =
@@ -431,17 +673,18 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               extraInfo = S(ts.toString),
             )
           case ts: semantics.InnerSymbol =>
-            if !funcCtx.containsLocal(l) then
-              return errExpr(
-                Ls(
-                  msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" ->
-                    ts.toLoc,
-                ),
-                extraInfo = S(
-                  s"Block IR: `${ts.toString}`\nWasm Locals: ${funcCtx.locals.toString}\nWasm Globals: ${ctx.getGlobals.toString}",
-                ),
-              )
-            local.get(funcCtx.lookupLocal_!(ts, ts.toLoc), RefType.anyref)
+            funcCtx.lookupLocal(ts) match
+              case S(localIdx) => local.get(localIdx, RefType.anyref)
+              case N =>
+                errExpr(
+                  Ls(
+                    msg"WatBuilder::getVar for InnerSymbol (symbol not in top-level scope) not implemented yet" ->
+                      ts.toLoc,
+                  ),
+                  extraInfo = S(
+                    s"Block IR: `${ts.toString}`\nWasm Locals: ${(funcCtx.params ++ funcCtx.locals).toString}\nWasm Globals: ${ctx.getGlobals.toString}",
+                  ),
+                )
           case l =>
             if funcCtx.containsLocal(l) then
               local.get(funcCtx.lookupLocal_!(l, l.toLoc), RefType.anyref)
@@ -860,17 +1103,18 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   private def getI32FromAnyref(idx: SymIdx): Expr =
     i31.get(ref.cast(getLocalAnyref(idx), RefType.i31ref), true)
 
-  def returningTerm(t: Block)(using Ctx, FunctionCtx, Raise): Expr =
-    def isControlTransfer(expr: Expr): Bool =
+  extension (expr: Expr)
+    private def isControlTransfer: Bool =
       expr.resultType.contains(UnreachableType) || expr.mnemonic == "return"
 
-    def asStatement(expr: Expr): Expr =
-      if isControlTransfer(expr) then expr
-      else
-        expr.resultType match
-          case S(_) => drop(expr)
-          case N => expr
+  private def asStatement(expr: Expr): Expr =
+    if expr.isControlTransfer then expr
+    else
+      expr.resultType match
+        case S(_) => drop(expr)
+        case N => expr
 
+  def returningTerm(t: Block)(using Ctx, FunctionCtx, Raise): Expr =
     t match
       case _: HandleBlock =>
         errExpr(Ls(msg"This code requires effect handler instrumentation but was compiled without it." -> N))
@@ -1077,13 +1321,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     break(errUnimplExpr("paramsOpt.nonEmpty for object"))
                   if clsLikeDefn.auxParams.nonEmpty then
                     break(errUnimplExpr("auxParams.nonEmpty"))
-                  if clsLikeDefn.parentPath.nonEmpty then
-                    break(errUnimplExpr("parentPath.nonEmpty"))
+                  if isSingletonObj && clsLikeDefn.parentPath.nonEmpty then
+                    break(errUnimplExpr("parentPath.nonEmpty for object"))
                   if clsLikeDefn.methods.nonEmpty then
                     break(errUnimplExpr("methods.nonEmpty"))
-                  clsLikeDefn.preCtor match
-                    case End(_) => ()
-                    case _ => break(errUnimplExpr("preCtor is not End"))
                   if clsLikeDefn.companion.isDefined then
                     break(errUnimplExpr("companion.isDefined"))
 
@@ -1095,72 +1336,79 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   // Numeric indices are only needed for `$tag` values.
                   val typeref = ctx.getType_!(clsLikeDefn.sym)
                   val typeinfo = ctx.getTypeInfo_!(typeref)
+                  
+                  val (initFnCtx, initWat) = setupInitLocals(clsLikeDefn)
 
-                  val (fnCtx, thisVar, ctorWat) = compileCtor(clsLikeDefn)
+                    // val (fnCtx, thisVar, initWat) = setupInitLocals(clsLikeDefn)
 
                   // * If there are no ctor params, pop one param list off the aux params
-                  val (newCtorAuxParams, initialCtorParams) = clsLikeDefn.paramsOpt match
+                  val newCtorAuxParams = clsLikeDefn.paramsOpt match
                     case None => ctorAuxParams match
-                        case head :: next => (next, head)
-                        case Nil => (ctorAuxParams, Nil)
-                    case Some(_) => (ctorAuxParams, fnCtx.params)
+                        case head :: next => next
+                        case Nil => ctorAuxParams
+                    case Some(_) => ctorAuxParams
 
                   val tagValue = typeinfo.objectTag.getOrElse:
                     lastWords(s"Expected class ${clsLikeDefn.sym} to have an object tag")
-
-                  val ctorCode = blockInstr(
-                    label = N,
-                    Seq(
-                      local.set(thisVar, struct.new_default(typeref)),
-                      struct.set(
-                        FieldIdx(SymIdx(typeinfo.compType.asInstanceOf[StructType].fields(0)._2.id)),
-                        ref.cast(
-                          local.get(thisVar, RefType.anyref),
-                          RefType(typeref, nullable = false),
+                  
+                  val initFuncRef = initFuncSym(clsLikeDefn.sym)
+                    
+                  val (ctorCode, fnCtx) = genFuncBody(clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)):
+                    // val (ctorParams, thisVar, ctorLocals) = setupCtorWrapperLocals(clsLikeDefn)
+                    val thisVar = setupCtorWrapperLocals(clsLikeDefn)
+                    val initCall = call(
+                      funcidx = ctx.getFunc_!(initFuncRef),
+                      operands = local.get(thisVar, RefType.anyref) +: funcCtx.params.map((_, nme) => getLocalAnyref(nme)),
+                      returnTypes = Seq(Result(RefType.anyref)),
+                    )
+                    
+                    blockInstr(
+                      label = N,
+                      Seq(
+                        local.set(thisVar, struct.new_default(typeref)),
+                        struct.set(
+                          FieldIdx(SymIdx(typeinfo.compType.asInstanceOf[StructType].fields(0)._2.id)),
+                          ref.cast(
+                            local.get(thisVar, RefType.anyref),
+                            RefType(typeref, nullable = false),
+                          ),
+                          i32.const(tagValue),
                         ),
-                        i32.const(tagValue),
+                        drop(initCall),
+                        `return`(S(local.get(thisVar, RefType(typeref, nullable = false)))),
                       ),
-                      ctorWat,
-                      `return`(S(local.get(thisVar, RefType(typeref, nullable = false)))),
-                    ),
-                    resultTypes = Seq(Result(RefType.anyref)),
-                  )
+                    //   ctorWat,
+                    //   `return`(S(local.get(thisVar, RefType(typeref, nullable = false)))),
+                    // ),
+                      resultTypes = Seq(Result(RefType.anyref)),
+                    )
 
                   val ctorAux = if newCtorAuxParams.isEmpty then
                     ctorCode
                   else
                     break(errUnimplExpr("newCtorAuxParams.nonEmpty"))
 
-                  val funcTySym = clsLikeDefn.sym
-                    .optionIf: sym =>
-                      !isSingletonObj && sym.nameIsMeaningful
-                    .fold(BlockMemberSymbol(s"${clsLikeDefn.sym.nme}_ctor", Nil, nameIsMeaningful = false)): sym =>
-                      BlockMemberSymbol(s"${sym.nme}_ctor", Nil, nameIsMeaningful = true)
-                  val funcTy = ctx.addType(TypeInfo(
-                    sym = funcTySym,
-                    FunctionType(
-                      params = fnCtx.params.map(p => WasmParam(p._2, RefType.anyref)),
-                      results = Seq(Result(RefType.anyref)),
-                    ),
-                    objectTag = N,
+                  val predeclaredInit = ctx.getFuncInfo_!(initFuncRef)
+                  ctx.addFunc(FuncInfo(
+                      sym = initFuncRef,
+                      typeUse = predeclaredInit.typeUse,
+                      params = initFnCtx.params,
+                      nResults = initWat.resultTypes.length,
+                      locals = initFnCtx.locals,
+                      body = initWat,
+                      `export` = predeclaredInit.`export`,
                   ))
 
-                  val ctorId = clsLikeDefn.sym
-                    .optionIf: sym =>
-                      !isSingletonObj && sym.nameIsMeaningful
-                    .map: sym =>
-                      s"${sym.nme}_ctor"
-                  ctx.addFunc(
-                    FuncInfo(
+                  val predeclaredCtor = ctx.getFuncInfo_!(clsLikeDefn.sym)
+                  ctx.addFunc(FuncInfo(
                       sym = clsLikeDefn.sym,
-                      typeUse = TypeUse(funcTy),
+                      typeUse = predeclaredCtor.typeUse,
                       params = fnCtx.params,
                       nResults = ctorCode.resultTypes.length,
                       locals = fnCtx.locals,
                       body = ctorAux,
-                      `export` = ctorId,
-                    ),
-                  )
+                      `export` = predeclaredCtor.`export`,
+                  ))
                   if isSingletonObj then
                     registerSingletonInit(clsLikeDefn, typeref)
 
@@ -1276,183 +1524,191 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           resultTypes = rstResultTypes,
         )
       case Match(scrut, arms, dflt, rst) =>
+        val tailMode = rst.isInstanceOf[End]
+        val matchResLocal =
+          if tailMode then S(mkTempLocal("matchRes"))
+          else N
         val matchLabelSym = LabelSymbol(N, "match")
-        funcCtx.withLabel(matchLabelSym, hasContinueLabel = false): labelTarget =>
-          val matchLabel = labelTarget.breakLabel
-          val tailMode = rst.isInstanceOf[End]
-          val matchResLocal =
-            if tailMode then S(mkTempLocal("matchRes"))
-            else N
-  
-          def getScrutExpr: Expr = result(scrut)
-  
-          def assignTailResult(target: LocalIdx, expr: Expr): Expr =
-            if isControlTransfer(expr) then expr
-            else
-              expr.resultType match
-                case S(_) => local.set(target, expr)
-                case N => Instructions.block(
-                    label = N,
-                    children = Seq(
-                      expr,
-                      local.set(target, result(Value.Ref(State.unitSymbol))),
-                    ),
-                    resultTypes = Seq.empty,
-                  )
-  
-          def lowerMatchBody(expr: Expr): Expr =
-            matchResLocal match
-              case S(localIdx) => assignTailResult(localIdx, expr)
-              case N => asStatement(expr)
-  
-          val matchResInitExpr = matchResLocal.map: localIdx =>
-            local.set(localIdx, ref.`null`(HeapType.Any))
-  
-          // Compile each match arm
-          val matchBlock = boundary:
-            val armExprs = arms.zipWithIndex.flatMap: (caseAndBody, armIdx) =>
-              val (cse, body) = caseAndBody
-              cse match
-                case Case.Lit(lit) =>
-                  val testExpr: FoldedInstr = lit match
-                    case BoolLit(value) =>
-                      val scrutAsI31 = ref.cast(getScrutExpr, RefType.i31ref)
-                      val scrutValue = i31.get(scrutAsI31, signed = true)
-                      i32.eq(scrutValue, i32.const(if value then 1 else 0))
-                    case IntLit(value) =>
-                      val scrutAsI31 = ref.cast(getScrutExpr, RefType.i31ref)
-                      val scrutValue = i31.get(scrutAsI31, signed = true)
-                      i32.eq(scrutValue, withValidIntLit(value, lit.toLoc)(i32.const))
-                    case _ =>
-                      break(errExpr(Ls(msg"Pattern matching for unit literals not implemented yet" -> lit.toLoc)))
-  
-                  val bodyExpr = returningTerm(body)
-                  val armBodyExpr = lowerMatchBody(bodyExpr)
-                  val armLabelSym = LabelSymbol(N, "arm")
-                  funcCtx.withLabel(armLabelSym, false): armLabelTarget =>
-                    val armLabel = armLabelTarget.breakLabel
-                    S(`if`(
-                      condition = testExpr,
-                      ifTrue = blockInstr(
-                        label = S(armLabel),
-                        children = Seq(armBodyExpr, br(matchLabel)),
-                        resultTypes = Seq.empty,
-                      ),
-                      ifFalse = N,
-                      resultTypes = Seq.empty,
-                    ))
-  
-                case Case.Cls(cls, _) =>
-                  val clsBlkMemberSym = cls.asBlkMember.getOrElse:
-                    break(errExpr(
-                      Ls(msg"Could not resolve BlockMemberSymbol for class pattern" -> cls.toLoc),
-                      extraInfo = S(s"ClassLikeSymbol: ${cls.toString}"),
-                    ))
-                  val clsTypeIdx = ctx.getType_!(clsBlkMemberSym)
-                  val typeinfo = ctx.getTypeInfo_!(clsTypeIdx)
-  
-                  val expectedTag = typeinfo.objectTag.getOrElse:
-                    lastWords(s"Expected class $clsBlkMemberSym to have an object tag")
-  
-                  val scrutExpr = getScrutExpr
-                  val isStructCompatible = ref.test(scrutExpr, baseObjectRefType(nullable = true))
-  
-                  val bodyExpr = returningTerm(body)
-                  val armBodyExpr = lowerMatchBody(bodyExpr)
-                  val armLabelSym = LabelSymbol(N, "arm")
-                  funcCtx.withLabel(armLabelSym, false): armLabelTarget =>
-                    val armLabel = armLabelTarget.breakLabel
+        val matchBlock = funcCtx.withLabel(matchLabelSym, hasContinueLabel = false):
+          case LabelTarget(matchLabel, _) =>
+            def getScrutExpr: Expr = result(scrut)
     
-                    // Safe to cast and extract tag since ref.test passed
-                    val scrutAsObject = ref.cast(scrutExpr, baseObjectRefType(nullable = false))
-                    val scrutTag = struct.get(
-                      FieldIdx(SymIdx(typeinfo.compType.asInstanceOf[StructType].fields(0)._2.id)),
-                      scrutAsObject,
-                      I32Type,
+            def assignTailResult(target: LocalIdx, expr: Expr): Expr =
+              if expr.isControlTransfer then expr
+              else
+                expr.resultType match
+                  case S(_) => local.set(target, expr)
+                  case N => Instructions.block(
+                      label = N,
+                      children = Seq(
+                        expr,
+                        local.set(target, result(Value.Ref(State.unitSymbol))),
+                      ),
+                      resultTypes = Seq.empty,
                     )
-                    val tagMatches = i32.eq(scrutTag, i32.const(expectedTag))
     
-                    S(`if`(
-                      condition = isStructCompatible,
-                      ifTrue = `if`(
-                        condition = tagMatches,
-                        ifTrue = blockInstr(
-                          label = S(armLabel),
-                          children = Seq(armBodyExpr, br(matchLabel)),
+            def lowerMatchBody(expr: Expr): Expr =
+              matchResLocal match
+                case S(localIdx) => assignTailResult(localIdx, expr)
+                case N => asStatement(expr)
+    
+            val matchResInitExpr = matchResLocal.map: localIdx =>
+              local.set(localIdx, ref.`null`(HeapType.Any))
+    
+            // Compile each match arm
+            boundary:
+              val armExprs = arms.zipWithIndex.flatMap: (caseAndBody, armIdx) =>
+                val (cse, body) = caseAndBody
+                cse match
+                  case Case.Lit(lit) =>
+                    val testExpr: FoldedInstr = lit match
+                      case BoolLit(value) =>
+                        val scrutAsI31 = ref.cast(getScrutExpr, RefType.i31ref)
+                        val scrutValue = i31.get(scrutAsI31, signed = true)
+                        i32.eq(scrutValue, i32.const(if value then 1 else 0))
+                      case IntLit(value) =>
+                        val scrutAsI31 = ref.cast(getScrutExpr, RefType.i31ref)
+                        val scrutValue = i31.get(scrutAsI31, signed = true)
+                        i32.eq(scrutValue, withValidIntLit(value, lit.toLoc)(i32.const))
+                      case _ =>
+                        break(errExpr(Ls(msg"Pattern matching for unit literals not implemented yet" -> lit.toLoc)))
+    
+                    val bodyExpr = returningTerm(body)
+                    val armBodyExpr = lowerMatchBody(bodyExpr)
+                    val armLabelSym = LabelSymbol(N, "arm")
+                    funcCtx.withLabel(armLabelSym, false): 
+                      case LabelTarget(armLabel, _) =>
+                        S(`if`(
+                          condition = testExpr,
+                          ifTrue = blockInstr(
+                            label = S(armLabel),
+                            children = Seq(armBodyExpr, br(matchLabel)),
+                            resultTypes = Seq.empty,
+                          ),
+                          ifFalse = N,
                           resultTypes = Seq.empty,
-                        ),
-                        ifFalse = N,
-                        resultTypes = Seq.empty,
-                      ),
-                      ifFalse = N,
-                      resultTypes = Seq.empty,
-                    ))
-
-                case Case.Tup(len, inf) =>
-                  val arrayRefType = RefType(HeapType.Array, nullable = true)
-                  val isArrayTest = ref.test(getScrutExpr, arrayRefType)
-  
-                  // Length check
-                  val scrutArray = ref.cast(getScrutExpr, arrayRefType)
-                  val arrayLength = array.len(scrutArray)
-                  val lengthTest = if inf then
-                    i32.ge_u(arrayLength, i32.const(len))
-                  else
-                    i32.eq(arrayLength, i32.const(len))
-  
-                  val testExpr = i32.and(isArrayTest, lengthTest)
-                  val bodyExpr = returningTerm(body)
-                  val armBodyExpr = lowerMatchBody(bodyExpr)
-                  val armLabelSym = LabelSymbol(N, "arm")
-                  funcCtx.withLabel(armLabelSym, false): armLabelTarget =>
-                    val armLabel = armLabelTarget.breakLabel
-                    S(`if`(
-                      condition = testExpr,
-                      ifTrue = blockInstr(
-                        label = S(armLabel),
-                        children = Seq(armBodyExpr, br(matchLabel)),
-                        resultTypes = Seq.empty,
-                      ),
-                      ifFalse = N,
-                      resultTypes = Seq.empty,
-                    ))
-                case _ =>
-                  break(errExpr(
-                    Ls(msg"WatBuilder::returningTerm for Match(...) with case `${cse.toString}` not implemented yet" ->
-                      N),
-                    extraInfo = S(cse.toString),
-                  ))
-              end match
-  
-            val defaultExpr =
-              val rawDefaultExpr = dflt match
-                case S(defaultBody) => returningTerm(defaultBody)
-                case N => nop
-              lowerMatchBody(rawDefaultExpr)
+                        ))
     
-            // Generate the match block
-            blockInstr(
-              label = S(matchLabel),
-              children = matchResInitExpr.toSeq ++ armExprs :+ defaultExpr,
-              resultTypes = Seq.empty,
-            )
-  
-          if tailMode then
-            Instructions.block(
-              label = N,
-              children = Seq(
-                matchBlock,
-                local.get(matchResLocal.get, RefType.anyref),
-              ),
-              resultTypes = Seq(Result(RefType.anyref)),
-            )
-          else
-            val rstExpr = returningTerm(rst)
-            Instructions.block(
-              label = N,
-              children = Seq(matchBlock, rstExpr),
-              resultTypes = rstExpr.resultTypes.flatMap(ty => ty.asValType.map(Result(_))),
-            )
+                  case Case.Cls(cls, _) =>
+                    val clsBlkMemberSym = cls.asBlkMember.getOrElse:
+                      break(errExpr(
+                        Ls(msg"Could not resolve BlockMemberSymbol for class pattern" -> cls.toLoc),
+                        extraInfo = S(s"ClassLikeSymbol: ${cls.toString}"),
+                      ))
+                    val clsTypeIdx = ctx.getType_!(clsBlkMemberSym)
+                    val typeinfo = ctx.getTypeInfo_!(clsTypeIdx)
+    
+                    val expectedTag = typeinfo.objectTag.getOrElse:
+                      lastWords(s"Expected class $clsBlkMemberSym to have an object tag")
+                    
+                    // TODO (https://github.com/orgs/hkust-taco/projects/14/views/1?pane=issue&itemId=174476970):
+                    // replace with RTTI ancestry checks once each object carries runtime type information.
+                    val acceptedTags = ctx.getRuntimeClassTags(clsBlkMemberSym).getOrElse(LinkedHashSet(expectedTag))
+    
+                    val scrutExpr = getScrutExpr
+                    val isStructCompatible = ref.test(scrutExpr, baseObjectRefType(nullable = true))
+    
+                    val bodyExpr = returningTerm(body)
+                    val armBodyExpr = lowerMatchBody(bodyExpr)
+                    val armLabelSym = LabelSymbol(N, "arm")
+    
+                    funcCtx.withLabel(armLabelSym, false):
+                      case LabelTarget(armLabel, _) =>
+                        // Safe to cast and extract tag since ref.test passed
+                        val scrutAsObject = ref.cast(scrutExpr, baseObjectRefType(nullable = false))
+                        val scrutTag = struct.get(
+                          FieldIdx(SymIdx(typeinfo.compType.asInstanceOf[StructType].fields(0)._2.id)),
+                          scrutAsObject,
+                          I32Type,
+                        )
+                        val tagMatches = acceptedTags.toList match
+                          case tag :: Nil => i32.eq(scrutTag, i32.const(tag))
+                          case tag :: rest =>
+                            rest.foldLeft[Expr](i32.eq(scrutTag, i32.const(tag))):
+                              (acc, candidateTag) => i32.or(acc, i32.eq(scrutTag, i32.const(candidateTag)))
+                          case Nil =>
+                            lastWords(s"Expected class $clsBlkMemberSym to have at least one accepted runtime tag")
+        
+                        S(`if`(
+                          condition = isStructCompatible,
+                          ifTrue = `if`(
+                            condition = tagMatches,
+                            ifTrue = blockInstr(
+                              label = S(armLabel),
+                              children = Seq(armBodyExpr, br(matchLabel)),
+                              resultTypes = Seq.empty,
+                            ),
+                            ifFalse = N,
+                            resultTypes = Seq.empty,
+                          ),
+                          ifFalse = N,
+                          resultTypes = Seq.empty,
+                        ))
+                  case Case.Tup(len, inf) =>
+                    val arrayRefType = RefType(HeapType.Array, nullable = true)
+                    val isArrayTest = ref.test(getScrutExpr, arrayRefType)
+    
+                    // Length check
+                    val scrutArray = ref.cast(getScrutExpr, arrayRefType)
+                    val arrayLength = array.len(scrutArray)
+                    val lengthTest = if inf then
+                      i32.ge_u(arrayLength, i32.const(len))
+                    else
+                      i32.eq(arrayLength, i32.const(len))
+    
+                    val testExpr = i32.and(isArrayTest, lengthTest)
+                    val bodyExpr = returningTerm(body)
+                    val armBodyExpr = lowerMatchBody(bodyExpr)
+                    val armLabelSym = LabelSymbol(N, "arm")
+                    funcCtx.withLabel(armLabelSym, false):
+                      case LabelTarget(armLabel, _) =>
+                        S(`if`(
+                          condition = testExpr,
+                          ifTrue = blockInstr(
+                            label = S(armLabel),
+                            children = Seq(armBodyExpr, br(matchLabel)),
+                            resultTypes = Seq.empty,
+                          ),
+                          ifFalse = N,
+                          resultTypes = Seq.empty,
+                        ))
+                  case _ =>
+                    break(errExpr(
+                      Ls(msg"WatBuilder::returningTerm for Match(...) with case `${cse.toString}` not implemented yet" ->
+                        N),
+                      extraInfo = S(cse.toString),
+                    ))
+                end match
+    
+              val defaultExpr =
+                val rawDefaultExpr = dflt match
+                  case S(defaultBody) => returningTerm(defaultBody)
+                  case N => nop
+                lowerMatchBody(rawDefaultExpr)
+    
+              // Generate the match block
+              blockInstr(
+                label = S(matchLabel),
+                children = matchResInitExpr.toSeq ++ armExprs :+ defaultExpr,
+                resultTypes = Seq.empty,
+              )
+
+        if tailMode then
+          Instructions.block(
+            label = N,
+            children = Seq(
+              matchBlock,
+              local.get(matchResLocal.get, RefType.anyref),
+            ),
+            resultTypes = Seq(Result(RefType.anyref)),
+          )
+        else
+          val rstExpr = returningTerm(rst)
+          Instructions.block(
+            label = N,
+            children = Seq(matchBlock, rstExpr),
+            resultTypes = rstExpr.resultTypes.flatMap(ty => ty.asValType.map(Result(_))),
+          )
 
       // * Try/finally lowering is intentionally rejected for now: the previous implementation required `exnref` support
       // * which can only be enabled with the `--experimental-wasm-exnref` flag.
@@ -1502,85 +1758,99 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val ctx = Ctx.empty
     given Ctx = ctx
 
-    // Create base Object struct with tag field that all other structs will inherit
-    ctx.addType(TypeInfo(
-      sym = baseObjectSym,
-      StructType(Seq(tagFieldSym -> Field(I32Type, mutable = true, id = "$tag"))),
-      objectTag = S(ctx.getFreshObjectTag() ensuring (_ == 0)),
-    ))
+    boundary[(Document, Str, Int)]:
+      val outerRaise = summon[Raise]
 
-    // Two-pass scheme: register all supported top-level class struct types before compiling any
-    // functions, so all class types are available during nested function codegen.
-    createDefnTypes(p.main)
-
-    // Compile the entry function under a dedicated local scope so that any temp locals introduced
-    // during codegen (e.g., via `local.tee`) are declared in the entry function.
-    val (entryFnExpr, funcCtx) = genFuncBody(Seq.empty):
-      val rawEntryFnExpr = block(p.main)
-      val entryFnExpr = normalizeEntryExpr(rawEntryFnExpr, p.main.isAbortive)
-      entryFnExpr
-
-    val entrySym = BlockMemberSymbol("entry", Nil)
-
-    val entryFnTy = ctx.addType(TypeInfo(
-      sym = entrySym,
-      FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref))),
-      objectTag = N,
-    ))
-
-    val entryFnInfo = FuncInfo(
-      sym = entrySym,
-      typeUse = TypeUse(entryFnTy),
-      params = funcCtx.params,
-      nResults = 1,
-      locals = funcCtx.locals,
-      body = entryFnExpr,
-      `export` = S(entrySym.nme),
-    )
-
-    if stringLits.nonEmpty then
-      stringLits.foreach: (s, lit) =>
-        if lit.byteLen > 0 then
-          ctx.addDataSegment(DataSegment.Active(
-            offset = i32.const(lit.offset),
-            bytes = lit.watBytes,
-            memuse = N,
-            sym = BlockMemberSymbol(s.take(WatBuilder.StringConstantIdentMaxLength), Nil, nameIsMeaningful = false),
-          ))
-
-    val singletonInitActions = ctx.getSingletonInitActions
-    if singletonInitActions.nonEmpty then
-      val initSym = BlockMemberSymbol("start", Nil, nameIsMeaningful = false)
-      val initTy = ctx.addType(TypeInfo(
-        sym = initSym,
-        FunctionType(params = Seq.empty, results = Seq.empty),
-        objectTag = N,
+      // Create base Object struct with tag field that all other structs will inherit
+      ctx.addType(TypeInfo(
+          sym = baseObjectSym,
+          StructType(Seq(tagFieldSym -> Field(I32Type, mutable = true, id = "$tag"))),
+          objectTag = S(ctx.getFreshObjectTag() ensuring (_ == 0)),
       ))
-      val initBody = blockInstr(
-        label = N,
-        children = singletonInitActions.toSeq,
-        resultTypes = Seq.empty,
+
+      // Early registration scheme: collect supported top-level classes from main block,
+      // order by inheritance, predeclare struct types, init functions, and constructors.
+      locally:
+        given Raise = diag =>
+          outerRaise(diag)
+          diag match
+            case _: ErrorReport => break((ctx.toWat, "entry", 0))
+            case _ => ()
+        val ordered = sortTopLevelClasses(collectTopLevelClassDefns(p.main))
+        ordered.foreach(predeclareClassType)
+        predeclareClassTags(ordered)
+        ordered.foreach(predeclareClassInit)
+        ordered.foreach(predeclareClassConstructor)
+
+      // Compile the entry function under a dedicated local scope so that any temp locals introduced
+      // during codegen (e.g., via `local.tee`) are declared in the entry function.
+      val (entryFnExpr, entryFnCtx) = genFuncBody(Seq.empty):
+        val rawEntryFnExpr = block(p.main)
+        normalizeEntryExpr(rawEntryFnExpr, p.main.isAbortive)
+
+      val entrySym = BlockMemberSymbol("entry", Nil)
+
+      val entryFnTy = ctx.addType(
+        TypeInfo(
+          sym = entrySym,
+          FunctionType(params = Seq.empty, results = Seq(Result(RefType.anyref))),
+          objectTag = N,
+        ),
       )
-      val initFn = ctx.addFunc(FuncInfo(
-        sym = initSym,
-        typeUse = TypeUse(initTy),
+      val entryFnInfo = FuncInfo(
+        sym = entrySym,
+        typeUse = TypeUse(entryFnTy),
         params = Seq.empty,
-        nResults = 0,
-        locals = Seq.empty,
-        body = initBody,
-        `export` = N,
-      ))
-      ctx.setStartFunc(initFn)
-    end if
+        nResults = 1,
+        locals = entryFnCtx.locals,
+        body = entryFnExpr,
+        `export` = S(entrySym.nme),
+      )
 
-    ctx.addFunc(entryFnInfo)
+      if stringLits.nonEmpty then
+        stringLits.foreach: (s, lit) =>
+          if lit.byteLen > 0 then
+            ctx.addDataSegment(DataSegment.Active(
+              offset = i32.const(lit.offset),
+              bytes = lit.watBytes,
+              memuse = N,
+              sym = BlockMemberSymbol(s.take(WatBuilder.StringConstantIdentMaxLength), Nil, nameIsMeaningful = false),
+            ))
 
-    val systemMemMinPages =
-      ctx.getMemoryImport(
-        ExternIntrinsics.SystemModule,
-        ExternIntrinsics.SystemMemoryImportName,
-      ).fold(0)(_.memType.lim.min)
-    (ctx.toWat, entrySym.nme, systemMemMinPages)
+      val singletonInitActions = ctx.getSingletonInitActions
+      if singletonInitActions.nonEmpty then
+        val initSym = BlockMemberSymbol("start", Nil, nameIsMeaningful = false)
+        val initTy = ctx.addType(TypeInfo(
+            sym = initSym,
+            FunctionType(params = Seq.empty, results = Seq.empty),
+            objectTag = N,
+          ),
+        )
+        val initBody = blockInstr(
+          label = N,
+          children = singletonInitActions.toSeq,
+          resultTypes = Seq.empty,
+        )
+        val initFn = ctx.addFunc(FuncInfo(
+          sym = initSym,
+          typeUse = TypeUse(initTy),
+          params = Seq.empty,
+          nResults = 0,
+          locals = Seq.empty,
+          body = initBody,
+          `export` = N,
+        ))
+        ctx.setStartFunc(initFn)
+      end if
+
+      ctx.addFunc(entryFnInfo)
+
+      val systemMemMinPages =
+        ctx.getMemoryImport(
+          ExternIntrinsics.SystemModule,
+          ExternIntrinsics.SystemMemoryImportName,
+        ).fold(0)(_.memType.lim.min)
+      (ctx.toWat, entrySym.nme, systemMemMinPages)
   end program
 
   def blockPreamble(ss: Iterable[Symbol])(using Ctx, FunctionCtx, Raise): Unit =
