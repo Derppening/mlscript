@@ -274,20 +274,10 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Declares the shared Wasm function type used by a class ctor/init placeholder. */
   private def declareClassFuncType(
-      // defn: ClsLikeDefn,
-      // suffix: Str,
       sym: BlockMemberSymbol,
       suffix: Str,
       params: Seq[Local -> SymIdx],
   )(using Ctx, Raise): TypeIdx =
-    // val isSingletonObj = defn.k is syntax.Obj
-    // val funcTyId = defn.sym
-    //   .optionIf: sym =>
-    //     !isSingletonObj && sym.nameIsMeaningful
-    //   .map: sym =>
-    //     s"${sym.nme}_$suffixCannot sele"
-    //   .getOrElse:
-    //     scope.allocateName(TempSymbol(N, s"${defn.sym.nme}_$suffix"))
     ctx.addType(TypeInfo(
         sym,
         FunctionType(
@@ -306,7 +296,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       defn: ClsLikeDefn,
       suffix: Str,
       params: Seq[Local -> SymIdx],
-      // id: Opt[Str],
       `export`: Opt[Str],
   )(using Ctx, Raise): Unit =
     val funcSym = BlockMemberSymbol(s"${defn.sym.nme}_$suffix", Nil, nameIsMeaningful = false)
@@ -316,7 +305,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val funcTy = declareClassFuncType(funcSym, suffix, params)
     ctx.addFunc(
       FuncInfo(
-        // id = SymIdx(id.orElse(`export`).getOrElse(scope.allocateName(TempSymbol(N, s"${defn.sym.nme}_$suffix")))),
         // TODO(Derppening): Hax
         sym = if suffix == "ctor" then defn.sym else funcSym,
         typeUse = TypeUse(funcTy),
@@ -334,12 +322,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       defn.paramsOpt.fold(Nil): ps =>
         ps.params.map: p =>
           p.sym -> SymIdx(p.sym.nme)
-    // val initId = defn.sym
-    //   .optionIf: sym =>
-    //     !(defn.k is syntax.Obj) && sym.nameIsMeaningful
-    //   .map: sym =>
-    //     s"${sym.nme}_init"
-    // predeclareClassFunc(defn, "init", initParams, S(initFuncSym(defn.sym)), initId, N)
     predeclareClassFunc(defn, "init", initParams, N)
 
   /** Declares one top-level class constructor. */
@@ -347,7 +329,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
     val ctorParams = defn.paramsOpt.fold(Nil): ps =>
       ps.params.map: p =>
         p.sym -> SymIdx(p.sym.nme)
-    // predeclareClassFunc(defn, "ctor", ctorParams, S(defn.sym), N, ctorId)
     val ctorId = defn.sym
       .optionIf: sym =>
         !(defn.k is syntax.Obj) && sym.nameIsMeaningful
@@ -463,8 +444,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
   )(using Ctx, Raise): (FunctionCtx, Expr) =
     val clsParams = clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)
     val (initWat, fnCtx) = genFuncBody(clsParams, S(clsLikeDefn.isym)):
-      // val (thisVar, thisVarName) = bindCtorThis(clsLikeDefn.isym)
-      // val thisVar = setupCtorWrapperLocals(clsLikeDefn)
       val thisVar = funcCtx.lookupLocal_!(clsLikeDefn.isym, N)
       val preCtorWat = compilePreCtor(clsLikeDefn, thisVar)
       val ctorWat = block(clsLikeDefn.ctor)
@@ -477,9 +456,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
         ),
         resultTypes = Seq(Result(RefType.anyref)),
       )
-      // val initLocals = preCtorLocals ++ ctorLocals.filterNot(preCtorLocals.toSet)
-      // val localsWithNames = initLocals.map(l => l -> scope.lookup_!(l, l.toLoc))
-    // ((clsLikeDefn.isym -> thisVarName) +: initParams, initWat, localsWithNames)
     (fnCtx, initWat)
 
   /** Lowers an inherited pre-constructor by preserving its setup code and rewriting the final `super(...)` into `Parent_init(this, ...)`. */
@@ -1339,8 +1315,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   
                   val (initFnCtx, initWat) = setupInitLocals(clsLikeDefn)
 
-                    // val (fnCtx, thisVar, initWat) = setupInitLocals(clsLikeDefn)
-
                   // * If there are no ctor params, pop one param list off the aux params
                   val newCtorAuxParams = clsLikeDefn.paramsOpt match
                     case None => ctorAuxParams match
@@ -1354,7 +1328,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   val initFuncRef = initFuncSym(clsLikeDefn.sym)
                     
                   val (ctorCode, fnCtx) = genFuncBody(clsLikeDefn.paramsOpt.fold(Nil)(_.paramSyms)):
-                    // val (ctorParams, thisVar, ctorLocals) = setupCtorWrapperLocals(clsLikeDefn)
                     val thisVar = setupCtorWrapperLocals(clsLikeDefn)
                     val initCall = call(
                       funcidx = ctx.getFunc_!(initFuncRef),
@@ -1377,9 +1350,6 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                         drop(initCall),
                         `return`(S(local.get(thisVar, RefType(typeref, nullable = false)))),
                       ),
-                    //   ctorWat,
-                    //   `return`(S(local.get(thisVar, RefType(typeref, nullable = false)))),
-                    // ),
                       resultTypes = Seq(Result(RefType.anyref)),
                     )
 

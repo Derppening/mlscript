@@ -228,11 +228,7 @@ class FunctionCtx(_params: Seq[Local], thisSym: Opt[Symbol])(using Raise, State)
   /** The parameter of this function, represented by a tuple of the symbol representing the parameter and its symbolic
     * identifier.
     */
-  val params: Seq[Local -> SymIdx] = 
-    // val thisParam = thisSym.map: thisSym =>
-    //   val symIdx = SymIdx(localScp.addToBindings(thisSym, "this", shadow = false))
-    //   thisSym -> symIdx
-    // thisSym.map(dis => dis -> SymIdx(localScp.allocateName(dis))).toSeq ++ _params.map(p => p -> SymIdx(localScp.allocateName(p)))
+  val params: Seq[Local -> SymIdx] =
     val thisParam = thisSym.map: dis =>
       dis -> SymIdx(localScp.addToBindings(dis, "this", shadow = false))
     thisParam.toSeq ++ _params.map(p => p -> SymIdx(localScp.allocateName(p)))
