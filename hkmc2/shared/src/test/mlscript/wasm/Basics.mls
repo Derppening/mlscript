@@ -259,7 +259,7 @@ O.y
 //│   (type $O_ctor (func (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (type $start (func))
-//│   (global $O$inst (mut (ref null $O)) (ref.null $O))
+//│   (global $O$inst (export "O$inst") (mut (ref null $O)) (ref.null $O))
 //│   (func $O_init (type $O_init) (param $this (ref null any)) (result (ref null any))
 //│     (block (result (ref null any))
 //│       (nop)

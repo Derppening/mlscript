@@ -233,6 +233,12 @@ case class MemType(lim: Limits, addrType: AddrType = AddrType.i32) extends ToWat
   def toWat: Document =
     doc"${addrType.optionIf(_ != AddrType.i32).fold(doc"")(at => doc"${at.toWat} ")}${lim.toWat}"
 
+/** A global type. */
+case class GlobalType(valType: ValType, mutable: Bool) extends ToWat:
+  def toWat: Document =
+    if mutable then doc"(mut ${valType.toWat})"
+    else valType.toWat
+
 object ExternType:
 
   object Mem:
@@ -257,6 +263,18 @@ object ExternType:
     override val id = SymIdx(summon[Ctx].funcScp.allocateOrGetName(sym))
 
     def toWat: Document = doc"""(func ${id.toWat} ${typeUse.toWat})"""
+
+  object Global:
+    @deprecated("Use `ExternType.Global` with `Symbol` instead.")
+    def apply(id: SymIdx, globalType: GlobalType)(using Ctx, Raise, State): Global =
+      new Global(globalType, BlockMemberSymbol(id.id, Nil, nameIsMeaningful = true))
+
+  /** A global entry that is externally addressable. */
+  case class Global(globalType: GlobalType, override val sym: Symbol)(using Ctx, Raise) extends ExternType(sym):
+
+    override val id = SymIdx(summon[Ctx].globalScp.allocateOrGetName(sym))
+
+    def toWat: Document = doc"""(global ${id.toWat} ${globalType.toWat})"""
 end ExternType
 
 sealed abstract class ExternType(val sym: Symbol) extends ToWat:

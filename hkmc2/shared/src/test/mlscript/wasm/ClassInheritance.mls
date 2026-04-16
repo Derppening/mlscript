@@ -35,6 +35,7 @@ c.Parent#x
 //│   (type $Child_ctor (func (param $y (ref null any)) (result (ref null any))))
 //│   (type $plus_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
+//│   (global $c (export "c") (mut (ref null any)) (ref.null any))
 //│   (func $Parent_init (type $Parent_init) (param $this (ref null any)) (param $x (ref null any)) (result (ref null any))
 //│     (block (result (ref null any))
 //│       (nop)
@@ -120,15 +121,14 @@ c.Parent#x
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $Parent (ref null any))
 //│     (local $Child (ref null any))
-//│     (local $c (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $c
+//│       (global.set $c
 //│         (call $Child
 //│           (ref.i31
 //│             (i32.const 2))))
 //│       (struct.get $Parent $x
 //│         (ref.cast (ref $Parent)
-//│           (local.get $c)))))
+//│           (global.get $c)))))
 //│   (elem $Parent_init declare func $Parent_init)
 //│   (elem $Child_init declare func $Child_init)
 //│   (elem $Parent declare func $Parent)
@@ -232,7 +232,7 @@ class B
 //│   (type $Unit_ctor (func (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (type $start (func))
-//│   (global $Unit$inst (mut (ref null $Unit)) (ref.null $Unit))
+//│   (global $Unit$inst (export "Unit$inst") (mut (ref null $Unit)) (ref.null $Unit))
 //│   (func $A_init (type $A_init) (param $this (ref null any)) (result (ref null any))
 //│     (block (result (ref null any))
 //│       (nop)

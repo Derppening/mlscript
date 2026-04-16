@@ -22,7 +22,7 @@ let i = 0 in
 //│   (type $Unit_ctor (func (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (type $start (func))
-//│   (global $Unit$inst (mut (ref null $Unit)) (ref.null $Unit))
+//│   (global $Unit$inst (export "Unit$inst") (mut (ref null $Unit)) (ref.null $Unit))
 //│   (func $lt_impl (type $lt_impl) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and

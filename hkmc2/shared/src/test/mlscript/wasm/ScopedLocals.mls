@@ -12,6 +12,8 @@ topA + topB
 //│   (type $Object (sub (struct (field $$tag (mut i32)))))
 //│   (type $plus_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
 //│   (type $entry (func (result (ref null any))))
+//│   (global $topA (export "topA") (mut (ref null any)) (ref.null any))
+//│   (global $topB (export "topB") (mut (ref null any)) (ref.null any))
 //│   (func $plus_impl (type $plus_impl) (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))
 //│     (if (result (ref null any))
 //│       (i32.and
@@ -31,19 +33,17 @@ topA + topB
 //│       (else
 //│         (unreachable))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
-//│     (local $topA (ref null any))
-//│     (local $topB (ref null any))
 //│     (block (result (ref null any))
-//│       (local.set $topA
+//│       (global.set $topA
 //│         (ref.i31
 //│           (i32.const 1)))
 //│       (block (result (ref null any))
-//│         (local.set $topB
+//│         (global.set $topB
 //│           (ref.i31
 //│             (i32.const 2)))
 //│         (call $plus_impl
-//│           (local.get $topA)
-//│           (local.get $topB)))))
+//│           (global.get $topA)
+//│           (global.get $topB)))))
 //│   (elem $plus_impl declare func $plus_impl)
 //│   (elem $entry declare func $entry))
 //│ Wasm result:
