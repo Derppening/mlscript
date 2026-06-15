@@ -103,7 +103,7 @@ object Instructions:
     mnemonic = "drop",
     instrargs = Seq.empty,
     stackargs = Seq(value),
-    resultType = N,
+    resultTypes = value.resultTypes.init,
   )
 
   /** Creates a `return` instruction with an optional return value. */
