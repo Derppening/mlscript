@@ -918,7 +918,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val thisVar = funcCtx.lookupLocal_!(clsLikeDefn.isym, N)
       val preCtorWat = compilePreCtor(clsLikeDefn, thisVar)
       val ctorWat = block(clsLikeDefn.ctor)
-      (preCtorWat ++ ctorWat :+ `return`(S(local.get(thisVar, RefType.anyref)))).mergeAsBlock_!
+      (preCtorWat ++ ctorWat.toVector :+ `return`(S(local.get(thisVar, RefType.anyref)))).mergeAsBlock_!
 
   /** Lowers an inherited pre-constructor by preserving its setup code and rewriting the final `super(...)` into
     * `Parent_init(this, ...)`.
@@ -961,7 +961,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                   operands = local.get(thisVar, RefType.anyref) +: args.map(argument),
                   returnTypes = Seq(Result(RefType.anyref)),
                 )
-                prefixWat.toSeq :+ drop(superCall)
+                prefixWat.toVector :+ drop(superCall)
               case N => Seq.empty
           case N =>
             raise(ErrorReport(
@@ -984,7 +984,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       isAbortive: Bool,
   )(using Ctx, FunctionCtx, Raise, SessionExportCtx): Seq[Expr] =
     if exprs.forall(_.resultTypes.isEmpty) && !isAbortive then
-      exprs :+ result(State.unitBlockMemberSymbol.asMemberRef(State.unitSymbol))
+      exprs.toVector :+ result(State.unitBlockMemberSymbol.asMemberRef(State.unitSymbol))
     else
       exprs
 
@@ -1980,7 +1980,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
               end match
 
             val rstBlk = returningTerm(rst)
-            res.toSeq ++ rstBlk
+            res.toVector ++ rstBlk
         end match
 
       case Return(res) =>
@@ -2076,7 +2076,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           else
             (exprs.mergeAsBlock, exprs.flatMap(_.resultTypes)) match
               case (S(expr), Seq(_)) => Seq(local.set(target, expr))
-              case (S(expr), Seq()) => exprs :+
+              case (S(expr), Seq()) => exprs.toVector :+
                   local.set(target, result(State.unitBlockMemberSymbol.asMemberRef(State.unitSymbol)))
               case (S(expr), _) => Seq(errExpr(
                   Ls(
@@ -2125,7 +2125,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                           condition = testExpr,
                           ifTrue = blockInstr(
                             label = S(armLabel),
-                            children = armBodyExpr :+ br(matchLabel),
+                            children = armBodyExpr.toVector :+ br(matchLabel),
                             resultTypes = Seq.empty,
                           ),
                           ifFalse = N,
@@ -2154,7 +2154,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                             condition = classMatchExpr,
                             ifTrue = blockInstr(
                               label = S(armLabel),
-                              children = armBodyExpr :+ br(matchLabel),
+                              children = armBodyExpr.toVector :+ br(matchLabel),
                               resultTypes = Seq.empty,
                             ),
                             ifFalse = N,
@@ -2184,7 +2184,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                           condition = testExpr,
                           ifTrue = blockInstr(
                             label = S(armLabel),
-                            children = armBodyExpr :+ br(matchLabel),
+                            children = armBodyExpr.toVector :+ br(matchLabel),
                             resultTypes = Seq.empty,
                           ),
                           ifFalse = N,
@@ -2200,12 +2200,12 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
                     ))
                 end match
 
-              val defaultExpr = lowerMatchBody(dflt.toSeq.flatMap(returningTerm))
+              val defaultExpr = lowerMatchBody(dflt.toVector.flatMap(returningTerm))
 
               // Generate the match block
               blockInstr(
                 label = S(matchLabel),
-                children = scrutInitExpr.toSeq ++ matchResInitExpr.toSeq ++ armExprs ++ defaultExpr,
+                children = scrutInitExpr.toVector ++ matchResInitExpr.toVector ++ armExprs ++ defaultExpr,
                 resultTypes = Seq.empty,
               )
 
