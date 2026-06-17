@@ -2072,7 +2072,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
           scrutLocalResult.fold(result(scrut))(getLocalAnyref)
 
         def assignTailResult(target: LocalIdx, exprs: Seq[Expr]): Seq[Expr] =
-          if exprs.isEmpty || exprs.last.isControlTransfer then exprs
+          if exprs.lastOption.forall(_.isControlTransfer) then exprs
           else
             (exprs.mergeAsBlock, exprs.flatMap(_.resultTypes)) match
               case (S(expr), Seq(_)) => Seq(local.set(target, expr))
