@@ -325,8 +325,30 @@ end TagInfo
 
 enum WasmIntrinsicType:
   case TupleArray(mutable: Bool)
+
   /** Shared erased Wasm function type for virtual methods with the given arity, including `this`. */
   case VirtualMethod(arity: Int)
+
+/** Information for a Wasm intrinsic function. 
+  *
+  * @param paramTypes The types of parameters expected by this intrinsic function.
+  * @param resultTypes The types of results produced by this intrinsic function.
+  * @param doParamTypeCheck Whether to verify the compile-time types of the arguments passed to this intrinsic function.
+  */
+case class IntrinsicFuncInfo(
+    val paramTypes: Seq[ValType],
+    val resultTypes: Seq[Result],
+    private val doParamTypeCheck: Bool = true,
+)(private val _body: Seq[Expr] => Raise ?=> Expr):
+  lazy val body: (Seq[Expr] => Raise ?=> Expr) = (args: Seq[Expr]) =>
+    if doParamTypeCheck then
+      paramTypes.zip(args.map(_.resultType)).zipWithIndex.foreach: 
+        case ((expected, actual), idx) =>
+          softAssert(
+            actual.contains(expected),
+            s"Expected argument #${idx + 1} of type `${expected.toWat.mkString()}`, got `${actual.fold("(none)")(_.toWat.mkString())}`",
+          )
+    _body(args)
 
 /** Class containing identifiers of labels to jump to when breaking or continuing from a control flow structure.
   *
@@ -487,6 +509,26 @@ object Ctx:
   )
   val wasmIntrinsicArities: Map[Str, Int] = (binaryOps.keys.map(_ -> 2) ++ unaryOps.keys.map(_ -> 1)).toMap
   val wasmIntrinsicNameSet: Set[Str] = wasmIntrinsicArities.keySet
+
+  val wasmInstrIntrinsics: Map[Str, IntrinsicFuncInfo] = Map(
+    // TODO(Derppening): Simplify this when typed IR is implemented by restricting `i32.add` to `i32` operands,
+    //                   requiring the user to explicitly insert `i31.get_s`/`ref.i31`
+    "i32.add" -> IntrinsicFuncInfo(paramTypes = Seq(I32Type, I32Type), resultTypes = Seq(Result(I32Type)), doParamTypeCheck = false):
+      case Seq(lhs, rhs) => 
+        (lhs.resultType, rhs.resultType) match
+          case (S(I32Type), S(I32Type)) => i32.add(lhs, rhs) 
+          case (S(RefType(lhsHeapType, _)), S(RefType(rhsHeapType, _))) => 
+            ref.i31(i32.add(
+              i31.get_s(if lhsHeapType == HeapType.I31 then lhs else ref.cast(lhs, RefType.i31ref)),
+              i31.get_s(if rhsHeapType == HeapType.I31 then rhs else ref.cast(rhs, RefType.i31ref)), 
+            ))
+          case _ => 
+            softAssert(
+              false,
+              s"Expected both arguments of type `ref` or `i32`, got `${lhs.resultType.fold("(none)")(_.toWat.mkString())}` and `${rhs.resultType.fold("(none)")(_.toWat.mkString())}`",
+            )
+            i32.add(lhs, rhs),
+  )
 
   def empty(using State): Ctx = Ctx()
 

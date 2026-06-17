@@ -1267,18 +1267,22 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       val args = argss.flatten
       wasmIntrinsicName(fun) match
         case S(intrName) =>
-          val expectedArity = wasmIntrinsicArities(intrName)
-          if expectedArity =/= args.length then
-            return errExpr(
-              Ls(msg"Wasm intrinsic '$intrName' called with incorrect arity (${args.length})" -> c.toLoc),
-              extraInfo = S(c.toString),
-            )
-          val funcIdx = getIntrinsic(intrName)
-          call(
-            funcidx = funcIdx,
-            operands = args.map(argument),
-            returnTypes = Seq(Result(RefType.anyref)),
-          )
+          Ctx.wasmInstrIntrinsics.get(intrName) match
+            case S(intr) =>
+              intr.body(args.map(argument))
+            case N => 
+              val expectedArity = wasmIntrinsicArities(intrName)
+              if expectedArity =/= args.length then
+                return errExpr(
+                  Ls(msg"Wasm intrinsic '$intrName' called with incorrect arity (${args.length})" -> c.toLoc),
+                  extraInfo = S(c.toString),
+                )
+              val funcIdx = getIntrinsic(intrName)
+              call(
+                funcidx = funcIdx,
+                operands = args.map(argument),
+                returnTypes = Seq(Result(RefType.anyref)),
+              )
         case N =>
           fun match
             case Value.SimpleRef(l) =>
@@ -1483,10 +1487,14 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
 
   /** Returns the intrinsic name if `path` refers to a builtin under `wasm`, or `N` otherwise.
     */
-  private def wasmIntrinsicName(path: Path): Opt[Str] = path match
-    case Select(Value.SimpleRef(sym), ident) if (sym eq State.wasmSymbol) && wasmIntrinsicNameSet.contains(ident.name) =>
-      S(ident.name)
-    case _ => N
+  private def wasmIntrinsicName(path: Path): Opt[Str] =
+    def loop(p: Path, acc: Ls[Str]): Opt[Str] = p match
+      case Select(Value.SimpleRef(sym), ident) if sym eq State.wasmSymbol =>
+        S((ident.name :: acc).mkString("."))
+      case Select(qual, ident) =>
+        loop(qual, ident.name :: acc)
+      case _ => N
+    loop(path, Nil)
 
   /** Gets (or creates) the intrinsic function implementing the wasm operator `name`.
     */

@@ -245,6 +245,26 @@ declare module js with
     try_catch
 
 declare module wasm with
+  module i32 with
+    fun
+      add
+      sub
+      mul
+      div_s
+      rem_s
+      eq
+      ne
+      lt_s
+      le_s
+      gt_s
+      ge_s
+      eqz
+  module ref with
+    fun
+      i31
+  module i31 with
+    fun
+      get_s
   fun
     plus_impl
     minus_impl
