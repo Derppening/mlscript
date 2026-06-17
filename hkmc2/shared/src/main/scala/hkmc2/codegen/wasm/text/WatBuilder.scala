@@ -983,7 +983,7 @@ class WatBuilder(using TraceLogger, State) extends CodeBuilder:
       exprs: Seq[Expr],
       isAbortive: Bool,
   )(using Ctx, FunctionCtx, Raise, SessionExportCtx): Seq[Expr] =
-    if exprs.flatMap(_.resultTypes).isEmpty && !isAbortive then
+    if exprs.forall(_.resultTypes.isEmpty) && !isAbortive then
       exprs :+ result(State.unitBlockMemberSymbol.asMemberRef(State.unitSymbol))
     else
       exprs
