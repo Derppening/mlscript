@@ -414,12 +414,14 @@ case class FoldedInstr(
   /** Returns the result type of this instruction if this instruction only has 0-1 result values. */
   def resultType: Opt[Type] = resultTypes match
     case Seq() => N
-    case ty :: Seq() => S(ty)
-    case _ => lastWords(s"resultType_! called on instruction with multi-value result type: $this")
+    case Seq(ty) => S(ty)
+    case tys => 
+      lastWords(s"resultType called on instruction `$mnemonic` with multi-value result type: ${tys.map(ty => doc"`${ty.toWat}`").mkDocument(doc"[", doc", ", doc"]").mkString()}")
 
   /** Returns the singular result type of this instruction, otherwise throws an exception. */
   def resultType_! : Type = resultType.getOrElse:
-    lastWords(s"resultType_! called on instruction with a non-unique result type: $this")
+    lastWords:
+      s"resultType_! called on instruction `$mnemonic` with non-unique result type(s): ${resultTypes.map(_.toWat).mkDocument(doc"[", doc", ", doc"]").mkString()}"
 
   def toWat: Document = doc"($mnemonic${
       instrargs.map: a =>
