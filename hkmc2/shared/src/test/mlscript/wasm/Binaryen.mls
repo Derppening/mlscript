@@ -91,3 +91,221 @@ mod.dispose()
 let inst = instantiateWasm of wasmMod, {}
 inst.exports.main() |> print
 //│ > 3
+
+
+// When does a struct ref inside a TYPE definition (func / struct / array) make binaryen.parseText
+// throw "invalid type: distinct rec groups would be identical after binary writing"?
+//
+// `setFeatures(All)` runs AFTER parseText, so during parsing GC is OFF. The error fires iff two rec
+// groups are DISTINCT under the full GC type system but SERIALIZE to identical bytes under GC-off
+// feature-erasure — which rewrites every non-string user heap-ref to its abstract top (`any`/`func`/
+// ...) and DROPS nullability (so (ref $Foo)/(ref null $Foo)/(ref any)/(ref null any) all coincide).
+// No error in the two complementary cases: the types are already equal under GC (binaryen MERGES
+// them — structurally-identical types collapse to one), or they stay distinct after erasure (e.g.
+// different arity, or i32 vs anyref). It is NOT "struct-ref types are bad" and NOT "moving vs
+// stationary": two struct-ref types collide iff they differ under GC yet erase the same. A struct
+// ref in a `(local ...)` decl is always safe; only type-section definitions are canonicalized.
+// The fix is always the same: co-locate the mutually-referencing types in one explicit `(rec ...)`.
+
+
+// R1: a struct-ref function type whose erased shape `(func (param anyref)(result i32))` is not
+//     shared by any other distinct type → no collision, parses & runs fine.
+let wasmMod = compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (type $Foo (sub $Object (struct (field $i i32))))
+        (type $GetI_t (func (param (ref $Foo)) (result i32)))
+        (func $getI (type $GetI_t)
+            (struct.get $Foo $i (local.get 0)))
+        (func (export "main") (result i32)
+            (call $getI (struct.new $Foo (i32.const 42)))))
+    """
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 42
+
+
+// R2: add $Twin, a DISTINCT type with the same erased shape `(func (param anyref)(result i32))`.
+//     Distinct under GC ((ref $Foo) ≠ anyref), identical when written → throws.
+:re
+compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (type $Foo (sub $Object (struct (field $i i32))))
+        (type $GetI_t (func (param (ref $Foo)) (result i32)))
+        (type $Twin (func (param (ref null any)) (result i32)))
+        (func $getI (type $GetI_t) (param $f (ref $Foo)) (result i32)
+            (struct.get $Foo $i (local.get $f)))
+        (func $twin (type $Twin) (param $x (ref null any)) (result i32)
+            (i32.const 0))
+        (func (export "main") (result i32)
+            (call $getI (struct.new $Foo (i32.const 42)))))
+    """
+//│ ═══[RUNTIME ERROR] [object Object]
+
+
+// Fix for R2: co-locate $Foo and $GetI_t in one explicit rec group. $GetI_t's group now genuinely
+// contains the struct ref, so it stays distinct from $Twin when written — $Twin can remain an
+// ordinary sibling outside the group.
+let wasmMod = compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (rec
+            (type $Foo (sub $Object (struct (field $i i32))))
+            (type $GetI_t (func (param (ref $Foo)) (result i32))))
+        (type $Twin (func (param (ref null any)) (result i32)))
+        (func $getI (type $GetI_t) (param $f (ref $Foo)) (result i32)
+            (struct.get $Foo $i (local.get $f)))
+        (func $twin (type $Twin) (param $x (ref null any)) (result i32)
+            (i32.const 0))
+        (func (export "main") (result i32)
+            (call $getI (struct.new $Foo (i32.const 42)))))
+    """
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 42
+
+
+// R3: a 0-param ctor `(func (result (ref $O)))` and `$entry = (func (result anyref))` are distinct
+//     under GC but both serialize to `(func (result anyref))` → throws. This is why objects/
+//     singletons collide in practice: `$entry`/`$start` is almost always present.
+:re
+compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (type $O (sub $Object (struct (field $i i32))))
+        (type $O_ctor (func (result (ref $O))))
+        (type $entry (func (result (ref null any))))
+        (func $oc (type $O_ctor) (result (ref $O))
+            (struct.new $O (i32.const 7)))
+        (func $entry (type $entry) (result (ref null any))
+            (ref.null any))
+        (func (export "main") (result i32)
+            (struct.get $O $i (call $oc))))
+    """
+//│ ═══[RUNTIME ERROR] [object Object]
+
+
+// R4: the same 0-param ctor ALONE — no other type shares its erased `(func (result anyref))` → fine.
+let wasmMod = compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (type $O (sub $Object (struct (field $i i32))))
+        (type $O_ctor (func (result (ref $O))))
+        (func $oc (type $O_ctor) (result (ref $O))
+            (struct.new $O (i32.const 7)))
+        (func (export "main") (result i32)
+            (struct.get $O $i (call $oc))))
+    """
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 7
+
+
+// R5: two ctors for STRUCTURALLY-IDENTICAL structs. $A and $B have the same shape (field names are
+//     irrelevant), so binaryen MERGES them — and their ctors with them. Merged types are never
+//     "distinct", so there is nothing to collide. (This — not "two struct-ref types are fine" — is
+//     why same-shape classes are safe.)
+let wasmMod = compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (type $A (sub $Object (struct (field $i i32))))
+        (type $B (sub $Object (struct (field $j i32))))
+        (type $A_ctor (func (result (ref $A))))
+        (type $B_ctor (func (result (ref $B))))
+        (func $ac (type $A_ctor) (result (ref $A))
+            (struct.new $A (i32.const 1)))
+        (func $bc (type $B_ctor) (result (ref $B))
+            (struct.new $B (i32.const 2)))
+        (func (export "main") (result i32)
+            (i32.add
+                (struct.get $A $i (call $ac))
+                (struct.get $B $j (call $bc)))))
+    """
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 3
+
+
+// R5b: make $A and $B STRUCTURALLY DISTINCT (1 vs 2 fields) and they no longer merge. The two ctors
+//      are now distinct under GC yet both serialize to `(func (result anyref))` → throws, with no
+//      `$entry` in sight. Consequence for the typed-IR direction: once class fields carry concrete
+//      types, same-arity ctors (and any struct-ref-bearing types) can collide PAIRWISE, not just
+//      against `$entry` — so the rec-group fix will be needed far more broadly.
+:re
+compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (type $A (sub $Object (struct (field $x i32))))
+        (type $B (sub $Object (struct (field $y i32) (field $z i32))))
+        (type $A_ctor (func (result (ref $A))))
+        (type $B_ctor (func (result (ref $B))))
+        (func $ac (type $A_ctor) (result (ref $A))
+            (struct.new $A (i32.const 1)))
+        (func $bc (type $B_ctor) (result (ref $B))
+            (struct.new $B (i32.const 2) (i32.const 3)))
+        (func (export "main") (result i32)
+            (i32.const 0)))
+    """
+//│ ═══[RUNTIME ERROR] [object Object]
+
+
+// Fix for R5b: co-locate each struct with its own ctor in a rec group. The collision check compares
+// whole rec GROUPS, so each group's erased shape now carries its struct — and the structs differ in
+// field count (1 vs 2), which is erasure-STABLE (i32 fields are not erased). So the two groups serialize
+// to different bytes and stay distinct. (Caveat: this only helps because something erasure-stable
+// distinguishes the groups. If two classes differed ONLY by a heap-ref field target — e.g. (ref $P)
+// vs (ref $Q), which both erase to anyref — separate per-class groups would STILL collide; the rescue
+// there is to co-group the conflicting types into ONE rec group, leaving nothing for them to alias.)
+let wasmMod = compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (rec
+            (type $A (sub $Object (struct (field $x i32))))
+            (type $A_ctor (func (result (ref $A)))))
+        (rec
+            (type $B (sub $Object (struct (field $y i32) (field $z i32))))
+            (type $B_ctor (func (result (ref $B)))))
+        (func $ac (type $A_ctor) (result (ref $A))
+            (struct.new $A (i32.const 1)))
+        (func $bc (type $B_ctor) (result (ref $B))
+            (struct.new $B (i32.const 2) (i32.const 3)))
+        (func (export "main") (result i32)
+            (i32.add
+                (struct.get $A $x (call $ac))
+                (struct.get $B $y (call $bc)))))
+    """
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 3
+
+
+// Fix for R3: co-locate $O and $O_ctor in one explicit rec group. The ctor's group now genuinely
+// contains the struct, so it stays distinct from $entry when written — even with $entry still
+// present.
+let wasmMod = compileWatToWasm of
+    """
+    (module
+        (type $Object (sub (struct)))
+        (rec
+            (type $O (sub $Object (struct (field $i i32))))
+            (type $O_ctor (func (result (ref $O)))))
+        (type $entry (func (result (ref null any))))
+        (func $oc (type $O_ctor) (result (ref $O))
+            (struct.new $O (i32.const 9)))
+        (func $entry (type $entry) (result (ref null any))
+            (ref.null any))
+        (func (export "main") (result i32)
+            (struct.get $O $i (call $oc))))
+    """
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 9
