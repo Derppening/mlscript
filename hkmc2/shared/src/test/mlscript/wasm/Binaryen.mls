@@ -5,8 +5,7 @@
 // Helper functions
 import "binaryen"
 fun compileWatToWasm(wat) = 
-  let mod = binaryen.parseText(wat)
-  mod.setFeatures(binaryen.Features.All)
+  let mod = binaryen.parseTextWithFeatures of wat, binaryen.Features.All
   assert mod.validate() != false
   val modBuf = mod.emitBinary()
   mod.dispose()
@@ -128,8 +127,7 @@ inst.exports.main() |> print
 
 // R2: add $Twin, a DISTINCT type with the same erased shape `(func (param anyref)(result i32))`.
 //     Distinct under GC ((ref $Foo) ≠ anyref), identical when written → throws.
-:re
-compileWatToWasm of
+let wasmMod = compileWatToWasm of
     """
     (module
         (type $Object (sub (struct)))
@@ -143,7 +141,9 @@ compileWatToWasm of
         (func (export "main") (result i32)
             (call $getI (struct.new $Foo (i32.const 42)))))
     """
-//│ ═══[RUNTIME ERROR] [object Object]
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 42
 
 
 // Fix for R2: co-locate $Foo and $GetI_t in one explicit rec group. $GetI_t's group now genuinely
@@ -172,8 +172,7 @@ inst.exports.main() |> print
 // R3: a 0-param ctor `(func (result (ref $O)))` and `$entry = (func (result anyref))` are distinct
 //     under GC but both serialize to `(func (result anyref))` → throws. This is why objects/
 //     singletons collide in practice: `$entry`/`$start` is almost always present.
-:re
-compileWatToWasm of
+let wasmMod = compileWatToWasm of
     """
     (module
         (type $Object (sub (struct)))
@@ -187,7 +186,9 @@ compileWatToWasm of
         (func (export "main") (result i32)
             (struct.get $O $i (call $oc))))
     """
-//│ ═══[RUNTIME ERROR] [object Object]
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 7
 
 
 // R4: the same 0-param ctor ALONE — no other type shares its erased `(func (result anyref))` → fine.
@@ -238,8 +239,7 @@ inst.exports.main() |> print
 //      `$entry` in sight. Consequence for the typed-IR direction: once class fields carry concrete
 //      types, same-arity ctors (and any struct-ref-bearing types) can collide PAIRWISE, not just
 //      against `$entry` — so the rec-group fix will be needed far more broadly.
-:re
-compileWatToWasm of
+let wasmMod = compileWatToWasm of
     """
     (module
         (type $Object (sub (struct)))
@@ -254,7 +254,9 @@ compileWatToWasm of
         (func (export "main") (result i32)
             (i32.const 0)))
     """
-//│ ═══[RUNTIME ERROR] [object Object]
+let inst = instantiateWasm of wasmMod, {}
+inst.exports.main() |> print
+//│ > 0
 
 
 // Fix for R5b: co-locate each struct with its own ctor in a rec group. The collision check compares
