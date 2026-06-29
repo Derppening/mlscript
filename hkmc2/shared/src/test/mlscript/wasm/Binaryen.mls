@@ -4,14 +4,21 @@
 
 // Helper functions
 import "binaryen"
+fun compileWatToWasmLegacy(wat) = 
+  let mod = binaryen.parseText of wat
+  mod.setFeatures of binaryen.Features.All
+  Predef.js_assert of mod.validate()
+  val modBuf = mod.emitBinary()
+  mod.dispose()
+  modBuf
 fun compileWatToWasm(wat) = 
   let mod = binaryen.parseTextWithFeatures of wat, binaryen.Features.All
-  assert mod.validate() != false
+  Predef.js_assert of mod.validate()
   val modBuf = mod.emitBinary()
   mod.dispose()
   modBuf
 fun instantiateWasm(wasm, importObj) = 
-  assert WebAssembly.validate(wasm)
+  assert WebAssembly.validate of wasm
   let mod = new WebAssembly.Module(wasm)
   let inst = new WebAssembly.Instance(mod, importObj)
   inst
@@ -311,3 +318,71 @@ let wasmMod = compileWatToWasm of
 let inst = instantiateWasm of wasmMod, {}
 inst.exports.main() |> print
 //│ > 9
+
+
+let mod = new! binaryen.Module()
+mod.setFeatures(binaryen.Features.All)
+let fooTb = new! binaryen.TypeBuilder(1)
+fooTb.setStructType of 0, tuple of
+    (
+      "type": binaryen.i32
+      packedType: binaryen.notPacked
+      mutable: false
+    )
+let fooTy = fooTb.buildAndDispose().0
+mod.addFunction of 
+  "getI"
+  tuple of fooTy
+  binaryen.i32
+  []
+  mod.struct.get of 0,
+    mod.local.get(0, fooTy)
+    fooTy
+    false
+mod.addFunctionExport of "getI", "getI"
+mod.addFunction of
+  "twin"
+  tuple of binaryen.anyref
+  binaryen.i32
+  []
+  mod.i32.const(0) 
+mod.addFunctionExport of "twin", "twin"
+Predef.js_assert of mod.validate()
+let src = mod.emitText()
+src |> print
+//let dst = binaryen.parseText of src
+let dst = binaryen.parseTextWithFeatures of src, binaryen.Features.All
+dst.emitText() |> print
+//│ > (module
+//│ >  (type $0 (struct (field i32)))
+//│ >  (type $1 (func (param (ref $0)) (result i32)))
+//│ >  (type $2 (func (param anyref) (result i32)))
+//│ >  (export "getI" (func $getI))
+//│ >  (export "twin" (func $twin))
+//│ >  (func $getI (type $1) (param $0 (ref $0)) (result i32)
+//│ >   (struct.get $0 0
+//│ >    (local.get $0)
+//│ >   )
+//│ >  )
+//│ >  (func $twin (type $2) (param $0 anyref) (result i32)
+//│ >   (i32.const 0)
+//│ >  )
+//│ > )
+//│ > 
+//│ > (module
+//│ >  (type $0 (struct (field i32)))
+//│ >  (type $1 (func (param (ref $0)) (result i32)))
+//│ >  (type $2 (func (param anyref) (result i32)))
+//│ >  (export "getI" (func $getI))
+//│ >  (export "twin" (func $twin))
+//│ >  (func $getI (type $1) (param $0 (ref $0)) (result i32)
+//│ >   (struct.get $0 0
+//│ >    (local.get $0)
+//│ >   )
+//│ >  )
+//│ >  (func $twin (type $2) (param $0 anyref) (result i32)
+//│ >   (i32.const 0)
+//│ >  )
+//│ > )
+//│ > 
+
