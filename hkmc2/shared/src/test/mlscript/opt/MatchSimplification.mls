@@ -26,9 +26,8 @@ fun f(x) =
 //│ define f⁰ as fun f¹(x) {
 //│   match x
 //│     0 =>
-//│       set x = 1;
-//│       end
-//│   match x
+//│       do Predef⁰.print⁰("!");
+//│       return runtime⁰.Unit⁰
 //│     1 =>
 //│       do Predef⁰.print⁰("!");
 //│       return runtime⁰.Unit⁰

@@ -81,8 +81,9 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
   private def selectPrivateField(ts: semantics.TermSymbol, loc: Opt[Loc])(using Raise, Scope): Opt[Document] =
     ts.owner.collect:
       case owner if ts.isPrivate =>
+        val privateName = owner.privatesScope.allocateOrGetName(ts)
         if scope.inScopeOwners(owner)
-        then doc".#${owner.privatesScope.lookup_!(ts, loc)}"
+        then doc".#$privateName"
         else doc"[${scope.lookup_!(getPrivateAccessorSymbol(ts), loc)}]"
 
   private def withPrivateAccessorDecls(doc: Document)(using Raise, Scope): Document =
@@ -169,6 +170,12 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
     val res = result(r)
     if r.isInstanceOf[Value.Lit] then doc"(${res})" else res
   
+  def resultInst(r: Result)(using Raise, Scope): Document = 
+    val res = result(r)
+    r match
+    case s: Select if s.sanitize => doc"(${res})"
+    case _ => res
+  
   def result(r: Result)(using Raise, Scope): Document = r match
     case Value.This(ts: semantics.ModuleOrObjectSymbol) if ts.asMod.isDefined =>
       // * Module self-references use the module name itself instead of `this`
@@ -216,26 +223,33 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
       val (params, bodyDoc) = setupFunction(none, ps, bod, isLambda = true)
       doc"($params) => ${ braced(bodyDoc) }"
     case s @ Select(qual, id) => 
+      val checkCurrentSelection = checkSelections && s.sanitize
       val dotClass = s.symbol match
         case S(ds) if ds.shouldBeLifted => doc".class"
         case _ => doc""
       val field = s.symbol match
         case S(ts: semantics.TermSymbol) => selectPrivateField(ts, s.toLoc)
         case _ => N
-      val name = id.name
+      val name = symbolicSuffixBase(id.name).getOrElse(id.name)
       val fieldDoc = field.getOrElse:
         if isValidFieldName(name)
         then doc".$name"
         else name.toIntOption match
           case S(index) => doc"[$index]"
           case N => doc"[${makeStringLiteral(name)}]"
-      doc"${resultQual(qual)}${fieldDoc}${dotClass}"
+      val qualJS = resultQual(qual)
+      val sel = doc"${qualJS}${fieldDoc}${dotClass}"
+      if checkCurrentSelection then
+        // * We are careful to access `x.f` before `x.f$__checkNotMethod` in case `x` is, eg, `undefined` and
+        // * the access should throw an error like `TypeError: Cannot read property 'f' of undefined`.
+        doc"$runtimeVar.checkSelect($sel, ${makeStringLiteral(id.name)}, $qualJS)"
+      else sel
     case DynSelect(qual, fld, ai) =>
       if ai
       then doc"${resultQual(qual)}.at(${result(fld)})"
       else doc"${result(qual)}[${result(fld)}]"
     case Instantiate(mut, cls, argss) =>
-      val calls = argss.foldLeft(result(cls)): (acc, args) =>
+      val calls = argss.foldLeft(resultInst(cls)): (acc, args) =>
         doc"${acc}(${args.map(argument).mkDocument(", ")})"
       val inner = doc"new $calls"
       if mut then inner else doc"$freeze(${inner})"
@@ -348,7 +362,8 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
       val field = assign.symbol match
         case S(ts: semantics.TermSymbol) => selectPrivateField(ts, n.toLoc)
         case _ => N
-      doc" # ${result(p)}${field.getOrElse(fieldSelect(n.name))} = ${result(r)};${returningTerm(rst, endSemi)}"
+      val name = symbolicSuffixBase(n.name).getOrElse(n.name)
+      doc" # ${result(p)}${field.getOrElse(fieldSelect(name))} = ${result(r)};${returningTerm(rst, endSemi)}"
     case AssignDynField(p, f, ai, r, rst) =>
       doc" # ${result(p)}[${result(f)}] = ${result(r)};${returningTerm(rst, endSemi)}"
     case Define(defn, rst) =>
@@ -370,7 +385,8 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
             // * Use Object.defineProperty to override them in module/class static contexts.
             doc"Object.defineProperty(${thisDoc}, ${nme.escaped}, { configurable: true, enumerable: true, writable: true, value: ${result(p)} });${returningTerm(rst, endSemi)}"
           case _ =>
-            doc"${thisDoc}${fieldSelect(nme)} = ${result(p)};${returningTerm(rst, endSemi)}"
+            val field = selectPrivateField(tsym, tsym.toLoc).getOrElse(fieldSelect(nme))
+            doc"${thisDoc}${field} = ${result(p)};${returningTerm(rst, endSemi)}"
       case defn: (FunDefn | ClsLikeDefn) =>
         
         val outerScope = scope
@@ -430,7 +446,12 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
             softTODO(sourceParamsOpt.isDefined === isym.shouldBeLifted,
               s"$sourceParamsOpt.isDefined =/= ${isym.shouldBeLifted}")
             
-            def mkMethods(mtds: Ls[FunDefn], mtdPrefix: Str)(using Scope): Document =
+            def mkMethodName(td: FunDefn, owner: InnerSymbol): Document =
+              if td.dSym.isPrivate
+              then doc"#${owner.privatesScope.allocateOrGetName(td.dSym)}"
+              else doc"${td.sym.nme}"
+
+            def mkMethods(mtds: Ls[FunDefn], mtdPrefix: Str, owner: InnerSymbol)(using Scope): Document =
               mtds.map:
                 case td @ FunDefn(params = ps :: pss, body = bod) =>
                   val result = pss.foldRight(bod):
@@ -438,12 +459,13 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
                       Return(Lambda(ps, block)(Nil))
                   val (params, bodyDoc) = scope.nest.givenIn:
                     setupFunction(S(td.sym.nme), ps, result, isLambda = false)
-                  doc" # $mtdPrefix${td.sym.nme}($params) ${ braced(bodyDoc) }"
+                  doc" # $mtdPrefix${mkMethodName(td, owner)}($params) ${ braced(bodyDoc) }"
                 case td @ FunDefn(params = Nil, body = bod) =>
-                  doc" # ${mtdPrefix}get ${td.sym.nme}() ${ braced(body(bod, endSemi = true)) }"
+                  doc" # ${mtdPrefix}get ${mkMethodName(td, owner)}() ${ braced(body(bod, endSemi = true)) }"
               .mkDocument(doc"")
             
             def mkPrivs(pubFlds: Ls[BlockMemberSymbol -> TermSymbol], privFlds: Ls[TermSymbol],
+                  methods: Ls[FunDefn],
                   mtdPrefix: Str, isym: InnerSymbol)(using Scope): Document =
               // * Note: the non-mut-val parts of `pubFlds` are not used because in JS, fields are not declared
               val mutPubFields =
@@ -481,18 +503,26 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
                     selectPrivateField(fld, fld.toLoc).get
                   } = value; }"
                 :: Nil
-              (privDecls ::: accessors ::: privateAccessors).mkDocument(doc"")
+              val privateMethodAccessors = methods.filter(td =>
+                td.dSym.isPrivate && privateAccessorSymbols.contains(td.dSym)
+              ).flatMap: td =>
+                doc" # ${mtdPrefix}get [${scope.lookup_!(getPrivateAccessorSymbol(td.dSym), td.dSym.toLoc)}]() { return ${
+                    termSymOwnerQual(td.dSym)
+                  }${
+                    selectPrivateField(td.dSym, td.dSym.toLoc).get
+                  }; }" :: Nil
+              (privDecls ::: accessors ::: privateAccessors ::: privateMethodAccessors).mkDocument(doc"")
             
             val modDoc = modo match
               case N => doc""
               case S(mod) =>
                 val (thisProxy, res) = outerScope.nestRebindThis(S(mod.isym)):
                   val mtdPrefix = "static "
-                  val privs = mkPrivs(mod.publicFields, mod.privateFields, mtdPrefix, mod.isym)
+                  val privs = mkPrivs(mod.publicFields, mod.privateFields, mod.methods, mtdPrefix, mod.isym)
                   val ctorCode = if mod.ctor.isEmpty then doc"" else doc" # static " :: braced:
                     body(mod.ctor, endSemi = true)
                   privs :: ctorCode :: {
-                    mkMethods(mod.methods, mtdPrefix)
+                    mkMethods(mod.methods, mtdPrefix, mod.isym)
                   }
                 // * Note that `thisProxy` might be defined at this point,
                 // * if the module accesses the self-reference of an outer definition.
@@ -502,7 +532,7 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
             
             val mtdPrefix = ""
             
-            val privs = mkPrivs(pubFlds, privFlds, mtdPrefix, isym)
+            val privs = mkPrivs(pubFlds, privFlds, mtds, mtdPrefix, isym)
             
             val isSingleton = (kind is syntax.Obj) || (kind is syntax.Pat)
             
@@ -555,21 +585,24 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
                   if checkSelections
                   then mtds
                     .flatMap:
-                      case td @ FunDefn(params = ps :: pss, body = bod) => S:
-                        doc" # get ${td.sym.nme}$$__checkNotMethod() { ${
-                          runtimeVar
-                        }.deboundMethod(${makeStringLiteral(td.sym.nme)}, ${
-                          makeStringLiteral(sym.nme)
-                        }); }"
+                      case td @ FunDefn(params = ps :: pss, body = bod) =>
+                        softAssert(td.dSym.isPrivate === (td.visibility is Visibility.Private),
+                          s"Mismatched visibility for ${td.sym.nme}: ${td.dSym.isPrivate} vs ${td.visibility}")
+                        if td.dSym.isPrivate then N else S:
+                          doc" # get ${td.sym.nme}$$__checkNotMethod() { ${
+                            runtimeVar
+                          }.deboundMethod(${makeStringLiteral(td.sym.nme)}, ${
+                            makeStringLiteral(sym.nme)
+                          }); }"
                       case _ => N
                     .mkDocument(" ")
                   else doc""
                 } :: {
-                  mkMethods(mtds, mtdPrefix)
+                  mkMethods(mtds, mtdPrefix, isym)
                 } :: {
                   // * If this class has a `toString` implementation, then delegate
                   // * `prettyPrint` to `toString`.
-                  if mtds.exists(_.sym.nme == "toString") then doc""" # [${
+                  if mtds.exists(td => td.sym.nme == "toString" && !td.dSym.isPrivate) then doc""" # [${
                     scope.lookup_!(State.prettyPrintSymbol, N)
                   }]() { return this.toString(); }"""
                   // * Call the `render` function in the default `toString` method.
@@ -636,7 +669,7 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
       
       doc" # $resJS"
       
-    case Return(Value.Lit(UnitLit(false))) => doc" # return${mkSemi}"
+    case Return(Value.Lit(UnitLit(false))) => doc" # return $runtimeVar.Unit$mkSemi"
     case Return(res) => doc" # return ${result(res)}${mkSemi}"
     
     case Match(scrut, Nil, els, rest) =>
@@ -795,6 +828,9 @@ class JSBuilder(using Config, TL, State, Ctx) extends CodeBuilder:
       case _ => blk.subBlocks.foreach(go)
     go(p.main)
   
+  // * TODO: make JSBuilder never raise;
+  // *    Currently, it may raise if the IR is invalid (symbol not defined).
+  // *    Instead, run an IR well-formedness checking pass before the backend codegen.
   def program(p: Program, exprt: Opt[BlockMemberSymbol], wd: io.Path)(using Raise, Scope): Document =
     scope.allocateName(State.definitionMetadataSymbol)
     scope.allocateName(State.prettyPrintSymbol)

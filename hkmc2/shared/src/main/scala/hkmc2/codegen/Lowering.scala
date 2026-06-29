@@ -136,11 +136,25 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
   )
 
   lazy val unreachableFn =
-    Select(State.runtimeSymbol.asSimpleRef, Tree.Ident("unreachable"))(S(State.unreachableSymbol))
+    Select(State.runtimeSymbol.asSimpleRef, Tree.Ident("unreachable"))(S(State.unreachableSymbol))(false)
   
   def unit: Path =
-    Select(State.runtimeSymbol.asSimpleRef, Tree.Ident("Unit"))(S(State.unitSymbol))
+    Select(State.runtimeSymbol.asSimpleRef, Tree.Ident("Unit"))(S(State.unitSymbol))(false)
   
+  private def memberIdent(nme: Tree.Ident, sym: Opt[MemberSymbol]): Tree.Ident =
+    sym match
+    case S(sym) =>
+      new Tree.Ident(sym.nme).withLocOf(nme)
+    case N =>
+      symbolicSuffixBase(nme.name) match
+      case S(base) =>
+        new Tree.Ident(base).withLocOf(nme)
+      case N =>
+        nme
+
+  private def definitionIdent(nme: Tree.Ident, sym: DefinitionSymbol[?]): Tree.Ident =
+    new Tree.Ident(sym.nme).withLocOf(nme)
+
   // type Rcd = (mut: Bool, args: List[RcdArg]) // * Better, but Scala's patmat exhaustiveness chokes on it
   type Rcd = (Bool, List[RcdArg])
   
@@ -531,19 +545,19 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
       WarningReport(msg"Pure expression in statement position" -> loc :: Nil, extraInfo,
         source = Diagnostic.Source.Compilation)
 
-  private def assignSymbol(sym: Symbol, rhs: Result, rest: Block, loco: Opt[Loc])(using LoweringCtx): Block =
+  private def assignSymbol(target: Symbol, diagnostic: Symbol, rhs: Result, rest: Block, loco: Opt[Loc])(using LoweringCtx): Block =
     def nope = fail:
       ErrorReport(
-        msg"Cannot assign to ${sym match
+        msg"Cannot assign to ${diagnostic match
             case sym: BlockMemberSymbol => sym.describe
             case sym => "symbol"
-          } '${sym.nme}'" -> loco
-          :: sym.toLoc.match
+          } '${diagnostic.nme}'" -> loco
+          :: diagnostic.toLoc.match
             case s @ S(_) => msg"Defined here:" -> s :: Nil
             case N => Nil,
         source = Diagnostic.Source.Compilation,
-        extraInfo = S(sym.getClass))
-    sym match
+        extraInfo = S(target.getClass))
+    target match
     case sym: TermSymbol if (sym.k is MutVal) || (sym.k is LetBind) =>
       sym.owner match
       case S(owner) => AssignField(owner.asThis, sym.id, rhs, rest)(S(sym))
@@ -647,7 +661,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
           // * With the current Elaborator semantics, selections are already inserted for most things;
           // * the current case can only happen if `td` is a let binding defined in some object owner.
           softAssert(td.k is syntax.LetBind, s"Expected a let binding, got a ${td.k.str} ($td)")
-          return k(Select(owner.asThis, td.tsym.id)(S(td.tsym)).withLocOf(ref))
+          return k(Select(owner.asThis, td.tsym.id)(S(td.tsym))(false).withLocOf(ref))
         case N => ()
       case S(_) => ()
       case N => () // TODO panic here; can only lower refs to elab'd symbols
@@ -655,7 +669,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
       sym.owner match
       case S(owner) =>
         warnStmt
-        val sel = Select(owner.asThis, sym.id)(S(sym))
+        val sel = Select(owner.asThis, sym.id)(S(sym))(false)
         return k(sel.withLocOf(ref))
       case N => ()
     case _ => ()
@@ -879,16 +893,16 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
       // * are preserved in the call and not moved to a temporary variable.
       case sel @ Sel(prefix, nme) =>
         subTerm(prefix): p =>
-          conclude(Select(p, nme)(N).withLocOf(sel))
+          conclude(Select(p, nme)(N)(false).withLocOf(sel))
       case Resolved(sel @ Sel(prefix, nme), sym) =>
         subTerm(prefix): p =>
-          conclude(Select(p, nme)(S(sym)).withLocOf(sel))
+          conclude(Select(p, definitionIdent(nme, sym))(S(sym))(false).withLocOf(sel))
       case sel @ SelProj(prefix, _, nme) =>
         subTerm(prefix): p =>
-          conclude(Select(p, nme)(N).withLocOf(sel))
+          conclude(Select(p, nme)(N)(false).withLocOf(sel))
       case Resolved(sel @ SelProj(prefix, _, nme), sym) =>
         subTerm(prefix): p =>
-          conclude(Select(p, nme)(S(sym)).withLocOf(sel))
+          conclude(Select(p, definitionIdent(nme, sym))(S(sym))(false).withLocOf(sel))
       case _ => subTerm(baseF)(conclude)
     case h @ Handle(lhs, rhs, as, cls, defs, bod) =>
       if !lowerHandlers then
@@ -916,18 +930,33 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
             k(resSym.asSimpleRef))
     case st.Blk(sts, res) => block(sts, R(res), inStmtPos = inStmtPos)(k)
     case Assgn(lhs, rhs) =>
-      lhs match
+      // * An assignment LHS is an l-value: normal term lowering would read the
+      // * selected field, possibly with access instrumentation, while here we
+      // * need the selected prefix/name/symbol in order to emit `AssignField`.
+      // * Still, resolver expansions matter: `Resolved(lhs, sym)` carries the
+      // * disambiguated member symbol needed for private fields and overloads.
+      val (target, resolvedSelectionSymbol) = lhs.instantiated match
+        case Resolved(inner, sym) => inner -> S(sym)
+        case target => target -> N
+      target match
       case Ref(sym) =>
         subTerm(rhs): r =>
-          assignSymbol(sym, r, k(unit), trm.toLoc)
-      case sel @ SynthSel(prefix, nme) =>
-        subTerm(prefix): p =>
-          subTerm_nonTail(rhs): r =>
-            AssignField(p, nme, r, k(unit))(sel.sym)
+          assignSymbol(resolvedSelectionSymbol.getOrElse(sym), sym, r, k(unit), trm.toLoc)
       case sel @ Sel(prefix, nme) =>
         subTerm(prefix): p =>
           subTerm_nonTail(rhs): r =>
-            AssignField(p, nme, r, k(unit))(sel.sym)
+            AssignField(p, nme, r, k(unit))(resolvedSelectionSymbol)
+      case sel @ SynthSel(prefix, nme) =>
+        // * See the doc in the `term` case for `SynthSel` for why we fall back to `sel.sym` here
+        val sym = resolvedSelectionSymbol match
+          case S(sym) => S(sym)
+          case N => sel.sym match
+            case S(sym: DefinitionSymbol[?]) => S(sym)
+            case _ => N
+        softAssert(sym.nonEmpty, s"Missing symbol for synthetic assignment target ${sel.showDbg}")
+        subTerm(prefix): p =>
+          subTerm_nonTail(rhs): r =>
+            AssignField(p, memberIdent(nme, sel.sym), r, k(unit))(sym)
       case sel @ DynSel(prefix, fld, ai) =>
         subTerm(prefix): p =>
           subTerm_nonTail(fld): f =>
@@ -936,7 +965,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
       case sel @ SelProj(prefix, _, proj) =>
         subTerm(prefix): p =>
           subTerm_nonTail(rhs): r =>
-            AssignField(p, proj, r, k(unit))(sel.sym)
+            AssignField(p, memberIdent(proj, sel.sym), r, k(unit))(resolvedSelectionSymbol)
       case _ => fail:
         ErrorReport(
           msg"Unexpected left-hand side in assignment (${lhs.describe})" -> lhs.toLoc :: Nil, S(lhs),
@@ -959,6 +988,8 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
     case iftrm: st.IfLike => ucs.Normalization(this)(iftrm)(k)
     
     case iftrm: st.SynthIf => ucs.Normalization(this)(iftrm)(k)
+
+    case whltrm: st.SynthWhile => ucs.Normalization(this)(whltrm)(k)
       
     case sel @ Sel(prefix, nme) =>
       setupSelection(prefix, nme, N)(k)
@@ -967,14 +998,20 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
     
     case sel @ SynthSel(prefix, nme) =>
       // * Not using `setupSelection` as these selections are not meant to be sanity-checked
+      // * Unlike source `Sel`s, compiler-synthesized selections may carry a known
+      // * member symbol directly in `sel.sym` without being wrapped in `Resolved`.
+      // * This reflects the current IR convention: `sel.sym` records the selected
+      // * member/representative, while `Resolved(sel, sym)` records a disambiguated
+      // * definition when one exists. Do not use this fallback for ordinary `Sel`
+      // * lowering unless that convention is changed at the source.
       subTerm(prefix): p =>
-        k(Select(p, nme)(sel.sym.collect:
+        k(Select(p, memberIdent(nme, sel.sym))(sel.sym.collect:
           case s: DefinitionSymbol[?] => s
-        ))
+        )(false))
     case Resolved(sel @ SynthSel(prefix, nme), sym) =>
       // * Not using `setupSelection` as these selections are not meant to be sanity-checked
       subTerm(prefix): p =>
-        k(Select(p, nme)(S(sym)))
+        k(Select(p, definitionIdent(nme, sym))(S(sym))(false))
     
     case DynSel(prefix, fld, ai) =>
       subTerm(prefix): p =>
@@ -1020,17 +1057,17 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
     case Resolved(inner, sym) => TODO(s"lowering for Resolved($inner)")
     case Region(reg, body) =>
       loweringCtx.collectScopedSym(reg)
-      Assign(reg, Instantiate(mut = true, Select(State.globalThisSymbol.asThis, Tree.Ident("Region"))(N), Nil :: Nil)(InstantiateMetadata.empty),
+      Assign(reg, Instantiate(mut = true, Select(State.globalThisSymbol.asThis, Tree.Ident("Region"))(N)(false), Nil :: Nil)(InstantiateMetadata.empty),
         term_nonTail(body)(k))
     case RegRef(reg, value) =>
       plainArgs(reg :: value :: Nil): args =>
-        k(Instantiate(mut = true, Select(State.globalThisSymbol.asThis, Tree.Ident("Ref"))(N), args :: Nil)(InstantiateMetadata.empty))
+        k(Instantiate(mut = true, Select(State.globalThisSymbol.asThis, Tree.Ident("Ref"))(N)(false), args :: Nil)(InstantiateMetadata.empty))
     case Drop(ref) =>
       subTerm(ref): _ =>
         k(unit)
     case Deref(ref) =>
       subTerm(ref): r =>
-        k(Select(r, Tree.Ident("value"))(N))
+        k(Select(r, Tree.Ident("value"))(N)(false))
     case SetRef(lhs, rhs) =>
       subTerm(lhs): ref =>
         subTerm_nonTail(rhs): value =>
@@ -1231,11 +1268,15 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
           val cfgOverride = td.extraAnnotations.collectFirst:
             case Annot.Config(modify) => modify(config)
           FunDefn(td.owner, td.sym, td.tsym, paramLists, bodyBlock)(cfgOverride, td.annotations)
-    val publicFlds = clsBody.publicFlds.map(f => f.sym -> f.tsym)
+    val publicFlds = clsBody.publicFlds.collect:
+      case f if !f.tsym.isPrivate =>
+        f.sym -> f.tsym
     val privateFlds = clsBody.nonMethods.collect:
       case decl @ LetDecl(sym: TermSymbol, annotations) =>
         reportAnnotations(decl, annotations)
         sym
+      case td: TermDefinition if td.tsym.isPrivate =>
+        td.tsym
     val ctor =
       inScopedBlock:
         term_nonTail(Blk(clsBody.nonMethods, clsBody.blk.res), inStmtPos = true)(Assign.discard(_, End()))
@@ -1336,28 +1377,14 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
     val etaExpanded =
       EtaExpansion(Program(imps.map(imp => imp.sym -> imp.str), deforested)).main
     
-    val handlerPaths = new HandlerPaths
-    
-    val shouldFlattenScopes = config.effectHandlers.isDefined
-    
-    val scopeFlattened =
-      if shouldFlattenScopes then ScopeFlattener().applyBlock(etaExpanded)
+    val lifted =
+      if lift then Lifter(etaExpanded).transform
       else etaExpanded
     
-    val lifted =
-      if lift then Lifter(scopeFlattened).transform
-      else scopeFlattened
+    val withHandlers = config.effectHandlers.fold(lifted): opt =>
+      HandlerLowering(new HandlerPaths, opt).translateTopLevel(lifted)
     
-    val (withHandlers2, stackSafetyInfo) = config.effectHandlers.fold((lifted, Map.empty)): opt =>
-      HandlerLowering(handlerPaths, opt).translateTopLevel(lifted)
-    
-    val stackSafe = config.stackSafety match
-      case N => withHandlers2
-      case S(sts) => StackSafeTransform(sts.stackLimit, handlerPaths, stackSafetyInfo).transformTopLevel(withHandlers2)
-    
-    val flattened = stackSafe.flattened
-    
-    val bufferable = BufferableTransform().transform(flattened)
+    val bufferable = BufferableTransform().transform(withHandlers.flattened)
     
     // * TODO[Anto]: Can we remove MergeMatchArmTransformer? Seems no longer necessary
     val merged = MergeMatchArmTransformer.applyBlock(bufferable)
@@ -1382,7 +1409,11 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
   
   def setupSelection(prefix: Term, nme: Tree.Ident, disamb: Opt[DefinitionSymbol[?]])(k: Result => Block)(using LoweringCtx): Block =
     subTerm(prefix): p =>
-      k(Select(p, nme)(disamb))
+      k(Select(p, disamb.fold(memberIdent(nme, N))(definitionIdent(nme, _)))(disamb)(
+        !disamb.isDefined
+        // * ^ We assume that resolved selections are well-behaved (will not yield undefined or debind a method)
+        // || disamb.exists(_.defn.exists(_.hasDeclareModifier.isEmpty)) // * This checks `declare` members, which is normally unwanted
+      ))
   
   final def setupFunctionOrByNameDef(paramLists: List[ParamList], bodyTerm: Term, name: Option[Str])
       (using LoweringCtx): (List[ParamList], Block) =
@@ -1414,10 +1445,11 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
         case N => WarningReport(msg"This annotation has no effect." -> annot.toLoc :: Nil)
     annotations.foreach:
       case Annot.Untyped => ()
-      case a @ (Annot.TailRec | Annot.Inline) =>
+      case a @ (Annot.TailRec | Annot.Inline | Annot.NoInline) =>
         val annot = a match
           case Annot.TailRec => "@tailrec"
           case Annot.Inline => "@inline"
+          case Annot.NoInline => "@noInline"
         target match
           case TermDefinition(body = S(bod), k = syntax.Fun) => ()
           case TermDefinition(k = syntax.Fun) => warn(a, S(msg"Only functions with a body may be marked as $annot."))
@@ -1452,39 +1484,13 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
         case _ => warn(a)
       case annot => warn(annot)
 
-trait LoweringSelSanityChecks(using Config, TL, Raise, State)
-    extends Lowering:
-  
-  private val instrument: Bool = config.sanityChecks.isDefined
-  
-  override def setupSelection(prefix: st, nme: Tree.Ident, disamb: Opt[DefinitionSymbol[?]])(k: Result => Block)(using LoweringCtx): Block =
-    if !instrument
-    // || disamb.exists(_.defn.exists(_.hasDeclareModifier.isEmpty)) // * This checks `declare` members, which is normally unwanted
-    || disamb.isDefined
-    // * ^ We assume that resolved selections are well-behaved (will not yield undefined or debind a method)
-    then super.setupSelection(prefix, nme, disamb)(k)
-    else subTerm(prefix): p =>
-      val selRes = loweringCtx.registerTempSymbol(N, "selRes")
-      // * We are careful to access `x.f` before `x.f$__checkNotMethod` in case `x` is, eg, `undefined` and
-      // * the access should throw an error like `TypeError: Cannot read property 'f' of undefined`.
-      blockBuilder
-        .assign(selRes, Select(p, nme)(disamb))
-        .assign(NoSymbol, Select(p, Tree.Ident(nme.name+"$__checkNotMethod"))(N))
-          .ifthen(selRes.asSimpleRef,
-            Case.Lit(syntax.Tree.UnitLit(false)),
-            Throw(Instantiate(mut = false, Select(State.globalThisSymbol.asThis, Tree.Ident("Error"))(N),
-              (Value.Lit(syntax.Tree.StrLit(s"Access to required field '${nme.name}' yielded 'undefined'")).asArg :: Nil) :: Nil)(InstantiateMetadata.empty))
-          )
-          .rest(k(selRes.asSimpleRef))
-
-
 
 trait LoweringTraceLog(instrument: Bool)(using TL, Raise, State)
     extends Lowering:
   
   private def selFromGlobalThis(path: Str*): Path =
       path.foldLeft[Path](State.globalThisSymbol.asThis):
-        (qual, name) => Select(qual, Tree.Ident(name))(N)
+        (qual, name) => Select(qual, Tree.Ident(name))(N)(false)
     
   private def assignStmts(stmts: (Assignable, Result)*)(rest: Block) =
     stmts.foldRight(rest):
@@ -1573,18 +1579,13 @@ object TrivialStatementsAndMatch:
         val newR = k.getOrElse(identity: Block => Block)(r)
         assign(newR)
       S(S(newK), m)
-    
     b match
-      case m: Match => S(N, m)
-      case Assign(lhs, rhs: Path, TrivialStatementsAndMatch(k, m)) =>
-        handleAssignAndMatch(r => Assign(lhs, rhs, r), m, k)
-      case a@AssignField(lhs, nme, rhs: Path, TrivialStatementsAndMatch(k, m)) =>
-        handleAssignAndMatch(r => AssignField(lhs, nme, rhs, r)(a.symbol), m, k)
-      case AssignDynField(lhs, fld, arrayIdx, rhs: Path, TrivialStatementsAndMatch(k, m)) =>
-        handleAssignAndMatch(r =>  AssignDynField(lhs, fld, arrayIdx, rhs, r), m, k)
-      case Define(defn, TrivialStatementsAndMatch(k, m)) => 
-        handleAssignAndMatch(r => Define(defn, r), m, k)
-      case _ => N
+    case m: Match => S(N, m)
+    case Assign(lhs, rhs, TrivialStatementsAndMatch(k, m)) if rhs.isPure =>
+      handleAssignAndMatch(r => Assign(lhs, rhs, r), m, k)
+    case Define(defn, TrivialStatementsAndMatch(k, m)) if defn.isPure =>
+      handleAssignAndMatch(r => Define(defn, r), m, k)
+    case _ => N
 
 
 object MergeMatchArmTransformer extends BlockTransformer(SymbolSubst.Id):

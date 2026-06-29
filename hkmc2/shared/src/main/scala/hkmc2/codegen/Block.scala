@@ -141,9 +141,9 @@ sealed abstract class Block extends Product:
       rst.isAbortive
     case Scoped(_, body) => body.isAbortive
   
-  // * Note: it seems most historical uses of `definedVars` would be better removed,
-  // * now that we properly put everything in proper Scoped blocks;
-  // * and `definedVars` itself should be removed.
+  // * Note: this function is only for rather fringe use-cases in the optimizer;
+  // * it should not be used for scope analysis purposes
+  // * (like it used to before we added Scoped blocks).
   lazy val definedVars: Set[BoundSymbol] = this match
     case _: Return | _: Throw | _: Unreachable => Set.empty
     case Begin(sub, rst) => sub.definedVars ++ rst.definedVars
@@ -161,7 +161,7 @@ sealed abstract class Block extends Product:
       if defn.isOwned then rest else rest + defn.sym
     case TryBlock(sub, fin, rst) => sub.definedVars ++ fin.definedVars ++ rst.definedVars
     case Label(lbl, _, bod, rst) => bod.definedVars ++ rst.definedVars
-    case Scoped(syms, body) => body.definedVars ++ syms
+    case Scoped(syms, body) => body.definedVars -- syms
   
   lazy val size: Int = 1 + this.match
     case Return(r: Result) => r.size
@@ -208,6 +208,10 @@ sealed abstract class Block extends Product:
     case Scoped(syms, body) => body.freeVars -- syms
     case End(msg) => Set.empty
     case Unreachable(msg) => Set.empty
+  
+  lazy val scopedVars: collection.Set[ScopedSymbol] = this match
+    case Scoped(syms, body) => syms ++ body.scopedVars
+    case _ => this.subBlocks.iterator.flatMap(_.scopedVars).toSet
   
   lazy val subBlocks: Ls[Block] = this match
     case Match(p, arms, dflt, rest) => p.subBlocks ++ arms.map(_._2) ++ dflt.toList :+ rest
@@ -667,6 +671,7 @@ final case class FunDefn(
   val asPath = sym.asMemberRef(dSym)
   lazy val tailRec: Bool = annotations.contains(Annot.TailRec)
   lazy val inline: Bool = annotations.contains(Annot.Inline)
+  lazy val noInline: Bool = annotations.contains(Annot.NoInline)
   lazy val visibility: Visibility = annotations.collectFirst:
     case Annot.Modifier(Keyword.`private`) => Visibility.Private
     case Annot.Modifier(Keyword.`public`) => Visibility.Public
@@ -992,6 +997,7 @@ object Call:
   private inline def evalBuiltin(sym: BuiltinSymbol, arg1: Value, arg2: Value)(inline k: Value => Unit): Unit =
     (sym.nme, arg1, arg2) match
     case ("+", Lit(Tree.IntLit(v1)), Lit(Tree.IntLit(v2))) => k(Lit(Tree.IntLit(v1 + v2)))
+    case ("+", Lit(Tree.StrLit(v1)), Lit(Tree.StrLit(v2))) => k(Lit(Tree.StrLit(v1 + v2)))
     case ("-", Lit(Tree.IntLit(v1)), Lit(Tree.IntLit(v2))) => k(Lit(Tree.IntLit(v1 - v2)))
     case ("*", Lit(Tree.IntLit(v1)), Lit(Tree.IntLit(v2))) => k(Lit(Tree.IntLit(v1 * v2)))
     // * For "/", should check for 0 and return a DecLit.
@@ -1035,8 +1041,8 @@ case class Record(mut: Bool, elems: Ls[RcdArg]) extends Result
 
 
 sealed abstract class Path extends TrivialResult:
-  def selN(id: Tree.Ident): Path = Select(this, id)(N)
-  def sel(id: Tree.Ident, sym: DefinitionSymbol[?]): Path = Select(this, id)(S(sym))
+  def selN(id: Tree.Ident): Path = Select(this, id)(N)(false)
+  def sel(id: Tree.Ident, sym: DefinitionSymbol[?]): Path = Select(this, id)(S(sym))(false)
   def selSN(id: Str): Path = selN(new Tree.Ident(id))
   def asArg = Arg(spread = N, this)
   def targetSymbol: Opt[DefinitionSymbol[?]] = this match
@@ -1047,7 +1053,7 @@ sealed abstract class Path extends TrivialResult:
 /**
  * @param symbol The symbol representing the definition that the selection refers to, if known.
  */
-case class Select(qual: Path, name: Tree.Ident)(val symbol: Opt[DefinitionSymbol[?]]) extends Path with ProductWithExtraInfo:
+case class Select(qual: Path, name: Tree.Ident)(val symbol: Opt[DefinitionSymbol[?]])(val sanitize: Boolean) extends Path with ProductWithExtraInfo:
   def extraInfo(using DebugPrinter): Str = symbol.map(s => s"sym=${s.showAsPlain}").mkString
 
 case class DynSelect(qual: Path, fld: Path, arrayIdx: Bool) extends Path

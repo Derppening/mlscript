@@ -15,8 +15,10 @@ import BracketKind.*
 import Term.{ Blk, Rcd }
 import hkmc2.Message.MessageContext
 
-import Keyword.{`let`, `set`}
+import Keyword.{`and`, `case`, `do`, `else`, `if`, `is`, `let`, `or`, `set`, `then`, `while`}
 import hkmc2.utils.Scope
+import SimpleSplit.*
+import ucs.{error, unapply}
 
 
 object Elaborator:
@@ -276,6 +278,7 @@ object Elaborator:
         val tailrec = assumeObject("tailrec")
         val tailcall = assumeObject("tailcall")
         val inline = assumeObject("inline")
+        val noInline = assumeObject("noInline")
         val compile = assumeObject("compile")
         val buffered = assumeObject("buffered")
         val bufferable = assumeObject("bufferable")
@@ -324,16 +327,92 @@ object Elaborator:
   
   transparent inline def ctx(using Ctx): Ctx = summon
   
+  final case class RuntimeSymbols(
+      unit: ModuleOrObjectSymbol,
+      loopEnd: ModuleOrObjectSymbol,
+      tuple: ModuleOrObjectSymbol,
+      str: ModuleOrObjectSymbol,
+      unreachable: TermSymbol,
+      tupleGet: TermSymbol,
+      tupleSlice: TermSymbol,
+      tupleLazySlice: TermSymbol,
+      strStartsWith: TermSymbol,
+      strGet: TermSymbol,
+      strTake: TermSymbol,
+      strLeave: TermSymbol,
+      matchSuccessCls: ClassSymbol,
+      matchSuccessTrm: TermSymbol,
+      matchFailureCls: ClassSymbol,
+      matchFailureTrm: TermSymbol,
+  )
+
+  object RuntimeSymbols:
+    def fromBlock(blk: Term.Blk): RuntimeSymbols =
+      val topLevelMembers = ObjBody.extractMembers(blk) match
+        case R(members) => members
+        case L(errs) =>
+          lastWords:
+            errs.map(_.mainMsg).mkString("\n")
+      val members =
+        topLevelMembers
+          .get("Runtime")
+          .flatMap(_.asMod)
+          .flatMap(_.defn)
+          .fold(lastWords("Runtime.mls does not define module 'Runtime'."))(_.body.members)
+      def member(name: Str): BlockMemberSymbol =
+        members.getOrElse(name, lastWords(s"Runtime.mls does not define member '$name'."))
+      def term(name: Str): TermSymbol =
+        member(name).asTrm.getOrElse(lastWords(s"Runtime.mls member '$name' is not a term."))
+      def cls(name: Str): ClassSymbol =
+        member(name).asCls.getOrElse(lastWords(s"Runtime.mls member '$name' is not a class."))
+      def modOrObj(name: Str): ModuleOrObjectSymbol =
+        member(name).asModOrObj.getOrElse(lastWords(s"Runtime.mls member '$name' is not a module or object."))
+      def moduleMember(module: ModuleOrObjectSymbol, memberName: Str): TermSymbol =
+        module.defn
+          .flatMap(_.body.members.get(memberName))
+          .flatMap(_.asTrm)
+          .getOrElse(lastWords(s"Runtime.mls module '${module.nme}' does not define term '$memberName'."))
+
+      val tuple = modOrObj("Tuple")
+      val str = modOrObj("Str")
+      RuntimeSymbols(
+        unit = modOrObj("Unit"),
+        loopEnd = modOrObj("LoopEnd"),
+        tuple = tuple,
+        str = str,
+        unreachable = term("unreachable"),
+        tupleGet = moduleMember(tuple, "get"),
+        tupleSlice = moduleMember(tuple, "slice"),
+        tupleLazySlice = moduleMember(tuple, "lazySlice"),
+        strStartsWith = moduleMember(str, "startsWith"),
+        strGet = moduleMember(str, "get"),
+        strTake = moduleMember(str, "take"),
+        strLeave = moduleMember(str, "leave"),
+        matchSuccessCls = cls("MatchSuccess"),
+        matchSuccessTrm = term("MatchSuccess"),
+        matchFailureCls = cls("MatchFailure"),
+        matchFailureTrm = term("MatchFailure"),
+      )
+
   class State:
     val suid = new Uid.Symbol.State
     given State = this
     val globalThisSymbol = TopLevelSymbol("globalThis")
-    val unitSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Obj), Ident("Unit"))
+    private var cachedRuntimeSymbols: Opt[RuntimeSymbols] = N
+    def initRuntimeSymbolsFromBlock(blk: Term.Blk): Unit =
+      cachedRuntimeSymbols = S(RuntimeSymbols.fromBlock(blk))
+    def initRuntimeSymbolsFromFile(file: io.Path, prelude: Ctx)(using TL, Raise, Config, CompilerCtx): Unit =
+      if cachedRuntimeSymbols.isEmpty then
+        cachedRuntimeSymbols = S(RuntimeSymbols.fromBlock(CompilerCtx.get.getElaboratedBlock(file, prelude).term))
+    private def runtimeSymbols: RuntimeSymbols =
+      cachedRuntimeSymbols.getOrElse:
+        lastWords("Runtime symbols have not been initialized from Runtime.mls.")
+    def unitSymbol: ModuleOrObjectSymbol = runtimeSymbols.unit
     // Stable symbol for the synthetic Wasm Unit singleton
     val unitBlockMemberSymbol = BlockMemberSymbol("Unit", Nil)
-    val loopEndSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Obj), Ident("LoopEnd"))
-    val tupleSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Mod), Ident("Tuple"))
-    val strSymbol = ModuleOrObjectSymbol(DummyTypeDef(syntax.Mod), Ident("Str"))
+    def loopEndSymbol: ModuleOrObjectSymbol = runtimeSymbols.loopEnd
+    def tupleSymbol: ModuleOrObjectSymbol = runtimeSymbols.tuple
+    def strSymbol: ModuleOrObjectSymbol = runtimeSymbols.str
     // In JavaScript, `import` can be used for getting current file path, as `import.meta`
     val importSymbol = new VarSymbol(Ident("import"))
     val noSymbol = NoSymbol
@@ -354,46 +433,18 @@ object Elaborator:
     val nonLocalRet =
       val id = new Ident("ret")
       BlockMemberSymbol(id.name, Nil, true)
-    val unreachableSymbol = TermSymbol(syntax.ImmutVal, N, new Ident("unreachable"))
-    val tupleGetSymbol =
-      createFunSymbolInMod("get", "xs" :: "i" :: Nil, tupleSymbol, mayRaiseEffects = false)
-    val tupleSliceSymbol =
-      createFunSymbolInMod("slice", "xs" :: "i" :: "j" :: Nil, tupleSymbol, mayRaiseEffects = false)
-    val tupleLazySliceSymbol =
-      createFunSymbolInMod("lazySlice", "xs" :: "i" :: "j" :: Nil, tupleSymbol)
-    val strStartsWithSymbol =
-      createFunSymbolInMod("startsWith", "string" :: "prefix" :: Nil, strSymbol)
-    val strGetSymbol =
-      createFunSymbolInMod("get", "string" :: "i" :: Nil, strSymbol)
-    val strTakeSymbol =
-      createFunSymbolInMod("take", "string" :: "n" :: Nil, strSymbol)
-    val strLeaveSymbol =
-      createFunSymbolInMod("leave", "string" :: "n" :: Nil, strSymbol)
-    val (matchSuccessClsSymbol, matchSuccessTrmSymbol) =
-      val id = new Ident("MatchSuccess")
-      val td = TypeDef(syntax.Cls, App(id, Tup(Ident("output") :: Ident("bindings") :: Nil)), N)
-      val cs = ClassSymbol(td, id)
-      val ts = TermSymbol(syntax.Fun, N, id)
-      val flag = FldFlags.empty.copy(isVal = true)
-      val ps = PlainParamList(
-        Param(flag, VarSymbol(Ident("output")), N, Modulefulness(N)(false)) ::
-        Param(flag, VarSymbol(Ident("bindings")), N, Modulefulness(N)(false)) ::
-        Nil)
-      val ctsym = ClassCtorSymbol(Fun, N/* note: no owner isn't quite right */, cs)
-      cs.defn = S(ClassDef.Parameterized(N, syntax.Cls, cs, BlockMemberSymbol(cs.name, Nil), S(ctsym),
-        Nil, ps, Nil, N, ObjBody(Blk(Nil, Term.Lit(UnitLit(false)))), N, Nil))
-      cs -> ts
-    val (matchFailureClsSymbol, matchFailureTrmSymbol) =
-      val id = new Ident("MatchFailure")
-      val td = DummyTypeDef(syntax.Cls)
-      val cs = ClassSymbol(td, id)
-      val ts = TermSymbol(syntax.Fun, N, id)
-      val flag = FldFlags.empty.copy(isVal = true)
-      val ps = PlainParamList(Param(flag, VarSymbol(Ident("errors")), N, Modulefulness(N)(false)) :: Nil)
-      val ctsym = ClassCtorSymbol(Fun, N/* note: no owner isn't quite right */, cs)
-      cs.defn = S(ClassDef.Parameterized(N, syntax.Cls, cs, BlockMemberSymbol(cs.name, td :: Nil), S(ctsym),
-        Nil, ps, Nil, N, ObjBody(Blk(Nil, Term.Lit(UnitLit(false)))), N, Nil))
-      cs -> ts
+    def unreachableSymbol: TermSymbol = runtimeSymbols.unreachable
+    def tupleGetSymbol: TermSymbol = runtimeSymbols.tupleGet
+    def tupleSliceSymbol: TermSymbol = runtimeSymbols.tupleSlice
+    def tupleLazySliceSymbol: TermSymbol = runtimeSymbols.tupleLazySlice
+    def strStartsWithSymbol: TermSymbol = runtimeSymbols.strStartsWith
+    def strGetSymbol: TermSymbol = runtimeSymbols.strGet
+    def strTakeSymbol: TermSymbol = runtimeSymbols.strTake
+    def strLeaveSymbol: TermSymbol = runtimeSymbols.strLeave
+    def matchSuccessClsSymbol: ClassSymbol = runtimeSymbols.matchSuccessCls
+    def matchSuccessTrmSymbol: TermSymbol = runtimeSymbols.matchSuccessTrm
+    def matchFailureClsSymbol: ClassSymbol = runtimeSymbols.matchFailureCls
+    def matchFailureTrmSymbol: TermSymbol = runtimeSymbols.matchFailureTrm
     val builtinOpsMap =
       val baseBuiltins = builtins.map: op =>
           op -> BuiltinSymbol(op,
@@ -416,17 +467,6 @@ object Elaborator:
     def dbgUid(uid: Uid[Symbol]): Str =
       if dbg then s"‹$uid›" else ""
       // ^ we do not display the uid by default to avoid polluting diff-test outputs
-    // Create a term symbol for a function defined in the given module
-    private def createFunSymbolInMod
-        (name: Str, paramNames: List[Str], mod: ModuleOrObjectSymbol, mayRaiseEffects: Bool = true) =
-      val sym = TermSymbol(syntax.Fun, N, Ident(name))
-      val bsym = BlockMemberSymbol(name, Nil, true)
-      val ps = PlainParamList(paramNames.map(s => Param.simple(VarSymbol(Ident(s)))))
-      sym.defn = S(TermDefinition(syntax.Fun, bsym, sym, ps :: Nil, N, N, N,
-        TermDefFlags(true), Modulefulness(S(mod))(false),
-        if !mayRaiseEffects then Annot.MayNotRaiseEffects :: Nil else Nil,
-        N))
-      sym
   transparent inline def State(using state: State): State = state
   
   /** Extracts all parameter lists from a `constructor(...)...` declaration.
@@ -458,7 +498,7 @@ import Elaborator.*
 
 class Elaborator(val tl: TraceLogger, val wd: io.Path, val prelude: Ctx)
 (using val raise: Raise, val state: State, val cctx: CompilerCtx, val config: Config)
-extends Importer with ucs.SplitElaborator:
+extends Importer:
   import tl.*
   given TraceLogger = tl
   
@@ -511,6 +551,8 @@ extends Importer with ucs.SplitElaborator:
             return S(Annot.TailRec)
           case ctx.builtins.annotations.inline =>
             return S(Annot.Inline)
+          case ctx.builtins.annotations.noInline =>
+            return S(Annot.NoInline)
           case ctx.builtins.annotations.mayNotRaiseEffects =>
             return S(Annot.MayNotRaiseEffects)
           case _ => ()
@@ -606,6 +648,278 @@ extends Importer with ucs.SplitElaborator:
     if methods.isEmpty then body else
       mkEffectHandleAbortive(nonLocalHandlerSym, "NonLocalLabelEffect", methods, body)
   
+  /** A scrutinee is a function that returns a reference to the symbol. */
+  private type Reference = () => Term.Ref
+  
+  private type Connective = `do`.type | `then`.type
+  
+  private given Ordering[Loc] = Ordering.by(l => (l.spanStart, l.spanEnd))
+  
+  /** Keep track of the locations where `do` and `then` are used as connectives. */
+  private var kwLocSets = (mutable.SortedSet.empty[Loc], mutable.SortedSet.empty[Loc])
+  
+  private def reportInconsistentConnectives(kw: Keywrd[Keyword.SplitLike]): Unit =
+    (kwLocSets._1.headOption, kwLocSets._2.headOption) match
+      case (Some(doLoc), Some(thenLoc)) =>
+        raise(ErrorReport(
+          msg"Mixed use of `do` and `then` in the `${kw.kw.name}` expression." -> kw.toLoc
+            :: msg"Keyword `then` is used here." -> S(thenLoc)
+            :: msg"Keyword `do` is used here." -> S(doLoc) :: Nil
+        ))
+      case _ => ()
+  
+  private def topmostDefault: SimpleSplit =
+    if kwLocSets._1.nonEmpty then Else(Term.UnitVal())(N) else End
+  
+  private object `~>`:
+    infix def unapply(tree: Tree): Opt[(Tree, Tree \/ (Keywrd[Connective], Tree))] = tree match
+      case InfixApp(lhs, Keywrd(`and`), rhs) => S((lhs, L(rhs)))
+      case InfixApp(lhs, kwTree @ Keywrd(kw: `then`.type), rhs) =>
+        kwLocSets._2 ++= kwTree.toLoc
+        S((lhs, R((new Keywrd(kw).withLocOf(kwTree), rhs))))
+      case InfixApp(lhs, kwTree @ Keywrd(kw: `do`.type), rhs) =>
+        kwLocSets._1 ++= kwTree.toLoc
+        S((lhs, R((new Keywrd(kw).withLocOf(kwTree), rhs))))
+      case _ => N
+  
+  private def withScopedConnectives
+      (kw: Keywrd[Keyword.SplitLike])(evaluate: => SimpleSplit): (IfLikeForm, SimpleSplit) =
+    val savedKwLocSets = kwLocSets
+    kwLocSets = (mutable.SortedSet.empty, mutable.SortedSet.empty)
+    val split = evaluate
+    val (result, form) = kw.kw match
+      case `if` | `case` =>
+        (split ~~: topmostDefault,
+          if kwLocSets._1.nonEmpty then IfLikeForm.ImperativeIf else IfLikeForm.ReturningIf)
+      case `while` => (split, IfLikeForm.While)
+    reportInconsistentConnectives(kw)
+    kwLocSets = savedKwLocSets
+    (form, result)
+  
+  /** Transform trees into a UCS split. */
+  protected def split(t: IfLike): Ctxl[Term.IfLike] =
+    val (form, split) = withScopedConnectives(t.kw):
+      t.split match
+      case block: Block => termSplit(block.desugStmts, identity)
+      case other: Tree => termSplit(Ls(other), identity)
+    new Term.IfLike(t.kw.kw, form, split).withLocOf(t)
+  
+  /** Elaborate `case` expressions */
+  protected def caseSplit(scrut: VarSymbol, tree: Case): Ctxl[Term.IfLike] =
+    val (form, split) = withScopedConnectives(tree.kw):
+      patternBranch(() => scrut.ref(), tree.branches, identity)
+    new Term.IfLike(tree.kw.kw, form, split).withLocOf(tree)
+  
+  /** Elaborate shorthand expressions. */
+  protected def shorthandSplit(tree: Tree)(using UnderCtx): Ctxl[SimpleSplit] =
+    val affirmative = Else(Term.Lit(BoolLit(true)))(N)
+    val negative = Else(Term.Lit(BoolLit(false)))(N)
+    val (scrutinee, pattern) :: matches = disaggregate(tree)
+    subterm(scrutinee).reference: scrutinee =>
+      lazy val innerSplit: Ctxl[SimpleSplit] = expandMatches(matches)(affirmative)
+      pattern match
+        case Block(Nil) =>
+          val recordPattern = Pattern.Record(Nil).withLocOf(pattern)
+          Head.Match(scrutinee(), recordPattern, innerSplit) ~: negative
+        case Block(trees) => trees.foldRight(negative):
+          case (pattern, alternative) =>
+            Head.Match(scrutinee(), this.pattern(pattern), innerSplit) ~: alternative
+        case _ =>
+          val firstPattern = this.pattern(pattern)
+          firstPattern.variables.report
+          (ctx ++ firstPattern.variables.allocate).givenIn:
+            Head.Match(scrutinee(), firstPattern, innerSplit) ~: negative
+  
+  /** Desugar a list of trees as a term split. The returned function takes a
+    * function, which takes a `Ctx` and returns a `SimpleSplit` representing
+    * the _alternative_ split, and returns a `SimpleSplit` representing the
+    * split of the given trees. */
+  private def termSplit(ts: Ls[Tree], mk: Term => Term): Ctxl[SimpleSplit] =
+    val (_, splits) = ts.foldLeft((ctx, Ls[SimpleSplit]())):
+      case ((curCtx, splits), t) =>
+        termBranch(t, mk)(using curCtx).mapSecond(_ :: splits)
+    concatenate(splits)
+  
+  /** Concatenate a sequence of splits and report warning for splits that come
+    * after a split which ends with an `else` branch. */
+  private def concatenate(splits: Ls[SimpleSplit]): SimpleSplit =
+    // The first element is a list of branches. The second element is
+    // - `N` if no `else` branch has been found; or
+    // - `S((default, unreachables))` if `default` is the first `else` branch
+    //   in the split and all splits thereafter will be added to `unreachables`.
+    val z: (Ls[Head], Opt[(Else, Ls[SimpleSplit])]) = (Nil, N)
+    val (reachables, elseRest) = splits.reverseIterator.foldLeft(z):
+      // This is the case when we haven't found an `else` branch yet.
+      case ((branches, N), split) =>
+        @tailrec
+        def go(acc: Ls[Head], split: SimpleSplit): (Ls[Head], Opt[Else]) =
+          split match
+            case Cons(branch, tail) => go(branch :: acc, tail)
+            case els: Else => (acc, S(els))
+            case End => (acc, N)
+        go(branches, split).mapSecond(_.map(_ -> (Nil: Ls[SimpleSplit])))
+      case ((branches, S((default, unreachables))), split) =>
+        (branches, S((default, split :: unreachables)))
+    // Report unreachables splits.
+    elseRest match
+      case S((default, unreachables)) =>
+        val messages = unreachables.reverseIterator.map: split =>
+          msg"This branch is unreachable." -> split.toLoc
+        .toList
+        if messages.nonEmpty then
+          raise(WarningReport((msg"This catch-all clause makes the following branches unreachable." -> default.toLoc :: messages)))
+      case N => ()
+    // Reconstruct the split from the reachable `heads`.
+    reachables.foldLeft(elseRest.fold(SimpleSplit.End)(_._1)):
+      case (innerSplit, branch) => branch ~: innerSplit
+  
+  /** Handle the common cases of branches in splits. */
+  private def branch(using Ctx): Cfg[PartialFunction[Tree, (Ctx, SimpleSplit)]] =
+    // Interleaved-`let` bindings like `{ x is A then 0; let x = 1; ... }`.
+    case LetLike(Keywrd(`let`), ident: Ident, S(rhsTree), N) =>
+      val symbol = VarSymbol(ident)
+      val head = Head.Let(symbol, term(rhsTree))
+      ((ctx + (ident.name -> symbol)), head ~: End)
+    // Interleaved-`do` statements like `{ x is A then 0; do log(1); ... }`.
+    case PrefixApp(Keywrd(`do`), rhsTree) =>
+      (ctx, Head.Let(TempSymbol(N, "unused"), term(rhsTree)) ~: End)
+    // Although the `else`-clause marks the end of the split, we cannot
+    // stop and still have to elaborate the remaining trees.
+    case PrefixApp(kwTree @ Keywrd(`else`), elseTree) =>
+      (ctx, Else(term(elseTree))(S(new Keywrd(`else`).withLocOf(kwTree))))
+  
+  private def expandMatches(matchesTree: Ls[TT])(consequent: Ctxl[SimpleSplit]): Ctxl[SimpleSplit] =
+    val z = (ctx, Ls[(Term, Pattern)]())
+    // Elaborate the term and the pattern in each match.
+    val (innerCtx, matches) = matchesTree.foldLeft(z):
+      case ((curCtx, matches), (scrutineeTree, patternTree)) =>
+        val scrutinee = term(scrutineeTree)(using curCtx)
+        val pattern = this.pattern(patternTree)(using curCtx)
+        pattern.variables.report
+        val resCtx = curCtx ++ pattern.variables.allocate
+        (resCtx, (scrutinee, pattern) :: matches)
+    // As `matches` is reversed, we should process it from the left.
+    val split = matches.foldLeft(consequent(using innerCtx)):
+      case (innerSplit, (scrutinee, pattern)) =>
+        scrutinee.reference: scrutineeRef =>
+          Head.Match(scrutineeRef(), pattern, innerSplit) ~: End
+    split
+  
+  private def termBranch(t: Tree, mk: Term => Term): Ctxl[(Ctx, SimpleSplit)] = branch.appOrElse(t):
+    case block: Block => (ctx, termSplit(block.desugStmts, mk))
+    case lhs is rhs => (ctx, mk(term(lhs)).reference(patternBranch(_, rhs, identity)))
+    // Several matches followed by `and`, `do`, or `then`.
+    case matchesTree ~> consequent =>
+      val (coda, patternTree) :: matches = disaggregate(matchesTree)
+      def innerSplit(using ctx: Ctx) = expandMatches(matches):
+        consequent match
+          case L(tree) => termSplit(Ls(tree), identity)
+          case R((kw, tree)) => Else(term(tree))(S(kw))
+      val split = coda match
+        case Under() => innerSplit
+        case coda => mk(term(coda)).reference: scrutinee =>
+          val pattern = this.pattern(patternTree)
+          val innerCtx = ctx ++ pattern.variables.allocate
+          Head.Match(scrutinee(), pattern, innerSplit(using innerCtx)) ~: End
+      (ctx, split)
+    // Handle splits on binary operators.
+    case OpApp(lhs, ident: Ident, rhss) =>
+      val op = term(ident)
+      val split = term(lhs).reference: lhs =>
+        val mk2 = (rhs: Term) =>
+          val args = Term.Tup(PlainFld(lhs()) :: PlainFld(rhs) :: Nil)(DummyTup)
+          Term.App(op, args)(Tree.DummyApp, N, FlowSymbol("‹operator-split›"))
+        termSplit(rhss, mk2 andThen mk)
+      (ctx, split)
+    case OpSplit(lhs, rhss) =>
+      val split = mk(term(lhs)).reference: lhs =>
+        val (_, splits) = rhss.foldLeft((ctx, Ls[SimpleSplit]())):
+          case ((curCtx, splits), t) =>
+            operatorBranch(lhs, t)(using curCtx).mapSecond(_ :: splits)
+        concatenate(splits)
+      (ctx, split)
+    // Unrecognized term split.
+    case _ =>
+      error(msg"Unrecognized term split (${t.describe})" -> t.toLoc)
+      (ctx, End)
+  
+  private def operatorBranch(scrutinee: Reference, rhs: Tree): Ctxl[(Ctx, SimpleSplit)] =
+    branch.appOrElse(rhs): rhsTree =>
+      termBranch(rhsTree.splitOn(Trm(scrutinee())), identity)
+  
+  private def patternBranch(scrutinee: Reference, t: Tree, mk: Tree => Tree): Ctxl[SimpleSplit] = t match
+    case block: Block =>
+      val (_, splits) = block.desugStmts.foldLeft((ctx, Ls[SimpleSplit]())):
+        case ((curCtx, splits), t) =>
+          branch(using curCtx).lift(t).getOrElse:
+            (curCtx, patternBranch(scrutinee, t, mk)(using curCtx))
+          .mapSecond(_ :: splits)
+      concatenate(splits)
+    case App(ctor: ucs.Ctor, Tup(rhss)) =>
+      val nl = (t: Tree) => mk(App(ctor, Tup(t :: Nil)))
+      patternBranch(scrutinee, Block(rhss), nl)
+    case Annotated(annotation, target) =>
+      patternBranch(scrutinee, target, Annotated(annotation, _) |> mk)
+    case patternAndMatches ~> consequentTree =>
+      val (firstPatternTree, _) :: matches = disaggregate(patternAndMatches)
+      val firstPattern = this.pattern(mk(firstPatternTree))
+      firstPattern.variables.report
+      (ctx ++ firstPattern.variables.allocate).givenIn:
+        val split = expandMatches(matches):
+          consequentTree match
+            case L(tree) =>
+              termSplit(Ls(tree), identity)
+            case R((kw, tree)) => Else(term(tree))(S(kw))
+        Head.Match(scrutinee(), firstPattern, split) ~: End
+    case _ =>
+      error(msg"Unrecognized pattern split (${t.describe})." -> t.toLoc)
+      Else(Term.Error().withLocOf(t))(N).withLocOf(t) // To inspect the source of errors.
+  
+  extension (term: Term)
+    private inline def reference(continuation: Reference => SimpleSplit): SimpleSplit =
+      term match
+        // If the term is already a reference, we can re-reference its symbol.
+        case Term.Ref(symbol) => continuation(() => symbol.ref().withLocOf(term))
+        // Otherwise, we need to create a temporary symbol holding the term.
+        case term: Term =>
+          val symbol = TempSymbol(N, "scrut")
+          Head.Let(symbol, term) ~: continuation(() => symbol.ref())
+  
+  private type TT = (Tree, Tree)
+  
+  /** Decompose a `Tree` of conjunct matches. The tree is from the same line in
+   *  the source code and followed by a `then`, or `and` with a continued line.
+   *  A formal definition of the conjunction is:
+   *
+   *  ```bnf
+   *  conjunction ::= conjunction `and` conjunction  # conjunction
+   *                | term `is` pattern              # pattern matching
+   *                | term                           # Boolean condition
+   *  ```
+   *
+   *  Each match is represented by a pair of a _coda_ and a _pattern_ that is
+   *  yet to be elaborated. For boolean conditions, the pattern is a `BoolLit`.
+   *
+   *  This function does not invoke elaboration and the implementation utilizes
+   *  functional lists to avoid calling the `reverse` method on the output,
+   *  which returns type `List[T]` instead of `::[T]`. See paper _A Novel
+   *  Representation of Lists and Its Application to the Function_ for details.
+   *
+   *  @param tree the tree to desugar
+   *  @return a non-empty list of scrutinee and pattern pairs represented in
+   *          type `::[T]` (instead of `List[T]`) so that the head element
+   *          can be retrieved in a type-safe manner
+   */
+  private def disaggregate(tree: Tree): ::[TT] =
+    def go(tree: Tree, acc: TT => ::[TT]): () => ::[TT] = tree match
+      case lhs `and` rhs  => go(lhs, ::(_, go(rhs, acc)()))
+      case lhs `or` rhs   =>
+        error(msg"Logical `or` is not yet supported." -> tree.toLoc)
+        go(lhs, ::(_, go(rhs, acc)())) // FIXME: this is currently copy-pasted from the `and` case
+      case scrut `is` pat => () => acc((scrut, pat))
+      case test           => () => acc((test, Tree.BoolLit(true)))
+    go(tree, ::(_, Nil))()
+  
   def term(tree: Tree): Ctxl[Term] =
   trace[Term](s"Elab term ${tree.showDbg}", r => s"~> $r"):
     val unders = mutable.ArrayBuffer.empty[VarSymbol]
@@ -696,6 +1010,8 @@ extends Importer with ucs.SplitElaborator:
       raise:
         ErrorReport(msg"Expected a right-hand side for this assignment" -> tree.toLoc :: Nil)
       error
+    case TryFinally(tryBody, finallyBody) =>
+      Term.Try(subterm(tryBody), subterm(finallyBody))
     case (hd @ Hndl(id: Ident, c, Block(sts_), S(bod))) => ctx.nest(OuterCtx.LambdaOrHandlerBlock).givenIn:
       
       val sym = VarSymbol(id)
@@ -1644,7 +1960,9 @@ extends Importer with ucs.SplitElaborator:
               then
                 val k = if p.flags.mut then MutVal else ImmutVal
                 val fsym = BlockMemberSymbol(p.sym.nme, Nil)
+                fsym.sourceAliases = p.sym.sourceAliases
                 val tsym = cp
+                tsym.sourceAliases = p.sym.sourceAliases
                 cp.decl = S(p)
                 val fdef = TermDefinition(
                   k,
@@ -1664,6 +1982,7 @@ extends Importer with ucs.SplitElaborator:
                 fdef :: Nil
               else
                 val psym = TermSymbol(LetBind, owner, p.sym.id)
+                psym.sourceAliases = p.sym.sourceAliases
                 val decl = LetDecl(psym, Nil)
                 val defn = DefineVar(psym, p.sym.ref())
                 p.fldSym = S(psym)
@@ -1676,6 +1995,7 @@ extends Importer with ucs.SplitElaborator:
                 case s: InnerSymbol => S(s)
                 case _: TypeAliasSymbol => die
               val psym = TermSymbol(LetBind, owner, p.sym.id)
+              psym.sourceAliases = p.sym.sourceAliases
               val decl = LetDecl(psym, Nil)
               val defn = DefineVar(psym, p.sym.ref())
               p.fldSym = S(psym)
@@ -1684,12 +2004,19 @@ extends Importer with ucs.SplitElaborator:
           val allFields = fields ::: ctorFields
           
           val ctxWithFields =
-            val valParams = allFields.collect:
+            val valParams = allFields.flatMap:
               case f: TermDefinition =>
-                f.sym.nme -> f.sym
-            val params = allFields.collect:
+                (f.sym.nme -> f.sym) :: f.sym.sourceAliases.map(_ -> f.sym)
+              case _ =>
+                Nil
+            val params = allFields.flatMap:
               case (f: LetDecl) =>
-                f.sym.nme -> f.sym
+                val aliases = f.sym match
+                  case sym: TermSymbol => sym.sourceAliases
+                  case _ => Nil
+                (f.sym.nme -> f.sym) :: aliases.map(_ -> f.sym)
+              case _ =>
+                Nil
             ctx.withMembers(valParams) ++ params
           
           val (blk, c) = fn(using ctxWithFields)
@@ -1857,6 +2184,10 @@ extends Importer with ucs.SplitElaborator:
         reportUnusedAnnotations
         val modify = ConfigParser.parseOverrides(args)
         go(sts, Nil, SetConfig(modify) :: acc)
+      case Directive(Ident("lang"), Tup(args)) :: sts =>
+        reportUnusedAnnotations
+        val modify = ConfigParser.parseLanguageDirective(args)
+        go(sts, Nil, SetConfig(modify) :: acc)
       case Directive(Ident(name), _) :: sts =>
         raise(ErrorReport(
           msg"Unknown directive '#${name}'" -> sts.headOption.flatMap(_.toLoc) :: Nil,
@@ -1910,16 +2241,22 @@ extends Importer with ucs.SplitElaborator:
     if ctx.outer.inner.isDefined then TermSymbol(k, ctx.outer.inner, id)
     else VarSymbol(id)
   
-  def param(t: Tree, inUsing: Bool, inDataClass: Bool): Ctxl[Diagnostic \/ (Param, Opt[SpreadKind])] =
+  def param(t: Tree, inUsing: Bool, inDataClass: Bool): Ctxl[Diagnostic \/ (Param, Opt[SpreadKind], Ls[Str])] =
     t.desugared.asParam(inUsing).map:
       case pt @ ParamTree(flags, id, sign, spd, modifiers) =>
         log(s"Elaborating ParamTree: ${pt}")
         val flg = flags.copy(isVal = flags.isVal || inDataClass)
-        val sym = VarSymbol(id)
+        val (canonicalId, aliases) = symbolicSuffixBase(id.name) match
+          case S(base) =>
+            new Ident(base).withLocOf(id) -> (id.name :: Nil)
+          case N =>
+            id -> Nil
+        val sym = VarSymbol(canonicalId)
+        sym.sourceAliases = aliases
         val sig = sign.map(term(_))
         val p = Param(flg, sym, sig, Modulefulness.ofSign(sig)(Mod in modifiers))
         sym.decl = S(p)
-        (p, spd)
+        (p, spd, aliases)
   
   def funParams(t: Tree): Ctxl[(ParamList, Ctx)] =
     val ps_ctx = params(t, inDataClass = false, inPattern = false)
@@ -1963,10 +2300,11 @@ extends Importer with ucs.SplitElaborator:
           val isCtxParam = hd.isModified(Ins)
           val inUsing = flags.ctx || isCtxParam
           param(hd, inUsing, inDataClass)(using ctx) match
-          case R((p, spd)) =>
+          case R((p, spd, aliases)) =>
             if isCtxParam && acc.nonEmpty then
               raise(ErrorReport(msg"Keyword `using` must occur before all parameters." -> hd.toLoc :: Nil))
-            val newCtx = if !inPattern || p.flags.pat then ctx + (p.sym.name -> p.sym) else ctx
+            val bindings = (p.sym.name -> p.sym) :: aliases.map(_ -> p.sym)
+            val newCtx = if !inPattern || p.flags.pat then ctx ++ bindings else ctx
             val newFlags = flags.copy(ctx = inUsing)
             spd match
             case S(spd) =>

@@ -195,11 +195,28 @@ fun applyTwice(f, x) = f(x) + f(x)
 applyTwice(fst, Pair(1, 2))
 //│ deforest > >>> non-affine syms >>>
 //│ deforest > cap_ub_(term:fst,0)_for_fst@35
-//│ deforest > f_for_applyTwice@23
-//│ deforest > f_for_applyTwice@54
+//│ deforest > f_for_applyTwice@24
+//│ deforest > f_for_applyTwice@55
 //│ deforest > fst_for_fst@32
 //│ deforest > tmp@1
-//│ deforest > x_for_applyTwice@24
-//│ deforest > x_for_applyTwice@55
+//│ deforest > x_for_applyTwice@23
+//│ deforest > x_for_applyTwice@54
 //│ deforest > <<< non-affine syms <<<
 //│ = 2
+
+
+#config(deforest: None)
+#config(language: 0.3.x)
+#lang(0.2.x)
+
+#lang(useNewResolution: true)
+
+#lang(0.3.x,
+  allowUnresolvedAccesses: true,
+  useNewResolution: false,
+  typeCheck: Some(TypeChecking()))
+
+#config(language: Language(
+  allowUnresolvedAccesses: false,
+  useNewResolution: true,
+  typeCheck: None))
