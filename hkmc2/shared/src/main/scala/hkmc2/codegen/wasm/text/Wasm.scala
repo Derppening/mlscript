@@ -61,6 +61,7 @@ private case object UnreachableType extends Type:
   def toWat: Document = throw UnsupportedOperationException(
     s"${toString} is a compiler-internal type and cannot be converted to WAT",
   )
+private type UnreachableType = UnreachableType.type
 
 type NumType = I32Type.type | I64Type.type | F32Type.type | F64Type.type
 type VecType = V128Type.type

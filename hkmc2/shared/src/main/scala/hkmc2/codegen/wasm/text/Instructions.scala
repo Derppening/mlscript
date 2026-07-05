@@ -5,35 +5,49 @@ import hkmc2.utils.*, shorthands.*
 
 import document.*
 
+extension (resultTypes: Seq[Result] | UnreachableType)
+  /** Returns the result clauses for the given result types. 
+    *
+    * If `resultTypes` is [[UnreachableType]], it returns an empty sequence.
+    */
+  private def resultClauses: Seq[Result] = resultTypes match
+    case results: Seq[Result] => results
+    case UnreachableType => Seq.empty
+  
+  /** Returns the normalized result types, converting [[UnreachableType]] into a singleton `Seq`. */
+  private def normalized: Seq[ValType | UnreachableType] = resultTypes match
+    case results: Seq[Result] => results.map(_.valtype)
+    case UnreachableType => Seq(UnreachableType)
+
 object Instructions:
   /** Creates a `block` instruction. */
   def block(
       label: Opt[Str],
       children: Seq[Expr],
-      resultTypes: Seq[Result],
+      resultTypes: Seq[Result] | UnreachableType,
   ): FoldedInstr =
     val labelWat = label.map(lbl => doc"$$$lbl")
 
     FoldedInstr(
       mnemonic = "block",
-      instrargs = labelWat.toSeq ++ resultTypes,
+      instrargs = labelWat.toSeq ++ resultTypes.resultClauses,
       stackargs = children,
-      resultTypes = resultTypes.map(_.valtype),
+      resultTypes = resultTypes.normalized,
     )
 
   /** Creates a `loop` instruction. */
   def loop(
       label: Opt[Str],
       children: Seq[Expr],
-      resultTypes: Seq[Result],
+      resultTypes: Seq[Result] | UnreachableType,
   ): FoldedInstr =
     val labelWat = label.map(lbl => doc"$$$lbl")
 
     FoldedInstr(
       mnemonic = "loop",
-      instrargs = labelWat.toSeq ++ resultTypes,
+      instrargs = labelWat.toSeq ++ resultTypes.resultClauses,
       stackargs = children,
-      resultTypes = resultTypes.map(_.valtype),
+      resultTypes = resultTypes.normalized,
     )
 
   /** Creates an `if` instruction. */
@@ -41,7 +55,7 @@ object Instructions:
       condition: Expr,
       ifTrue: Expr,
       ifFalse: Opt[Expr],
-      resultTypes: Seq[Result],
+      resultTypes: Seq[Result] | UnreachableType,
   ): FoldedInstr =
     val thenInstr = FoldedInstr(
       mnemonic = "then",
@@ -59,9 +73,9 @@ object Instructions:
 
     FoldedInstr(
       mnemonic = "if",
-      instrargs = resultTypes,
+      instrargs = resultTypes.resultClauses,
       stackargs = Seq(condition, thenInstr) ++ elseInstr.toSeq,
-      resultTypes = resultTypes.map(_.valtype),
+      resultTypes = resultTypes.normalized,
     )
   end `if`
 
