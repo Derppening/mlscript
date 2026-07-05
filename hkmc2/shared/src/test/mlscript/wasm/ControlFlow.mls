@@ -26,7 +26,7 @@ let i = 0 in
 //│     (local $scrut (ref null any))
 //│     (local $tmp (ref null any))
 //│     (local $matchRes (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $i
 //│         (ref.i31
 //│           (i32.const 0)))

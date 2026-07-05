@@ -52,7 +52,7 @@ callF(B())
 //│       (local.get $this)))
 //│   (func $A_ctor (export "A") (type $A_ctor) (result (ref null any))
 //│     (local $this (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $this
 //│         (struct.new $A
 //│           (global.get $A_typeinfo)))
@@ -68,7 +68,7 @@ callF(B())
 //│         (ref.i31
 //│           (i32.const 1)))))
 //│   (func $B_init (type $B_init) (param $this (ref null any)) (result (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (drop
 //│         (call $A_init
 //│           (local.get $this)))
@@ -76,7 +76,7 @@ callF(B())
 //│         (local.get $this))))
 //│   (func $B_ctor (export "B") (type $B_ctor) (result (ref null any))
 //│     (local $this (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $this
 //│         (struct.new $B
 //│           (global.get $B_typeinfo)))
@@ -109,7 +109,7 @@ callF(B())
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $tmp (ref null any))
 //│     (local $receiver (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $tmp
 //│         (call $B_ctor))
 //│       (return

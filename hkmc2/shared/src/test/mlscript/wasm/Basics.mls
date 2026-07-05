@@ -107,7 +107,7 @@ class Foo(val a)
 //│     (i32.const 1)
 //│     (ref.null $TypeInfoBase)))
 //│   (func $Foo_init (type $Foo_init) (param $this (ref null any)) (param $a (ref null any)) (result (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (struct.set $Foo $a
 //│         (ref.cast (ref $Foo)
 //│           (local.get $this))
@@ -116,7 +116,7 @@ class Foo(val a)
 //│         (local.get $this))))
 //│   (func $Foo_ctor (export "Foo") (type $Foo_ctor) (param $a (ref null any)) (result (ref null any))
 //│     (local $this (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $this
 //│         (struct.new $Foo
 //│           (global.get $Foo_typeinfo)
@@ -129,7 +129,7 @@ class Foo(val a)
 //│         (local.get $this))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $tmp (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $tmp
 //│         (call $Foo_ctor
 //│           (ref.i31
@@ -168,7 +168,7 @@ class Foo(val x) with
 //│     (i32.const 1)
 //│     (ref.null $TypeInfoBase)))
 //│   (func $Foo_init (type $Foo_init) (param $this (ref null any)) (param $x (ref null any)) (result (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (struct.set $Foo $x
 //│         (ref.cast (ref $Foo)
 //│           (local.get $this))
@@ -183,7 +183,7 @@ class Foo(val x) with
 //│         (local.get $this))))
 //│   (func $Foo_ctor (export "Foo") (type $Foo_ctor) (param $x (ref null any)) (result (ref null any))
 //│     (local $this (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $this
 //│         (struct.new $Foo
 //│           (global.get $Foo_typeinfo)
@@ -197,7 +197,7 @@ class Foo(val x) with
 //│         (local.get $this))))
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $tmp (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $tmp
 //│         (call $Foo_ctor
 //│           (ref.i31
@@ -233,7 +233,7 @@ O.y
 //│     (ref.null $TypeInfoBase)))
 //│   (global $O$inst (export "O$inst") (mut (ref null $O)) (ref.null $O))
 //│   (func $O_init (type $O_init) (param $this (ref null any)) (result (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (struct.set $O $x
 //│         (ref.cast (ref $O)
 //│           (local.get $this))
@@ -249,7 +249,7 @@ O.y
 //│         (local.get $this))))
 //│   (func $O_ctor (type $O_ctor) (result (ref null any))
 //│     (local $this (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $this
 //│         (struct.new $O
 //│           (global.get $O_typeinfo)

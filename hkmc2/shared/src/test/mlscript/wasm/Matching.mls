@@ -61,7 +61,7 @@ if Bar(true) is
 //│     (i32.const 2)
 //│     (ref.null $TypeInfoBase)))
 //│   (func $Bar_init (type $Bar_init) (param $this (ref null any)) (param $y (ref null any)) (result (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (struct.set $Bar $y
 //│         (ref.cast (ref $Bar)
 //│           (local.get $this))
@@ -70,7 +70,7 @@ if Bar(true) is
 //│         (local.get $this))))
 //│   (func $Bar_ctor (export "Bar") (type $Bar_ctor) (param $y (ref null any)) (result (ref null any))
 //│     (local $this (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $this
 //│         (struct.new $Bar
 //│           (global.get $Bar_typeinfo)
@@ -82,7 +82,7 @@ if Bar(true) is
 //│       (return
 //│         (local.get $this))))
 //│   (func $Baz_init (type $Baz_init) (param $this (ref null any)) (param $z (ref null any)) (result (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (struct.set $Baz $z
 //│         (ref.cast (ref $Baz)
 //│           (local.get $this))
@@ -91,7 +91,7 @@ if Bar(true) is
 //│         (local.get $this))))
 //│   (func $Baz_ctor (export "Baz") (type $Baz_ctor) (param $z (ref null any)) (result (ref null any))
 //│     (local $this (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $this
 //│         (struct.new $Baz
 //│           (global.get $Baz_typeinfo)
