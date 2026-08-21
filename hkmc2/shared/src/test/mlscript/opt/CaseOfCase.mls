@@ -68,10 +68,10 @@ fun test(x) = x map(_ + 1) map(_ * 2)
 //│   match x
 //│     Some⁰ =>
 //│       let inlinedVal1, inlinedVal2;
-//│       set arg$Some$0$1 = x.value⁰;
+//│       set arg$Some$0$1 = (x as!! Some⁰).value⁰;
 //│       set inlinedVal1 = +⁰(arg$Some$0$1, 1);
 //│       set inlinedVal = Option⁰.Some¹(inlinedVal1);
-//│       set arg$Some$0$ = inlinedVal.value⁰;
+//│       set arg$Some$0$ = (inlinedVal as!! Some⁰).value⁰;
 //│       set inlinedVal2 = *⁰(arg$Some$0$, 2);
 //│       return Option⁰.Some¹(inlinedVal2)
 //│     None⁰ =>
@@ -93,13 +93,13 @@ fun test(x) = x map(_ + 1) map(_ * 2) map("Result: " + _)
 //│   match x
 //│     Some⁰ =>
 //│       let inlinedVal2, inlinedVal3, inlinedVal4;
-//│       set arg$Some$0$2 = x.value⁰;
+//│       set arg$Some$0$2 = (x as!! Some⁰).value⁰;
 //│       set inlinedVal2 = +⁰(arg$Some$0$2, 1);
 //│       set inlinedVal = Option⁰.Some¹(inlinedVal2);
-//│       set arg$Some$0$1 = inlinedVal.value⁰;
+//│       set arg$Some$0$1 = (inlinedVal as!! Some⁰).value⁰;
 //│       set inlinedVal3 = *⁰(arg$Some$0$1, 2);
 //│       set inlinedVal1 = Option⁰.Some¹(inlinedVal3);
-//│       set arg$Some$0$ = inlinedVal1.value⁰;
+//│       set arg$Some$0$ = (inlinedVal1 as!! Some⁰).value⁰;
 //│       set inlinedVal4 = +⁰("Result: ", arg$Some$0$);
 //│       return Option⁰.Some¹(inlinedVal4)
 //│     None⁰ =>
@@ -124,10 +124,10 @@ fun test(x) = if x map(_ + 1) is
 //│   match x
 //│     Some⁰ =>
 //│       let inlinedVal1;
-//│       set arg$Some$0$1 = x.value⁰;
+//│       set arg$Some$0$1 = (x as!! Some⁰).value⁰;
 //│       set inlinedVal1 = +⁰(arg$Some$0$1, 1);
 //│       set inlinedVal = Option⁰.Some¹(inlinedVal1);
-//│       set arg$Some$0$ = inlinedVal.value⁰;
+//│       set arg$Some$0$ = (inlinedVal as!! Some⁰).value⁰;
 //│       match arg$Some$0$
 //│         0 =>
 //│           return []
@@ -195,7 +195,7 @@ fun prefixDependency(x) =
 //│     else
 //│       set tmp = PrefixBox⁰(false);
 //│       end
-//│   set copy = tmp.value¹;
+//│   set copy = (tmp as!! PrefixBox¹).value¹;
 //│   match tmp
 //│     PrefixBox¹ =>
 //│       return copy

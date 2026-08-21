@@ -348,7 +348,11 @@ class Normalization(lowering: Lowering)(using tl: TL)(using Raise, Ctx, State, C
                   Case.Cls(ctorSym, st) -> lowerSplit(tail, cont)
                 case (param, arg) :: args =>
                   val (cse, blk) = mkArgs(args)
-                  (cse, Assign(arg, Select(sr, new Tree.Ident(param.id.name).withLocOf(arg))(S(param))(false), blk))
+                  // * Inside the `Case.Cls` arm the scrutinee is known to be a `ctorSym`, but `sr` still carries the
+                  // * scrutinee's (typically unknown) static type; narrowing it here keeps the coercion in the IR
+                  // * rather than leaving each backend to re-derive it at the field read.
+                  val qual = lowering.castQualifierToOwner(sr, S(param), arg.toLoc)
+                  (cse, Assign(arg, Select(qual, new Tree.Ident(param.id.name).withLocOf(arg))(S(param))(false), blk))
               mkMatch(mkArgs(clsParams.iterator.zip(args).toList))
             symbol match
               case cls: ClassSymbol if ctx.builtins.virtualClasses contains cls =>

@@ -13,8 +13,8 @@ case Add(0, 0) then 1
 //│   let arg$Add$0$, arg$Add$1$;
 //│   match caseScrut
 //│     Add⁰ =>
-//│       set arg$Add$0$ = caseScrut.lhs⁰;
-//│       set arg$Add$1$ = caseScrut.rhs⁰;
+//│       set arg$Add$0$ = (caseScrut as!! Add⁰).lhs⁰;
+//│       set arg$Add$1$ = (caseScrut as!! Add⁰).rhs⁰;
 //│       match arg$Add$0$
 //│         0 =>
 //│           match arg$Add$1$
@@ -45,8 +45,8 @@ case @compile Add(0, 0) then 1
 //│     let lhs, rhs, lhs1, rhs1, p_0$, result1$, result1$1, p_0$1, tmp, tmp1;
 //│     match input
 //│       Add⁰ =>
-//│         set lhs = input.lhs⁰;
-//│         set rhs = input.rhs⁰;
+//│         set lhs = (input as!! Add⁰).lhs⁰;
+//│         set rhs = (input as!! Add⁰).rhs⁰;
 //│         set lhs1 = matcher__0$(lhs);
 //│         set rhs1 = matcher__0$(rhs);
 //│         set result1$1 = lhs1;
@@ -112,7 +112,7 @@ case @compile (Box(0) | Box(1)) then 1
 //│   match caseScrut
 //│     Box⁰ =>
 //│       let inlinedVal;
-//│       set value = caseScrut.value⁰;
+//│       set value = (caseScrut as!! Box⁰).value⁰;
 //│       match value
 //│         0 =>
 //│           set inlinedVal = { "p_1": true, "p_2": false };
@@ -174,7 +174,7 @@ fun compiledInner(module Inner: Outer.Inner, x) =
 //│     let value, value1, p_0$, result1$, p_0$1, tmp, tmp1;
 //│     match input
 //│       Wrapped⁰ =>
-//│         set value = input.value¹;
+//│         set value = (input as!! Wrapped⁰).value¹;
 //│         set value1 = matcher__3$(value);
 //│         set result1$ = value1;
 //│         match result1$

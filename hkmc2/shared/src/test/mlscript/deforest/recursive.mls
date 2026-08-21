@@ -25,8 +25,8 @@ let c = Cons(1, Nil) in
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(1, Nil⁰) ->
 //│ deforest > 	match: ls_map⁰
-//│ deforest > 	fields: ls_map⁰.h⁰
-//│ deforest > 	fields: ls_map⁰.t⁰
+//│ deforest > 	fields: (ls_map⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls_map⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls_map⁰
 //│ deforest > <<< fusing <<<
@@ -41,8 +41,8 @@ map(x => x + 1, c(1))
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(a⁰, Nil⁰) ->
 //│ deforest > 	match: ls_map¹
-//│ deforest > 	fields: ls_map¹.h⁰
-//│ deforest > 	fields: ls_map¹.t⁰
+//│ deforest > 	fields: (ls_map¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls_map¹ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls_map¹
 //│ deforest > <<< fusing <<<
@@ -57,12 +57,12 @@ map(1 :: 2 :: Nil, x => x + 1)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(1, tmp⁰) ->
 //│ deforest > 	match: ls⁰
-//│ deforest > 	fields: ls⁰.h⁰
-//│ deforest > 	fields: ls⁰.t⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(2, Nil⁰) ->
 //│ deforest > 	match: ls⁰
-//│ deforest > 	fields: ls⁰.h⁰
-//│ deforest > 	fields: ls⁰.t⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁰
 //│ deforest > <<< fusing <<<
@@ -79,8 +79,8 @@ sum(enum(3))
 //│ deforest > 	match: ls¹
 //│ deforest > Cons⁰(n⁰, tmp¹) ->
 //│ deforest > 	match: ls¹
-//│ deforest > 	fields: ls¹.h⁰
-//│ deforest > 	fields: ls¹.t⁰
+//│ deforest > 	fields: (ls¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls¹ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = 6
 
@@ -93,8 +93,8 @@ map(map(id(1 :: 2 :: Nil), x => x + 1), x => x * 2)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(tmp², tmp³) ->
 //│ deforest > 	match: ls²
-//│ deforest > 	fields: ls².h⁰
-//│ deforest > 	fields: ls².t⁰
+//│ deforest > 	fields: (ls² as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls² as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls²
 //│ deforest > <<< fusing <<<
@@ -109,8 +109,8 @@ map(x => x + 1, map(x => x * 2, id(enum(3))))
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(tmp⁴, tmp⁵) ->
 //│ deforest > 	match: ls³
-//│ deforest > 	fields: ls³.h⁰
-//│ deforest > 	fields: ls³.t⁰
+//│ deforest > 	fields: (ls³ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls³ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls³
 //│ deforest > <<< fusing <<<
@@ -132,24 +132,24 @@ cons(f(0)) + cons1(f(1))
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(x⁰, tmp⁶) ->
 //│ deforest > 	match: a1⁰
-//│ deforest > 	fields: a1⁰.h⁰
-//│ deforest > 	fields: a1⁰.t⁰
+//│ deforest > 	fields: (a1⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (a1⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(y⁰, tmp⁷) ->
 //│ deforest > 	match: a1⁰
-//│ deforest > 	fields: a1⁰.h⁰
-//│ deforest > 	fields: a1⁰.t⁰
+//│ deforest > 	fields: (a1⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (a1⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: a1⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: a1⁰
 //│ deforest > Cons⁰(x⁰, tmp⁶) ->
 //│ deforest > 	match: a¹
-//│ deforest > 	fields: a¹.h⁰
-//│ deforest > 	fields: a¹.t⁰
+//│ deforest > 	fields: (a¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (a¹ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(y⁰, tmp⁷) ->
 //│ deforest > 	match: a¹
-//│ deforest > 	fields: a¹.h⁰
-//│ deforest > 	fields: a¹.t⁰
+//│ deforest > 	fields: (a¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (a¹ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: a¹
 //│ deforest > Nil⁰ ->
@@ -175,8 +175,8 @@ f1(to(4))
 //│ deforest > 	match: ls1⁰
 //│ deforest > Cons⁰(n¹, tmp⁸) ->
 //│ deforest > 	match: ls1⁰
-//│ deforest > 	fields: ls1⁰.h⁰
-//│ deforest > 	fields: ls1⁰.t⁰
+//│ deforest > 	fields: (ls1⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls1⁰ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = 12
 
@@ -190,18 +190,18 @@ map(map(1 :: 2 :: Nil, succ), double)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(tmp⁹, tmp¹⁰) ->
 //│ deforest > 	match: ls⁴
-//│ deforest > 	fields: ls⁴.h⁰
-//│ deforest > 	fields: ls⁴.t⁰
+//│ deforest > 	fields: (ls⁴ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁴ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁴
 //│ deforest > Cons⁰(1, tmp¹¹) ->
 //│ deforest > 	match: ls⁴
-//│ deforest > 	fields: ls⁴.h⁰
-//│ deforest > 	fields: ls⁴.t⁰
+//│ deforest > 	fields: (ls⁴ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁴ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(2, Nil⁰) ->
 //│ deforest > 	match: ls⁴
-//│ deforest > 	fields: ls⁴.h⁰
-//│ deforest > 	fields: ls⁴.t⁰
+//│ deforest > 	fields: (ls⁴ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁴ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁴
 //│ deforest > <<< fusing <<<
@@ -220,14 +220,14 @@ f1(wrap(4)) + f2(wrap(5))
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(n², tmp¹²) ->
 //│ deforest > 	match: ls⁵
-//│ deforest > 	fields: ls⁵.h⁰
-//│ deforest > 	fields: ls⁵.t⁰
+//│ deforest > 	fields: (ls⁵ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁵ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁵
 //│ deforest > Cons⁰(n², tmp¹²) ->
 //│ deforest > 	match: ls⁶
-//│ deforest > 	fields: ls⁶.h⁰
-//│ deforest > 	fields: ls⁶.t⁰
+//│ deforest > 	fields: (ls⁶ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁶ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁶
 //│ deforest > <<< fusing <<<
@@ -247,20 +247,20 @@ f1(to(4, Nil), 0) + f2(to(5, Nil), 0) + f1(to(6, Nil), 0)
 //│ deforest > 	match: ls⁷
 //│ deforest > Cons⁰(n³, acc⁰) ->
 //│ deforest > 	match: ls⁷
-//│ deforest > 	fields: ls⁷.h⁰
-//│ deforest > 	fields: ls⁷.t⁰
+//│ deforest > 	fields: (ls⁷ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁷ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁸
 //│ deforest > Cons⁰(n³, acc⁰) ->
 //│ deforest > 	match: ls⁸
-//│ deforest > 	fields: ls⁸.h⁰
-//│ deforest > 	fields: ls⁸.t⁰
+//│ deforest > 	fields: (ls⁸ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁸ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁷
 //│ deforest > Cons⁰(n³, acc⁰) ->
 //│ deforest > 	match: ls⁷
-//│ deforest > 	fields: ls⁷.h⁰
-//│ deforest > 	fields: ls⁷.t⁰
+//│ deforest > 	fields: (ls⁷ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁷ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = 51
 
@@ -275,24 +275,24 @@ map(map(map(1 :: 2 :: Nil, succ), double), triple)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(tmp¹³, tmp¹⁴) ->
 //│ deforest > 	match: ls⁹
-//│ deforest > 	fields: ls⁹.h⁰
-//│ deforest > 	fields: ls⁹.t⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁹
 //│ deforest > Cons⁰(tmp¹³, tmp¹⁴) ->
 //│ deforest > 	match: ls⁹
-//│ deforest > 	fields: ls⁹.h⁰
-//│ deforest > 	fields: ls⁹.t⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁹
 //│ deforest > Cons⁰(1, tmp¹⁵) ->
 //│ deforest > 	match: ls⁹
-//│ deforest > 	fields: ls⁹.h⁰
-//│ deforest > 	fields: ls⁹.t⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(2, Nil⁰) ->
 //│ deforest > 	match: ls⁹
-//│ deforest > 	fields: ls⁹.h⁰
-//│ deforest > 	fields: ls⁹.t⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁹ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁹
 //│ deforest > <<< fusing <<<
@@ -317,8 +317,8 @@ map1(incr, map(double, id(mk(5))))
 //│ deforest > 	match: ls_map1⁰
 //│ deforest > Cons⁰(tmp¹⁶, tmp¹⁷) ->
 //│ deforest > 	match: ls_map1⁰
-//│ deforest > 	fields: ls_map1⁰.h⁰
-//│ deforest > 	fields: ls_map1⁰.t⁰
+//│ deforest > 	fields: (ls_map1⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls_map1⁰ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = Cons(11, Cons(9, Cons(7, Cons(5, Cons(3, Cons(1, Nil))))))
 
@@ -335,8 +335,8 @@ map(enumFromTo(1, 4))
 //│ deforest > 	match: ls¹⁰
 //│ deforest > Cons⁰(a², tmp¹⁸) ->
 //│ deforest > 	match: ls¹⁰
-//│ deforest > 	fields: ls¹⁰.h⁰
-//│ deforest > 	fields: ls¹⁰.t⁰
+//│ deforest > 	fields: (ls¹⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls¹⁰ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = Cons(5, Cons(6, Cons(7, Nil)))
 
@@ -351,8 +351,8 @@ sum(enumFromTo(1,10))
 //│ deforest > 	match: ls¹¹
 //│ deforest > Cons⁰(a³, tmp¹⁹) ->
 //│ deforest > 	match: ls¹¹
-//│ deforest > 	fields: ls¹¹.h⁰
-//│ deforest > 	fields: ls¹¹.t⁰
+//│ deforest > 	fields: (ls¹¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls¹¹ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = 45
 
@@ -368,8 +368,8 @@ map(x => x + 4, enumFromTo(1, 4))
 //│ deforest > 	match: ls¹²
 //│ deforest > Cons⁰(a⁴, tmp²⁰) ->
 //│ deforest > 	match: ls¹²
-//│ deforest > 	fields: ls¹².h⁰
-//│ deforest > 	fields: ls¹².t⁰
+//│ deforest > 	fields: (ls¹² as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls¹² as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = Cons(5, Cons(6, Cons(7, Nil)))
 
@@ -386,8 +386,8 @@ map(x => x + 4, enumFromTo(1, 4))
 //│ deforest > 	match: ls¹³
 //│ deforest > Cons⁰(a⁵, tmp²¹) ->
 //│ deforest > 	match: ls¹³
-//│ deforest > 	fields: ls¹³.h⁰
-//│ deforest > 	fields: ls¹³.t⁰
+//│ deforest > 	fields: (ls¹³ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls¹³ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = Cons(5, Cons(6, Cons(7, Nil)))
 
@@ -404,8 +404,8 @@ sum(enumFromTo(1, 10), 0)
 //│ deforest > 	match: ls¹⁴
 //│ deforest > Cons⁰(a⁶, tmp²²) ->
 //│ deforest > 	match: ls¹⁴
-//│ deforest > 	fields: ls¹⁴.h⁰
-//│ deforest > 	fields: ls¹⁴.t⁰
+//│ deforest > 	fields: (ls¹⁴ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls¹⁴ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = 45
 
@@ -426,8 +426,8 @@ map(incr, rev(id(mk(5)), Nil))
 //│ deforest > 	match: xs_map⁰
 //│ deforest > Cons⁰(x¹, acc¹) ->
 //│ deforest > 	match: xs_map⁰
-//│ deforest > 	fields: xs_map⁰.h⁰
-//│ deforest > 	fields: xs_map⁰.t⁰
+//│ deforest > 	fields: (xs_map⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (xs_map⁰ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Cons(6, Nil))))))
 
@@ -446,8 +446,8 @@ rev(map(incr, id(mk(3))), Nil)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(tmp²³, tmp²⁴) ->
 //│ deforest > 	match: xs_rev⁰
-//│ deforest > 	fields: xs_rev⁰.h⁰
-//│ deforest > 	fields: xs_rev⁰.t⁰
+//│ deforest > 	fields: (xs_rev⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (xs_rev⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: xs_rev⁰
 //│ deforest > <<< fusing <<<
@@ -502,8 +502,8 @@ sum(flatten(id(mk2d(4))))
 //│ deforest > 	match: ls_sum⁰
 //│ deforest > Cons⁰(x², tmp²⁵) ->
 //│ deforest > 	match: ls_sum⁰
-//│ deforest > 	fields: ls_sum⁰.h⁰
-//│ deforest > 	fields: ls_sum⁰.t⁰
+//│ deforest > 	fields: (ls_sum⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls_sum⁰ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = 20
 
@@ -521,16 +521,16 @@ count(0, rev(Nil, 1 :: 2 :: Nil))
 //│ deforest > 	match: xs⁰
 //│ deforest > Cons⁰(h¹, a⁷) ->
 //│ deforest > 	match: xs⁰
-//│ deforest > 	fields: xs⁰.h⁰
-//│ deforest > 	fields: xs⁰.t⁰
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(1, tmp²⁶) ->
 //│ deforest > 	match: ys⁰
-//│ deforest > 	fields: ys⁰.h⁰
-//│ deforest > 	fields: ys⁰.t⁰
+//│ deforest > 	fields: (ys⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ys⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(2, Nil⁰) ->
 //│ deforest > 	match: ys⁰
-//│ deforest > 	fields: ys⁰.h⁰
-//│ deforest > 	fields: ys⁰.t⁰
+//│ deforest > 	fields: (ys⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ys⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ys⁰
 //│ deforest > <<< fusing <<<
@@ -560,14 +560,14 @@ map(x => if x is A then 1 else 0, A :: B :: Nil)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(A⁰, tmp²⁷) ->
 //│ deforest > 	match: xs_map¹
-//│ deforest > 	fields: xs_map¹.h⁰
-//│ deforest > 	fields: xs_map¹.t⁰
+//│ deforest > 	fields: (xs_map¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (xs_map¹ as!! Cons¹).t⁰
 //│ deforest > A⁰ ->
 //│ deforest > 	match: x³
 //│ deforest > Cons⁰(B⁰, Nil⁰) ->
 //│ deforest > 	match: xs_map¹
-//│ deforest > 	fields: xs_map¹.h⁰
-//│ deforest > 	fields: xs_map¹.t⁰
+//│ deforest > 	fields: (xs_map¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (xs_map¹ as!! Cons¹).t⁰
 //│ deforest > B⁰ ->
 //│ deforest > 	match: x³
 //│ deforest > Nil⁰ ->
@@ -589,16 +589,16 @@ c(T(A, T(B, L, L), T(A, L, L)))
 //│ deforest > >>> fusing >>>
 //│ deforest > T⁰(A⁰, tmp²⁸, tmp²⁹) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.n⁴
-//│ deforest > 	fields: x⁴.l⁰
-//│ deforest > 	fields: x⁴.r⁰
+//│ deforest > 	fields: (x⁴ as!! T¹).n⁴
+//│ deforest > 	fields: (x⁴ as!! T¹).l⁰
+//│ deforest > 	fields: (x⁴ as!! T¹).r⁰
 //│ deforest > A⁰ ->
 //│ deforest > 	match: n⁵
 //│ deforest > T⁰(A⁰, L⁰, L⁰) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.n⁴
-//│ deforest > 	fields: x⁴.l⁰
-//│ deforest > 	fields: x⁴.r⁰
+//│ deforest > 	fields: (x⁴ as!! T¹).n⁴
+//│ deforest > 	fields: (x⁴ as!! T¹).l⁰
+//│ deforest > 	fields: (x⁴ as!! T¹).r⁰
 //│ deforest > A⁰ ->
 //│ deforest > 	match: n⁵
 //│ deforest > L⁰ ->
@@ -607,9 +607,9 @@ c(T(A, T(B, L, L), T(A, L, L)))
 //│ deforest > 	match: x⁴
 //│ deforest > T⁰(B⁰, L⁰, L⁰) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.n⁴
-//│ deforest > 	fields: x⁴.l⁰
-//│ deforest > 	fields: x⁴.r⁰
+//│ deforest > 	fields: (x⁴ as!! T¹).n⁴
+//│ deforest > 	fields: (x⁴ as!! T¹).l⁰
+//│ deforest > 	fields: (x⁴ as!! T¹).r⁰
 //│ deforest > B⁰ ->
 //│ deforest > 	match: n⁵
 //│ deforest > L⁰ ->
@@ -630,24 +630,24 @@ max(3 :: 2 :: 4 :: 1 :: 0 :: Nil, 0)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(3, tmp³⁰) ->
 //│ deforest > 	match: ms⁰
-//│ deforest > 	fields: ms⁰.h⁰
-//│ deforest > 	fields: ms⁰.t⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(2, tmp³¹) ->
 //│ deforest > 	match: ms⁰
-//│ deforest > 	fields: ms⁰.h⁰
-//│ deforest > 	fields: ms⁰.t⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(4, tmp³²) ->
 //│ deforest > 	match: ms⁰
-//│ deforest > 	fields: ms⁰.h⁰
-//│ deforest > 	fields: ms⁰.t⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(1, tmp³³) ->
 //│ deforest > 	match: ms⁰
-//│ deforest > 	fields: ms⁰.h⁰
-//│ deforest > 	fields: ms⁰.t⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(0, Nil⁰) ->
 //│ deforest > 	match: ms⁰
-//│ deforest > 	fields: ms⁰.h⁰
-//│ deforest > 	fields: ms⁰.t⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ms⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ms⁰
 //│ deforest > <<< fusing <<<

@@ -158,7 +158,7 @@ f().foo()
 //│   set scope0$cap.z$0¹ = 10;
 //│   set scope0$cap.w$1¹ = 1000;
 //│   set tmp1 = new Bad¹(scope0$cap);
-//│   do tmp1.foo³();
+//│   do (tmp1 as!! Bad¹).foo³();
 //│   return new Good¹(scope0$cap, x, y)
 //│ };
 //│ set tmp = f³();

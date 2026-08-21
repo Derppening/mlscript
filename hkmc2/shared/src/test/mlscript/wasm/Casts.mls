@@ -284,3 +284,82 @@ castToA(wasm.i32.const(123))
 //│ = 123
 
 
+
+// A selection's qualifier is narrowed in the IR (`Lowering.castQualifierToOwner`), so the backend has no
+// narrowing left to invent at the method-call receiver: the `ref.cast` on `$p` below is the IR's own `Cast`
+// being executed, not one `WatBuilder` derived. Deriving one is now reported as a compilation error, so a
+// regression here fails this test rather than passing silently with a redundant cast.
+// The other `ref.cast`, on `$this` in `$Pair_init`, is `CastOrigin.VirtualThis`: that widening is created by
+// this backend's uniform virtual signature, so the IR has no `Cast` for it to be missing.
+:wat
+class Pair(val fst, val snd) with
+  fun sum() = fst + snd
+let p = Pair(1, 2)
+p.Pair#sum()
+//│ Wat:
+//│ (module
+//│   (type $TypeInfoBase (sub (struct (field $$tag i32) (field $$parent (ref null $TypeInfoBase)))))
+//│   (type $Object (sub (struct (field $$typeinfo (mut (ref $TypeInfoBase))))))
+//│   (type $Pair (sub $Object (struct (field $$typeinfo (mut (ref $TypeInfoBase))) (field $fst (mut (ref null any))) (field $snd (mut (ref null any))))))
+//│   (type $Pair_typeinfo (sub $TypeInfoBase (struct (field $$tag i32) (field $$parent (ref null $TypeInfoBase)))))
+//│   (type $Pair_init (func (param $this (ref $Pair)) (param $fst (ref null any)) (param $snd (ref null any)) (result (ref $Pair))))
+//│   (type $Pair_ctor (func (param $fst (ref null any)) (param $snd (ref null any)) (result (ref $Pair))))
+//│   (type $Pair_sum (func (param $this (ref $Pair)) (result (ref null any))))
+//│   (type $plus_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
+//│   (type $entry (func (result (ref null any))))
+//│   (import "system" "plus_impl" (func $plus_impl (type $plus_impl)))
+//│   (global $p (export "p") (mut (ref null any)) (ref.null any))
+//│   (global $Pair_typeinfo (export "Pair_typeinfo") (ref $Pair_typeinfo) (struct.new $Pair_typeinfo
+//│     (i32.const 1)
+//│     (ref.null $TypeInfoBase)))
+//│   (func $Pair_init (type $Pair_init) (param $this (ref $Pair)) (param $fst (ref null any)) (param $snd (ref null any)) (result (ref $Pair))
+//│     (block (result (ref $Pair))
+//│       (struct.set $Pair $fst
+//│         (local.get $this)
+//│         (local.get $fst))
+//│       (struct.set $Pair $snd
+//│         (local.get $this)
+//│         (local.get $snd))
+//│       (return
+//│         (ref.cast (ref $Pair)
+//│           (local.get $this)))))
+//│   (func $Pair_ctor (export "Pair") (type $Pair_ctor) (param $fst (ref null any)) (param $snd (ref null any)) (result (ref $Pair))
+//│     (local $this (ref $Pair))
+//│     (block (result (ref $Pair))
+//│       (local.set $this
+//│         (struct.new $Pair
+//│           (global.get $Pair_typeinfo)
+//│           (ref.null any)
+//│           (ref.null any)))
+//│       (drop
+//│         (call $Pair_init
+//│           (local.get $this)
+//│           (local.get $fst)
+//│           (local.get $snd)))
+//│       (return
+//│         (local.get $this))))
+//│   (func $Pair_sum (type $Pair_sum) (param $this (ref $Pair)) (result (ref null any))
+//│     (return
+//│       (call $plus_impl
+//│         (struct.get $Pair $fst
+//│           (local.get $this))
+//│         (struct.get $Pair $snd
+//│           (local.get $this)))))
+//│   (func $entry (export "entry") (type $entry) (result (ref null any))
+//│     (block (result (ref null any))
+//│       (global.set $p
+//│         (call $Pair_ctor
+//│           (ref.i31
+//│             (i32.const 1))
+//│           (ref.i31
+//│             (i32.const 2))))
+//│       (return
+//│         (call $Pair_sum
+//│           (ref.cast (ref $Pair)
+//│             (global.get $p))))))
+//│   (elem $Pair_init declare func $Pair_init)
+//│   (elem $Pair_ctor declare func $Pair_ctor)
+//│   (elem $Pair_sum declare func $Pair_sum)
+//│   (elem $entry declare func $entry))
+//│ Wasm result:
+//│ = 3

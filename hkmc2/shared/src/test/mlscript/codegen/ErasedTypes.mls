@@ -1036,3 +1036,52 @@ fun mk() =
 //│   return new Holder⁰(Tag²)
 //│ };
 //│ end
+
+
+// A selection narrows its qualifier to the class declaring the member, so that the coercion lives in the IR
+// instead of being re-derived by each backend. `a` is an untyped local, so the narrowing is not a no-op.
+:sir
+class Box(val v) with
+  fun get() = v
+let a = Box(1)
+a.Box#v
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define Box⁶ as class Box⁸ {
+//│   val v⁵: ?;
+//│   constructor Box⁷(v: ?) {
+//│     define v⁵ as val v⁶: ? = v;
+//│     end
+//│   }
+//│   method get⁵ = fun get⁶(): ? { return Box⁸.this.v⁶ }
+//│ };
+//│ set a² = Box⁷(1);
+//│ return (a² as!! Box⁸).v⁶
+
+
+// The same rule reaches a method call's receiver (a call lowers to `Call(Select(qual, m), args)`) and the
+// class-parameter bindings UCS synthesizes after a successful class test.
+:sir
+class Box(val v) with
+  fun get() = v
+fun peek(b) = if b is Box(x) then x else b.Box#get()
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define peek¹ as fun peek²(b: ?): ? {
+//│   let x: ?, arg$Box$0$: ?;
+//│   match b
+//│     Box⁹ =>
+//│       set arg$Box$0$ = (b as!! Box⁹).v⁷;
+//│       set x = arg$Box$0$;
+//│       return x
+//│     else
+//│       return (b as!! Box⁹).get⁷()
+//│   end
+//│ };
+//│ define Box¹⁰ as class Box⁹ {
+//│   val v⁸: ?;
+//│   constructor Box¹¹(v: ?) {
+//│     define v⁸ as val v⁷: ? = v;
+//│     end
+//│   }
+//│   method get⁸ = fun get⁷(): ? { return Box⁹.this.v⁷ }
+//│ };
+//│ end

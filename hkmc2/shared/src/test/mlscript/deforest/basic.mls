@@ -53,7 +53,7 @@ c(p())
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(O⁰) ->
 //│ deforest > 	match: x⁰
-//│ deforest > 	fields: x⁰.a⁰
+//│ deforest > 	fields: (x⁰ as!! X¹).a⁰
 //│ deforest > <<< fusing <<<
 //│ = O
 
@@ -67,10 +67,10 @@ f(p())
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(tmp⁰) ->
 //│ deforest > 	match: x¹
-//│ deforest > 	fields: x¹.a⁰
+//│ deforest > 	fields: (x¹ as!! X¹).a⁰
 //│ deforest > Y⁰(O⁰) ->
 //│ deforest > 	match: arg$X$0$⁰
-//│ deforest > 	fields: arg$X$0$⁰.b⁰
+//│ deforest > 	fields: (arg$X$0$⁰ as!! Y¹).b⁰
 //│ deforest > <<< fusing <<<
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let tmp, p_8$p, f_10$f, f_10$x_X, f_10$x_rest, f_10$arg$X$0$_Y, f_10$arg$X$0$_rest;
@@ -115,10 +115,10 @@ f(p())
 //│   let y, arg$X$0$, arg$Y$0$;
 //│   match x
 //│     X¹ =>
-//│       set arg$X$0$ = x.a⁰;
+//│       set arg$X$0$ = (x as!! X¹).a⁰;
 //│       match arg$X$0$
 //│         Y¹ =>
-//│           set arg$Y$0$ = arg$X$0$.b⁰;
+//│           set arg$Y$0$ = (arg$X$0$ as!! Y¹).b⁰;
 //│           set y = arg$Y$0$;
 //│           return y
 //│         else
@@ -145,10 +145,10 @@ f(p(), 2)
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(tmp¹) ->
 //│ deforest > 	match: x²
-//│ deforest > 	fields: x².a⁰
+//│ deforest > 	fields: (x² as!! X¹).a⁰
 //│ deforest > Y⁰(O⁰) ->
 //│ deforest > 	match: a¹
-//│ deforest > 	fields: a¹.b⁰
+//│ deforest > 	fields: (a¹ as!! Y¹).b⁰
 //│ deforest > <<< fusing <<<
 //│ = 14
 
@@ -166,7 +166,7 @@ f(X(1), Y(2), 3)
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(1) ->
 //│ deforest > 	match: x³
-//│ deforest > 	fields: x³.a⁰
+//│ deforest > 	fields: (x³ as!! X¹).a⁰
 //│ deforest > <<< fusing <<<
 //│ = 16
 
@@ -178,16 +178,16 @@ fun c(x, d) = if x is
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(a²) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.a⁰
+//│ deforest > 	fields: (x⁴ as!! X¹).a⁰
 //│ deforest > X⁰(3) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.a⁰
+//│ deforest > 	fields: (x⁴ as!! X¹).a⁰
 //│ deforest > X⁰(a²) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.a⁰
+//│ deforest > 	fields: (x⁴ as!! X¹).a⁰
 //│ deforest > X⁰(3) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.a⁰
+//│ deforest > 	fields: (x⁴ as!! X¹).a⁰
 //│ deforest > <<< fusing <<<
 //│ = fun lambda_7$lambda
 
@@ -279,7 +279,7 @@ f(A(1))
 //│ deforest > >>> fusing >>>
 //│ deforest > A⁰(1) ->
 //│ deforest > 	match: x⁷
-//│ deforest > 	fields: x⁷.x⁸
+//│ deforest > 	fields: (x⁷ as!! A¹).x⁸
 //│ deforest > <<< fusing <<<
 //│ = 1
 
@@ -291,8 +291,8 @@ f(A(1))
 //│ deforest > >>> fusing >>>
 //│ deforest > A⁰(1) ->
 //│ deforest > 	match: x⁹
-//│ deforest > 	fields: x⁹.x⁸
-//│ deforest > 	fields: x⁹.x⁸
+//│ deforest > 	fields: (x⁹ as!! A¹).x⁸
+//│ deforest > 	fields: (x⁹ as!! A¹).x⁸
 //│ deforest > <<< fusing <<<
 //│ = 2
 
@@ -304,10 +304,10 @@ f(A(2)) + f(A(3))
 //│ deforest > >>> fusing >>>
 //│ deforest > A⁰(3) ->
 //│ deforest > 	match: x¹⁰
-//│ deforest > 	fields: x¹⁰.x⁸
+//│ deforest > 	fields: (x¹⁰ as!! A¹).x⁸
 //│ deforest > A⁰(2) ->
 //│ deforest > 	match: x¹⁰
-//│ deforest > 	fields: x¹⁰.x⁸
+//│ deforest > 	fields: (x¹⁰ as!! A¹).x⁸
 //│ deforest > <<< fusing <<<
 //│ = 4
 
@@ -321,16 +321,16 @@ localFuse(4)
 //│ deforest > >>> fusing >>>
 //│ deforest > A⁰(x¹¹) ->
 //│ deforest > 	match: scrut¹
-//│ deforest > 	fields: scrut¹.x⁸
+//│ deforest > 	fields: (scrut¹ as!! A¹).x⁸
 //│ deforest > A⁰(x¹¹) ->
 //│ deforest > 	match: scrut¹
-//│ deforest > 	fields: scrut¹.x⁸
+//│ deforest > 	fields: (scrut¹ as!! A¹).x⁸
 //│ deforest > A⁰(x¹¹) ->
 //│ deforest > 	match: scrut¹
-//│ deforest > 	fields: scrut¹.x⁸
+//│ deforest > 	fields: (scrut¹ as!! A¹).x⁸
 //│ deforest > B⁰(y⁰) ->
 //│ deforest > 	match: scrut²
-//│ deforest > 	fields: scrut².x¹²
+//│ deforest > 	fields: (scrut² as!! B¹).x¹²
 //│ deforest > <<< fusing <<<
 //│ = B(4)
 
@@ -382,7 +382,7 @@ dtor(A(B(0)))
 //│ deforest > 	match: y¹
 //│ deforest > A⁰(tmp²) ->
 //│ deforest > 	match: x¹³
-//│ deforest > 	fields: x¹³.x⁸
+//│ deforest > 	fields: (x¹³ as!! A¹).x⁸
 //│ deforest > <<< fusing <<<
 //│ = B(0)
 

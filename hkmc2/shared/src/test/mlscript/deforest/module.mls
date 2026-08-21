@@ -16,10 +16,10 @@ M.f(M.p())
 //│ deforest > >>> fusing >>>
 //│ deforest > M⁰.this.XX⁰(tmp⁰) ->
 //│ deforest > 	match: x⁰
-//│ deforest > 	fields: x⁰.a⁰
+//│ deforest > 	fields: (x⁰ as!! XX¹).a⁰
 //│ deforest > M⁰.this.YY⁰(M⁰.this.OO⁰) ->
 //│ deforest > 	match: arg$XX$0$⁰
-//│ deforest > 	fields: arg$XX$0$⁰.b⁰
+//│ deforest > 	fields: (arg$XX$0$⁰ as!! YY¹).b⁰
 //│ deforest > <<< fusing <<<
 //│ = 123
 
@@ -43,22 +43,22 @@ DeforestList.res + DeforestList.main()
 //│ deforest > >>> fusing >>>
 //│ deforest > DeforestList⁰.this.Cons⁰(n⁰, tmp¹) ->
 //│ deforest > 	match: ls⁰
-//│ deforest > 	fields: ls⁰.h⁰
-//│ deforest > 	fields: ls⁰.t⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).t⁰
 //│ deforest > DeforestList⁰.this.Nil⁰ ->
 //│ deforest > 	match: ls⁰
 //│ deforest > DeforestList⁰.this.Cons⁰(n⁰, tmp¹) ->
 //│ deforest > 	match: ls⁰
-//│ deforest > 	fields: ls⁰.h⁰
-//│ deforest > 	fields: ls⁰.t⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).t⁰
 //│ deforest > DeforestList⁰.this.Nil⁰ ->
 //│ deforest > 	match: ls⁰
 //│ deforest > DeforestList⁰.this.Nil⁰ ->
 //│ deforest > 	match: ls⁰
 //│ deforest > DeforestList⁰.this.Cons⁰(n⁰, tmp¹) ->
 //│ deforest > 	match: ls⁰
-//│ deforest > 	fields: ls⁰.h⁰
-//│ deforest > 	fields: ls⁰.t⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = 5056
 
@@ -81,24 +81,24 @@ module DeforestList with
   val res = DeforestList.sum(DeforestList.enum(100))
 DeforestList.res + DeforestList.main()
 //│ deforest > >>> fusing >>>
-//│ deforest > DeforestList¹.this.Cons¹(n¹, tmp²) ->
+//│ deforest > DeforestList¹.this.Cons²(n¹, tmp²) ->
 //│ deforest > 	match: ls¹
-//│ deforest > 	fields: ls¹.h¹
-//│ deforest > 	fields: ls¹.t¹
+//│ deforest > 	fields: (ls¹ as!! Cons³).h¹
+//│ deforest > 	fields: (ls¹ as!! Cons³).t¹
 //│ deforest > DeforestList¹.this.Nil¹ ->
 //│ deforest > 	match: ls¹
-//│ deforest > DeforestList¹.this.Cons¹(n¹, tmp²) ->
+//│ deforest > DeforestList¹.this.Cons²(n¹, tmp²) ->
 //│ deforest > 	match: ls¹
-//│ deforest > 	fields: ls¹.h¹
-//│ deforest > 	fields: ls¹.t¹
+//│ deforest > 	fields: (ls¹ as!! Cons³).h¹
+//│ deforest > 	fields: (ls¹ as!! Cons³).t¹
 //│ deforest > DeforestList¹.this.Nil¹ ->
 //│ deforest > 	match: ls¹
 //│ deforest > DeforestList¹.this.Nil¹ ->
 //│ deforest > 	match: ls¹
-//│ deforest > DeforestList¹.this.Cons¹(n¹, tmp²) ->
+//│ deforest > DeforestList¹.this.Cons²(n¹, tmp²) ->
 //│ deforest > 	match: ls¹
-//│ deforest > 	fields: ls¹.h¹
-//│ deforest > 	fields: ls¹.t¹
+//│ deforest > 	fields: (ls¹ as!! Cons³).h¹
+//│ deforest > 	fields: (ls¹ as!! Cons³).t¹
 //│ deforest > <<< fusing <<<
 //│ = 5056
 
@@ -206,7 +206,7 @@ g(f(O.I), O.I)
 //│ deforest > >>> fusing >>>
 //│ deforest > I⁰.C¹(3) ->
 //│ deforest > 	match: x¹
-//│ deforest > 	fields: x¹.x²
+//│ deforest > 	fields: (x¹ as!! C²).x²
 //│ deforest > <<< fusing <<<
 //│ = 5
 
@@ -220,6 +220,6 @@ g(f(O), O)
 //│ deforest > >>> fusing >>>
 //│ deforest > O⁰.I¹.C¹(3) ->
 //│ deforest > 	match: x³
-//│ deforest > 	fields: x³.x²
+//│ deforest > 	fields: (x³ as!! C²).x²
 //│ deforest > <<< fusing <<<
 //│ = 5

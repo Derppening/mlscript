@@ -11,11 +11,11 @@ if B(1,2,3,4,5) is
 //│ deforest > >>> fusing >>>
 //│ deforest > B⁰(1, 2, 3, 4, 5) ->
 //│ deforest > 	match: scrut⁰
-//│ deforest > 	fields: scrut⁰.a⁰
-//│ deforest > 	fields: scrut⁰.b⁰
-//│ deforest > 	fields: scrut⁰.c⁰
-//│ deforest > 	fields: scrut⁰.d⁰
-//│ deforest > 	fields: scrut⁰.e⁰
+//│ deforest > 	fields: (scrut⁰ as!! B¹).a⁰
+//│ deforest > 	fields: (scrut⁰ as!! B¹).b⁰
+//│ deforest > 	fields: (scrut⁰ as!! B¹).c⁰
+//│ deforest > 	fields: (scrut⁰ as!! B¹).d⁰
+//│ deforest > 	fields: (scrut⁰ as!! B¹).e⁰
 //│ deforest > <<< fusing <<<
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let scrut, e, a, b, c, d, arg$B$0$, arg$B$1$, arg$B$2$, arg$B$3$, arg$B$4$, $scrut_B, $scrut_rest, B_a, B_b, B_c, B_d, B_e;
@@ -57,22 +57,22 @@ c2 of A(A(A(A(A(A(1))))))
 //│ deforest > >>> fusing >>>
 //│ deforest > A⁰(tmp⁰) ->
 //│ deforest > 	match: x⁰
-//│ deforest > 	fields: x⁰.a¹
+//│ deforest > 	fields: (x⁰ as!! A¹).a¹
 //│ deforest > A⁰(tmp¹) ->
 //│ deforest > 	match: arg$A$0$⁰
-//│ deforest > 	fields: arg$A$0$⁰.a¹
+//│ deforest > 	fields: (arg$A$0$⁰ as!! A¹).a¹
 //│ deforest > A⁰(tmp²) ->
 //│ deforest > 	match: arg$A$0$¹
-//│ deforest > 	fields: arg$A$0$¹.a¹
+//│ deforest > 	fields: (arg$A$0$¹ as!! A¹).a¹
 //│ deforest > A⁰(tmp³) ->
 //│ deforest > 	match: arg$A$0$²
-//│ deforest > 	fields: arg$A$0$².a¹
+//│ deforest > 	fields: (arg$A$0$² as!! A¹).a¹
 //│ deforest > A⁰(tmp⁴) ->
 //│ deforest > 	match: arg$A$0$³
-//│ deforest > 	fields: arg$A$0$³.a¹
+//│ deforest > 	fields: (arg$A$0$³ as!! A¹).a¹
 //│ deforest > A⁰(1) ->
 //│ deforest > 	match: arg$A$0$⁴
-//│ deforest > 	fields: arg$A$0$⁴.a¹
+//│ deforest > 	fields: (arg$A$0$⁴ as!! A¹).a¹
 //│ deforest > <<< fusing <<<
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let tmp, tmp1, tmp2, tmp3, tmp4, tmp5, c2_19$c2, c2_19$x_A, c2_19$x_rest, c2_19$arg$A$0$_A, c2_19$arg$A$0$_rest, c2_19$arg$A$0$_A1, c2_19$arg$A$0$_rest1, c2_19$arg$A$0$_A2, c2_19$arg$A$0$_rest2, c2_19$arg$A$0$_A3, c2_19$arg$A$0$_rest3, c2_19$arg$A$0$_A4, c2_19$arg$A$0$_rest4, A_a, A_a1, A_a2, A_a3, A_a4, A_a5;
@@ -140,22 +140,22 @@ c2 of A(A(A(A(A(A(1))))))
 //│   let a, arg$A$0$, arg$A$0$1, arg$A$0$2, arg$A$0$3, arg$A$0$4, arg$A$0$5;
 //│   match x
 //│     A¹ =>
-//│       set arg$A$0$ = x.a¹;
+//│       set arg$A$0$ = (x as!! A¹).a¹;
 //│       match arg$A$0$
 //│         A¹ =>
-//│           set arg$A$0$1 = arg$A$0$.a¹;
+//│           set arg$A$0$1 = (arg$A$0$ as!! A¹).a¹;
 //│           match arg$A$0$1
 //│             A¹ =>
-//│               set arg$A$0$2 = arg$A$0$1.a¹;
+//│               set arg$A$0$2 = (arg$A$0$1 as!! A¹).a¹;
 //│               match arg$A$0$2
 //│                 A¹ =>
-//│                   set arg$A$0$3 = arg$A$0$2.a¹;
+//│                   set arg$A$0$3 = (arg$A$0$2 as!! A¹).a¹;
 //│                   match arg$A$0$3
 //│                     A¹ =>
-//│                       set arg$A$0$4 = arg$A$0$3.a¹;
+//│                       set arg$A$0$4 = (arg$A$0$3 as!! A¹).a¹;
 //│                       match arg$A$0$4
 //│                         A¹ =>
-//│                           set arg$A$0$5 = arg$A$0$4.a¹;
+//│                           set arg$A$0$5 = (arg$A$0$4 as!! A¹).a¹;
 //│                           set a = arg$A$0$5;
 //│                           return a
 //│                         else

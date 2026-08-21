@@ -102,7 +102,10 @@ object TrackableFieldSelect:
         owner <- tSym.owner
         cls <- owner.asCls
         if cls.tree.clsParams.size === 1
-      yield s.qual -> (tSym, cls)
+      // * The qualifier is tracked by what it refers to, so the owner-narrowing cast `Lowering` puts on it is
+      // * transparent here: leaving it on makes every downstream `Value.SimpleRef` match fail and silently
+      // * disables fusion for the selection.
+      yield s.qual.throughUncheckedCasts -> (tSym, cls)
     case _ => N
 
 object PossibleTrackableTupleSelect:
@@ -132,7 +135,7 @@ object MemberRefTo:
       target ->
       locally:
         p match
-          case Select(qual, _) => S(qual)
+          case Select(qual, _) => S(qual.throughUncheckedCasts)
           case _ => N
 
 object CtorProducer:

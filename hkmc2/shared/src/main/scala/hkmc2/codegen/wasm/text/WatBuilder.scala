@@ -332,16 +332,76 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
   private def baseObjectRefType(nullable: Bool): RefType =
     RefType(baseObjectTypeIdx, nullable = nullable)
 
+  /** Why the backend is narrowing a value at a coercion site.
+    *
+    * `Cast` nodes exist so that the IR owns coercions: a narrowing recorded in the IR appears in the lowered-IR
+    * dumps, carries a source location, and is visible to every later pass, while one the backend invents on its own
+    * is visible to none of that. Each site therefore states which of the two it is, so that a narrowing the IR
+    * should have carried is reported rather than silently repaired here.
+    */
+  private enum CastOrigin:
+    /** Executing a `Cast` node: the IR asked for this narrowing, so performing it is this backend's job. */
+    case IrCast
+    /** Narrowing `this` from the type its Wasm parameter slot declares to the class whose body is being compiled.
+      *
+      * The widening this repairs is introduced by this backend rather than by the IR: every override sharing a
+      * virtual slot also shares one signature, whose `this` is declared at the class that introduced the slot (see
+      * [[virtualMethodSignature]]). The IR's `this` is the defining class throughout, so it has no widening to
+      * record and therefore no `Cast` to be missing.
+      */
+    case VirtualThis
+    /** The backend reaching a declared Wasm type on its own, at the site described by `what`. */
+    case Derived(what: Str)
+
+  /** Whether narrowing `from` to `to` only recovers non-nullability, leaving the heap type alone.
+    *
+    * The erased type hierarchy has no notion of nullability, so the IR cannot express these and the backend has to
+    * derive them. They are one of the two families of backend-derived casts that are expected rather than a defect:
+    * struct fields are declared nullable precisely because eager construction needs a default value to write.
+    */
+  private def isNullabilityOnly(from: RefType, to: RefType): Bool =
+    from.heapType === to.heapType && from.nullable && !to.nullable
+
+  /** Whether `to` is the boxed representation of a primitive.
+    *
+    * The other expected family. `ErasedType.needsCast` reports a primitive as unrelated to every other erased type -
+    * `Unknown` included - so a coercion into one is rejected outright rather than turned into a `Cast`. The IR
+    * consequently *cannot* carry this narrowing, however much it ought to: unboxing a value the IR only knows as the
+    * top type is left to the backend that chose the boxing.
+    *
+    * This masks a limitation of the lattice rather than a structural impossibility, and it is broader than the one
+    * case that motivated it (a merged `TailRecOpt` dispatch param): every `i31ref` target is excluded, which is also
+    * how `Bool` and `Int31` box. A genuinely missing coercion into one of those would go unreported here.
+    */
+  private def isPrimitiveBoxing(to: RefType): Bool =
+    to.heapType === HeapType.I31
+
   /** Casts an expression to `target` type, unless its result type is already a subtype of `target`.
     *
-    * Emits an error if the two types have incompatible type hierarchies.
+    * Emits an error if the two types have incompatible type hierarchies, and reports a backend-derived narrowing of
+    * the heap type as one too: outside the two families the IR cannot express - nullability and primitive boxing -
+    * reaching a declared type is the IR's job (see [[CastOrigin]]), so needing a cast here means a coercion went
+    * missing upstream.
     */
-  private def castConserve(expr: Expr, target: ValType)(using Raise): Expr =
+  private def castConserve(expr: Expr, target: ValType, origin: CastOrigin)(using Raise): Expr =
     require(expr.resultTypes.size == 1, "expected single-result expression for cast")
     expr.resultType -> target match
       case (S(ty), _) if ty.isSubtypeOf(target) => expr
       case (S(ty: RefType), target: RefType) if ty.heapType.topType === target.heapType.topType =>
-        ref.cast(expr, target)
+        origin match
+          case CastOrigin.Derived(what) if !isNullabilityOnly(ty, target) && !isPrimitiveBoxing(target) =>
+            // * Reported at the same severity as `checkBodyRetType`, and for the same reason: the IR should already
+            // * carry a `Cast` wherever the coercion is representable, so needing one here is a compiler defect.
+            // * The cast is still emitted, so that the reported program keeps compiling to valid Wasm.
+            raise(ErrorReport(
+              Ls(msg"Wasm ${what} narrows `${
+                  ty.toWat.mkString()
+                }` to `${target.toWat.mkString()}` without a `Cast` in the IR" -> N),
+              source = Diagnostic.Source.Compilation,
+              extraInfo = S(expr.toWat.mkString()),
+            ))
+            ref.cast(expr, target)
+          case _ => ref.cast(expr, target)
       case (ty, _) =>
         errExpr(
           Ls(msg"Cannot cast a Wasm value of type `${
@@ -351,15 +411,20 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
         )
 
   /** Compiles `r` and narrows it to `target`, the declared type of the slot it flows into. */
-  private def castToValType(r: codegen.Result, target: ValType)(using FunctionCtx, Raise, SessionExportCtx): Expr =
-    castConserve(result(r), target)
+  private def castToValType(r: codegen.Result, target: ValType, origin: CastOrigin)(using FunctionCtx, Raise, SessionExportCtx): Expr =
+    castConserve(result(r), target, origin)
 
-  /** Casts each argument in `wasmArgs` down to the corresponding declared parameter type read from `funcTypeInfo`. */
-  private def castArgsToParams(wasmArgs: Seq[Expr], funcTypeInfo: TypeInfo)(using Raise): Seq[Expr] =
+  /** Casts each argument in `wasmArgs` down to the corresponding declared parameter type read from `funcTypeInfo`.
+    *
+    * `what` names the operand kind for diagnostics; each position is reported separately, since position 0 is the
+    * receiver for a method or virtual call and an ordinary argument otherwise.
+    */
+  private def castArgsToParams(wasmArgs: Seq[Expr], funcTypeInfo: TypeInfo, what: Str)(using Raise): Seq[Expr] =
     val declParams = funcTypeInfo.asFunctionType_!.sigType.params
-    wasmArgs.zip(declParams).map: (arg, p) =>
+    wasmArgs.zip(declParams).zipWithIndex.map: (argAndParam, idx) =>
+      val (arg, p) = argAndParam
       p.valtype match
-        case rt: RefType => castConserve(arg, rt)
+        case rt: RefType => castConserve(arg, rt, CastOrigin.Derived(s"$what at position $idx"))
         case _ => arg
 
   /** Returns the default Wasm value for one struct field when eagerly constructing an object instance. */
@@ -1319,6 +1384,16 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
   private def mkTempLocal(base: Str, erasedType: Opt[ErasedValueType])(using FunctionCtx, Raise): LocalIdx =
     funcCtx.addLocal(TempSymbol(N, erasedType, base))
 
+  /** Allocates a Wasm local to spill `r` into, carrying `r`'s erased type, and yields it with its slot type.
+    *
+    * A spill local created with no erased type reads back as `anyref`, which discards whatever type the IR had
+    * established for the value and forces a `ref.cast` at each use of the local. Those casts are invisible to the
+    * IR (see [[CastOrigin]]), so the type belongs on the local instead.
+    */
+  private def mkSpillLocal(base: Str, r: codegen.Result)(using FunctionCtx, Raise): (LocalIdx, ValType) =
+    val sym = TempSymbol(N, r.erasedValueType, base)
+    (funcCtx.addLocal(sym), funcCtx.slotType(sym))
+
   /** Binds constructor self (`thisSym`) to the Wasm local name `this` in the current function context.
     */
   private def bindCtorThis(thisSym: InnerSymbol)(using FunctionCtx, Raise): LocalIdx =
@@ -1521,6 +1596,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
       castConserve(
         global.get(globalIdx, ctx.getGlobalType_!(globalIdx).globalType.valType),
         l.localType,
+        CastOrigin.Derived("global slot read"),
       )
     case N =>
       errExpr(
@@ -1541,9 +1617,13 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
       value: codegen.Result,
       loc: Opt[Loc],
   )(using FunctionCtx, Raise, SessionExportCtx): Expr = varIndex(l, loc) match
-    case S(localIdx: LocalIdx) => local.set(localIdx, castToValType(value, funcCtx.slotType(l)))
+    case S(localIdx: LocalIdx) =>
+      local.set(localIdx, castToValType(value, funcCtx.slotType(l), CastOrigin.Derived("local slot write")))
     case S(globalIdx: GlobalIdx) =>
-      global.set(globalIdx, castToValType(value, ctx.getGlobalType_!(globalIdx).globalType.valType))
+      global.set(
+        globalIdx,
+        castToValType(value, ctx.getGlobalType_!(globalIdx).globalType.valType, CastOrigin.Derived("global slot write")),
+      )
     case N =>
       errExpr(
         Ls(
@@ -1613,9 +1693,9 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
           s"Virtual call arity mismatch for $methodSym: ${args.size} args vs ${paramTypes.size} declared params",
         )
         val ownerTypeInfoIdx = typeInfoTypeIdxs(ownerCls)
-        val receiverTmp = mkTempLocal("receiver", erasedType = N)
+        val (receiverTmp, receiverType) = mkSpillLocal("receiver", qual)
         val receiverExpr = local.set(receiverTmp, result(qual))
-        val receiverRef = local.get(receiverTmp, RefType.anyref)
+        val receiverRef = local.get(receiverTmp, receiverType)
         val ownerTypeInfoRef = ref.cast(
           readObjectTypeInfo(receiverRef),
           RefType(ownerTypeInfoIdx, nullable = false),
@@ -1626,7 +1706,8 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
           ownerTypeInfoRef,
           RefType(virtualMethodTypeIdx, nullable = true),
         )
-        val operands = castArgsToParams(receiverRef +: args.map(argument), ctx.getTypeInfo_!(virtualMethodTypeIdx))
+        val operands =
+          castArgsToParams(receiverRef +: args.map(argument), ctx.getTypeInfo_!(virtualMethodTypeIdx), "virtual-call operand")
         val virtualCall = call_ref(
           target = methodRef,
           operands = operands,
@@ -1636,7 +1717,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
         Ls(receiverExpr, virtualCall)
       case N =>
         val funcTypeInfo = ctx.getTypeInfo_!(ctx.getFuncTypeUse_!(methodSym).typeIdx)
-        val operands = castArgsToParams(result(qual) +: args.map(argument), funcTypeInfo)
+        val operands = castArgsToParams(result(qual) +: args.map(argument), funcTypeInfo, "method-call operand")
         Ls(call(
           funcidx = ctx.getFunc_!(methodSym),
           operands = operands,
@@ -1691,6 +1772,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
               sym.asBlkMember.fold(baseObjectTypeIdx)(ctx.getType_!(_)),
               nullable = false,
             ),
+            CastOrigin.VirtualThis,
           )
 
     case Call(Value.SimpleRef(l: BuiltinSymbol), lhs :: rhs :: Nil) if !l.functionLike =>
@@ -1779,7 +1861,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
                     extraInfo = S(fun.toString),
                   )
               val baseTypeInfo = ctx.getTypeInfo_!(ctx.getFuncTypeUse_!(baseFuncIdx).typeIdx)
-              val wasmArgs = castArgsToParams(args.map(argument), baseTypeInfo)
+              val wasmArgs = castArgsToParams(args.map(argument), baseTypeInfo, "call argument")
 
               call(
                 funcidx = baseFuncIdx,
@@ -1859,12 +1941,16 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
             case other => lastWords(s"Expected struct type for $selCls, found ${other.toWat.mkString()}")
           val getExpr = struct.get(
             fieldidx,
-            ref = castConserve(qualRes, RefType(ctx.getType_!(selCls), nullable = false)),
+            ref = castConserve(
+              qualRes,
+              RefType(ctx.getType_!(selCls), nullable = false),
+              CastOrigin.Derived("field-read qualifier"),
+            ),
             ty = fieldTy,
           )
           fieldTy match
             case rt: RefType if rt.nullable && rt.heapType != HeapType.Any =>
-              castConserve(getExpr, rt.copy(nullable = false))
+              castConserve(getExpr, rt.copy(nullable = false), CastOrigin.Derived("field-read result"))
             case _ => getExpr
         case N =>
           errExpr(
@@ -1948,7 +2034,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
         lastWords(s"Missing type definition for class constructor ${ctorClsBlkSym.toString}")
       val ctorClsTypeIdx = ctx.getType(ctorClsBlkSym).getOrElse:
         lastWords(s"Missing class definition for class ${ctorClsBlkSym.toString}")
-      val ctorArgs = castArgsToParams(as.map(argument), ctorTypeIdx)
+      val ctorArgs = castArgsToParams(as.map(argument), ctorTypeIdx, "constructor argument")
       call(funcidx = ctorFuncIdx, operands = ctorArgs, Seq(Result(RefType(ctorClsTypeIdx, nullable = false))))
 
     case Tuple(mut, elems) =>
@@ -1957,7 +2043,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
 
     case Cast(value, target, _) =>
       target.wasmType match
-        case S(ty) => castToValType(value, ty)
+        case S(ty) => castToValType(value, ty, CastOrigin.IrCast)
         case N => result(value)
 
     case r =>
@@ -2072,13 +2158,17 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
                       })",
                   )
                 val fieldidx = fieldSelect(selCls, fieldSym)
-                val objRef = castConserve(lhsExpr, RefType(ctx.getType_!(selCls), nullable = false))
+                val objRef = castConserve(
+                  lhsExpr,
+                  RefType(ctx.getType_!(selCls), nullable = false),
+                  CastOrigin.Derived("field-assignment qualifier"),
+                )
                 val structInfo = ctx.getTypeInfo_!(selCls)
                 val fieldType = structInfo.compType match
                   case st: StructType => st.fieldsBySym(fieldSym).ty
                   case other => lastWords(s"Expected struct type for $selCls, found ${other.toWat.mkString()}")
                 val rhsCasted = fieldType match
-                  case rt: RefType => castConserve(rhsExpr, rt)
+                  case rt: RefType => castConserve(rhsExpr, rt, CastOrigin.Derived("field-assignment value"))
                   case _ => rhsExpr
                 struct.set(fieldidx, objRef, rhsCasted)
               case N =>
@@ -2145,7 +2235,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
                 val fieldType = structInfo.compType match
                   case st: StructType => st.fieldsBySym(tsym).ty
                   case other => lastWords(s"Expected struct type for $ownerBlkMem, found ${other.toWat.mkString()}")
-                val pCasted = castToValType(p, fieldType)
+                val pCasted = castToValType(p, fieldType, CastOrigin.Derived("field initializer"))
                 val assignInstr = struct.set(
                   index = fieldIdx,
                   ref = mkThis(owner),
@@ -2465,6 +2555,8 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
           else N
         val scrutLocalResult = scrut match
           case _: (Value.RefLike | Value.Lit) => N
+          // * Not `mkSpillLocal`: a match scrutinee's erased type is `Unknown` in practice, so typing the spill
+          // * measurably changes nothing here, and the arms narrow it themselves through their `Case` tests.
           case _ => S(mkTempLocal("scrut", erasedType = N))
 
         val scrutInitExpr = scrutLocalResult.map: scrutLocal =>

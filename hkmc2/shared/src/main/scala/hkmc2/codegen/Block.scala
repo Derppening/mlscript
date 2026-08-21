@@ -1301,6 +1301,23 @@ sealed abstract class Path extends TrivialResult:
     case sel: Select => sel.symbol
     case _ => N
 
+  /** This path with any number of *unchecked* casts stripped off.
+    *
+    * An unchecked cast does not change what its operand denotes, only the type that operand is read at. A consumer
+    * that identifies a path by *what it refers to* - rather than by the type it is read at - must therefore look
+    * through one; [[`Result.litThroughUncheckedCasts`]] is this same rule specialised to literals. Matching a shape
+    * such as `Value.SimpleRef` directly instead stops matching, silently, as soon as a cast is interposed - which is
+    * what `Lowering` now does at every selection whose qualifier is wider than the selected member's owner.
+    *
+    * A cast over a non-path operand cannot be stripped without leaving the path world, so it is left in place.
+    *
+    * A *checked* cast is deliberately opaque here: it can throw, so its operand does not stand in for it.
+    */
+  @annotation.tailrec
+  final def throughUncheckedCasts: Path = this match
+    case Cast(value: Path, _, false) => value.throughUncheckedCasts
+    case _ => this
+
 /**
  * @param symbol The symbol representing the definition that the selection refers to, if known.
  */

@@ -24,8 +24,8 @@ sum(enum(5), 0)
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(x⁰, tmp⁰) ->
 //│ deforest > 	match: ls⁰
-//│ deforest > 	fields: ls⁰.h⁰
-//│ deforest > 	fields: ls⁰.t⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁰
 //│ deforest > <<< fusing <<<
@@ -53,8 +53,8 @@ sum(enum(5), 0)
 //│       Nil⁰ =>
 //│         return acc
 //│       Cons¹ =>
-//│         set arg$Cons$0$ = ls.h⁰;
-//│         set arg$Cons$1$ = ls.t⁰;
+//│         set arg$Cons$0$ = (ls as!! Cons¹).h⁰;
+//│         set arg$Cons$1$ = (ls as!! Cons¹).t⁰;
 //│         set tmp = +⁰(arg$Cons$0$, acc);
 //│         set ls = arg$Cons$1$;
 //│         set acc = tmp;
@@ -105,8 +105,8 @@ len(flatten(id((1 :: 2 :: Nil) :: (3 :: Nil) :: Nil)))
 //│ deforest > 	match: ls¹
 //│ deforest > Cons⁰(h¹, tmp¹) ->
 //│ deforest > 	match: ls¹
-//│ deforest > 	fields: ls¹.h⁰
-//│ deforest > 	fields: ls¹.t⁰
+//│ deforest > 	fields: (ls¹ as!! Cons¹).h⁰
+//│ deforest > 	fields: (ls¹ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ eta-expansion > >>> eta-expansion targets shapes >>>
 //│ eta-expansion > flatten_31_append_19$append: [2, 6]
@@ -126,8 +126,8 @@ len(flatten(id((1 :: 2 :: Nil) :: (3 :: Nil) :: Nil)))
 //│       return 0
 //│     Cons¹ =>
 //│       let ys;
-//│       set arg$Cons$0$ = xss.h⁰;
-//│       set arg$Cons$1$ = xss.t⁰;
+//│       set arg$Cons$0$ = (xss as!! Cons¹).h⁰;
+//│       set arg$Cons$1$ = (xss as!! Cons¹).t⁰;
 //│       set ys = flatten_31$flatten⁰(arg$Cons$1$);
 //│       return flatten_31_append_19$append$worker⁰(arg$Cons$0$, ys)
 //│     else
@@ -142,7 +142,7 @@ len(flatten(id((1 :: 2 :: Nil) :: (3 :: Nil) :: Nil)))
 //│       return ys()
 //│     Cons¹ =>
 //│       let inlinedVal;
-//│       set arg$Cons$1$ = xs.t⁰;
+//│       set arg$Cons$1$ = (xs as!! Cons¹).t⁰;
 //│       set inlinedVal = flatten_31_append_19$append$worker⁰(arg$Cons$1$, ys);
 //│       return +⁰(1, inlinedVal)
 //│     else
@@ -155,8 +155,8 @@ len(flatten(id((1 :: 2 :: Nil) :: (3 :: Nil) :: Nil)))
 //│     Nil⁰ =>
 //│       return ys
 //│     Cons¹ =>
-//│       set arg$Cons$0$ = xs.h⁰;
-//│       set arg$Cons$1$ = xs.t⁰;
+//│       set arg$Cons$0$ = (xs as!! Cons¹).h⁰;
+//│       set arg$Cons$1$ = (xs as!! Cons¹).t⁰;
 //│       set tmp5 = append¹(arg$Cons$1$, ys);
 //│       return Cons⁰(arg$Cons$0$, tmp5)
 //│     else
@@ -169,8 +169,8 @@ len(flatten(id((1 :: 2 :: Nil) :: (3 :: Nil) :: Nil)))
 //│     Nil⁰ =>
 //│       return Nil⁰
 //│     Cons¹ =>
-//│       set arg$Cons$0$ = xss.h⁰;
-//│       set arg$Cons$1$ = xss.t⁰;
+//│       set arg$Cons$0$ = (xss as!! Cons¹).h⁰;
+//│       set arg$Cons$1$ = (xss as!! Cons¹).t⁰;
 //│       set tmp5 = flatten¹(arg$Cons$1$);
 //│       return append¹(arg$Cons$0$, tmp5)
 //│     else
@@ -183,7 +183,7 @@ len(flatten(id((1 :: 2 :: Nil) :: (3 :: Nil) :: Nil)))
 //│     Nil⁰ =>
 //│       return 0
 //│     Cons¹ =>
-//│       set arg$Cons$1$ = ls.t⁰;
+//│       set arg$Cons$1$ = (ls as!! Cons¹).t⁰;
 //│       set tmp5 = len¹(arg$Cons$1$);
 //│       return +⁰(1, tmp5)
 //│     else

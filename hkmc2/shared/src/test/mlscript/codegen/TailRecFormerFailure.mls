@@ -38,7 +38,7 @@ fun go(x) = if x is
 //│     let arg$Cons$1$, tmp, tmp1;
 //│     match x
 //│       Cons⁰ =>
-//│         set arg$Cons$1$ = x.tail⁰;
+//│         set arg$Cons$1$ = (x as!! Cons⁰).tail⁰;
 //│         match arg$Cons$1$
 //│           Nil⁰ =>
 //│             return "Z"
@@ -70,7 +70,7 @@ fun go(x) = if x is
 //│     let arg$Cons$1$, tmp;
 //│     match x
 //│       Cons⁰ =>
-//│         set arg$Cons$1$ = x.tail⁰;
+//│         set arg$Cons$1$ = (x as!! Cons⁰).tail⁰;
 //│         match arg$Cons$1$
 //│           Nil⁰ =>
 //│             return "Z"

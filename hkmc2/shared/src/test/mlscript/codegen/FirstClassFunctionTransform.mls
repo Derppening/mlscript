@@ -176,7 +176,7 @@ Foo(1).foo(x => x - 1)
 //│   }
 //│ };
 //│ set tmp1 = new Function$²();
-//│ return tmp.foo²(tmp1)
+//│ return (tmp as!! Foo¹).foo²(tmp1)
 //│ —————————————————| Output |—————————————————————————————————————————————————————————————————————————
 //│ = 0
 
@@ -262,8 +262,8 @@ module Foo with
 //│     return lambda⁴(Function$⁴.this.Bar⁰, Function$⁴.this.z⁰, x)
 //│   }
 //│ };
-//│ define Foo¹ as class Foo²
-//│ module Foo³ {
+//│ define Foo² as class Foo³
+//│ module Foo⁴ {
 //│   constructor {
 //│     define Bar¹ as class Bar³ {
 //│       private val y⁰;

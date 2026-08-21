@@ -48,7 +48,7 @@ if s is
 //│ let arg$Some$0$;
 //│ match s⁰
 //│   Some⁰ =>
-//│     set arg$Some$0$ = s⁰.value⁰;
+//│     set arg$Some$0$ = (s⁰ as!! Some⁰).value⁰;
 //│     match arg$Some$0$
 //│       1 =>
 //│         return 0
@@ -64,7 +64,7 @@ if s is
 //│ let arg$Some$0$;
 //│ match s⁰
 //│   Some⁰ =>
-//│     set arg$Some$0$ = s⁰.value⁰;
+//│     set arg$Some$0$ = (s⁰ as!! Some⁰).value⁰;
 //│     match arg$Some$0$
 //│       1 =>
 //│         return 0

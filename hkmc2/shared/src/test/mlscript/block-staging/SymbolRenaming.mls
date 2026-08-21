@@ -27,7 +27,7 @@ staged module Selection with
 //│ >   let {scrut, tmp}
 //│ >   x.call()
 //│ >   tmp = C(1)
-//│ >   scrut = tmp.x
+//│ >   scrut = (tmp as!! C).x
 //│ >   if scrut is
 //│ >     Bool then true
 //│ >     else false

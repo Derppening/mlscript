@@ -26,7 +26,7 @@ c(p(3))
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(x⁰) ->
 //│ deforest > 	match: x¹
-//│ deforest > 	fields: x¹.a⁰
+//│ deforest > 	fields: (x¹ as!! X¹).a⁰
 //│ deforest > <<< fusing <<<
 //│ eta-expansion > >>> eta-expansion targets shapes >>>
 //│ eta-expansion > p_4$p: [1, 2]
@@ -64,10 +64,10 @@ g(f(p()))
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(tmp⁰) ->
 //│ deforest > 	match: x³
-//│ deforest > 	fields: x³.a⁰
+//│ deforest > 	fields: (x³ as!! X¹).a⁰
 //│ deforest > Y⁰(O⁰) ->
 //│ deforest > 	match: y⁰
-//│ deforest > 	fields: y⁰.b⁰
+//│ deforest > 	fields: (y⁰ as!! Y¹).b⁰
 //│ deforest > <<< fusing <<<
 //│ eta-expansion > >>> eta-expansion targets shapes >>>
 //│ eta-expansion > f_10$f: [1, 2]
@@ -87,16 +87,16 @@ c(p(true))
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(tmp¹) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.a⁰
+//│ deforest > 	fields: (x⁴ as!! X¹).a⁰
 //│ deforest > Y⁰(33) ->
 //│ deforest > 	match: arg$X$0$⁰
-//│ deforest > 	fields: arg$X$0$⁰.b⁰
+//│ deforest > 	fields: (arg$X$0$⁰ as!! Y¹).b⁰
 //│ deforest > X⁰(tmp²) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.a⁰
+//│ deforest > 	fields: (x⁴ as!! X¹).a⁰
 //│ deforest > Y⁰(22) ->
 //│ deforest > 	match: arg$X$0$⁰
-//│ deforest > 	fields: arg$X$0$⁰.b⁰
+//│ deforest > 	fields: (arg$X$0$⁰ as!! Y¹).b⁰
 //│ deforest > <<< fusing <<<
 //│ eta-expansion > >>> eta-expansion targets shapes >>>
 //│ eta-expansion > p_10$p: [1, 3]
@@ -114,16 +114,16 @@ main(3)
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(tmp³) ->
 //│ deforest > 	match: x⁵
-//│ deforest > 	fields: x⁵.a⁰
+//│ deforest > 	fields: (x⁵ as!! X¹).a⁰
 //│ deforest > Y⁰(tmp⁴) ->
 //│ deforest > 	match: arg$X$0$¹
-//│ deforest > 	fields: arg$X$0$¹.b⁰
+//│ deforest > 	fields: (arg$X$0$¹ as!! Y¹).b⁰
 //│ deforest > X⁰(tmp³) ->
 //│ deforest > 	match: x⁵
-//│ deforest > 	fields: x⁵.a⁰
+//│ deforest > 	fields: (x⁵ as!! X¹).a⁰
 //│ deforest > Y⁰(tmp⁴) ->
 //│ deforest > 	match: arg$X$0$¹
-//│ deforest > 	fields: arg$X$0$¹.b⁰
+//│ deforest > 	fields: (arg$X$0$¹ as!! Y¹).b⁰
 //│ deforest > <<< fusing <<<
 //│ eta-expansion > >>> eta-expansion targets shapes >>>
 //│ eta-expansion > p: [1, 3]
@@ -141,6 +141,6 @@ c(p(3))
 //│ deforest > >>> fusing >>>
 //│ deforest > X⁰(x⁶) ->
 //│ deforest > 	match: x⁷
-//│ deforest > 	fields: x⁷.a⁰
+//│ deforest > 	fields: (x⁷ as!! X¹).a⁰
 //│ deforest > <<< fusing <<<
 //│ = 3

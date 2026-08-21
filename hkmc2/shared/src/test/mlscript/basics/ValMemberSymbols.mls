@@ -24,7 +24,7 @@ a.x
 :sir
 a.A#x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ return a⁰.x¹
+//│ return (a⁰ as!! A²).x¹
 //│ —————————————————| Output |—————————————————————————————————————————————————————————————————————————
 //│ = 1
 
@@ -34,7 +34,7 @@ A::x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let lambda;
 //│ @private
-//│ define lambda as fun lambda⁰(self, ...args) { return self.x¹(...args) };
+//│ define lambda as fun lambda⁰(self, ...args) { return (self as!! A²).x¹(...args) };
 //│ return lambda⁰
 //│ —————————————————| Output |—————————————————————————————————————————————————————————————————————————
 //│ = fun
@@ -49,7 +49,7 @@ case A(x) then x
 //│   let x, arg$A$0$;
 //│   match caseScrut
 //│     A² =>
-//│       set arg$A$0$ = caseScrut.x¹;
+//│       set arg$A$0$ = (caseScrut as!! A²).x¹;
 //│       set x = arg$A$0$;
 //│       return x
 //│     else
@@ -80,7 +80,7 @@ a.x
 :sir
 a.A#x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ return a¹.x³
+//│ return (a¹ as!! A⁵).x³
 //│ —————————————————| Output |—————————————————————————————————————————————————————————————————————————
 //│ = 1
 
@@ -89,7 +89,7 @@ A::x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let lambda;
 //│ @private
-//│ define lambda as fun lambda²(self, ...args) { return self.x³(...args) };
+//│ define lambda as fun lambda²(self, ...args) { return (self as!! A⁵).x³(...args) };
 //│ return lambda²
 //│ —————————————————| Output |—————————————————————————————————————————————————————————————————————————
 //│ = fun
@@ -137,7 +137,11 @@ fun foo(x, y) =
 //│     end
 //│   }
 //│ };
-//│ define foo⁰ as fun foo¹(x, y) { let a; set a = new A⁷(x, y); return [a, a.u¹, a.v¹] };
+//│ define foo⁰ as fun foo¹(x, y) {
+//│   let a;
+//│   set a = new A⁷(x, y);
+//│   return [a, (a as!! A⁷).u¹, (a as!! A⁷).v¹]
+//│ };
 //│ end
 //│ —————————————————| Output |—————————————————————————————————————————————————————————————————————————
 

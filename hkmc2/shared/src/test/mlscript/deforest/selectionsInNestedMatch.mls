@@ -35,7 +35,7 @@ c(AA(2))
 //│ deforest > 	match: A⁰
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: x⁰
-//│ deforest > 	fields: x⁰.x¹
+//│ deforest > 	fields: (x⁰ as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ = 2
 
@@ -51,7 +51,7 @@ c(AA(2), A)
 //│ deforest > 	match: y⁰
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: x²
-//│ deforest > 	fields: x².x¹
+//│ deforest > 	fields: (x² as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ = 2
 
@@ -69,7 +69,7 @@ c(p(), A)
 //│ deforest > 	match: y¹
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: x³
-//│ deforest > 	fields: x³.x¹
+//│ deforest > 	fields: (x³ as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ = 2
 
@@ -89,7 +89,7 @@ c(p(), A)
 //│ deforest > 	match: y²
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: x⁴
-//│ deforest > 	fields: x⁴.x¹
+//│ deforest > 	fields: (x⁴ as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ = 3
 
@@ -106,19 +106,19 @@ f(AA(AA(AA(AA(AA(A))))))
 //│ deforest > >>> fusing >>>
 //│ deforest > AA⁰(tmp⁰) ->
 //│ deforest > 	match: x⁵
-//│ deforest > 	fields: x⁵.x¹
+//│ deforest > 	fields: (x⁵ as!! AA¹).x¹
 //│ deforest > AA⁰(tmp¹) ->
 //│ deforest > 	match: arg$AA$0$⁰
-//│ deforest > 	fields: arg$AA$0$⁰.x¹
+//│ deforest > 	fields: (arg$AA$0$⁰ as!! AA¹).x¹
 //│ deforest > AA⁰(tmp²) ->
 //│ deforest > 	match: x⁶
-//│ deforest > 	fields: x⁶.x¹
+//│ deforest > 	fields: (x⁶ as!! AA¹).x¹
 //│ deforest > AA⁰(tmp³) ->
 //│ deforest > 	match: x⁵
-//│ deforest > 	fields: x⁵.x¹
+//│ deforest > 	fields: (x⁵ as!! AA¹).x¹
 //│ deforest > AA⁰(A⁰) ->
 //│ deforest > 	match: arg$AA$0$⁰
-//│ deforest > 	fields: arg$AA$0$⁰.x¹
+//│ deforest > 	fields: (arg$AA$0$⁰ as!! AA¹).x¹
 //│ deforest > A⁰ ->
 //│ deforest > 	match: x⁶
 //│ deforest > <<< fusing <<<
@@ -131,10 +131,10 @@ f(AA(AA(A)))
 //│ deforest > >>> fusing >>>
 //│ deforest > AA⁰(tmp⁴) ->
 //│ deforest > 	match: x⁷
-//│ deforest > 	fields: x⁷.x¹
+//│ deforest > 	fields: (x⁷ as!! AA¹).x¹
 //│ deforest > AA⁰(A⁰) ->
 //│ deforest > 	match: arg$AA$0$¹
-//│ deforest > 	fields: arg$AA$0$¹.x¹
+//│ deforest > 	fields: (arg$AA$0$¹ as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ = A
 
@@ -146,10 +146,10 @@ f(p())
 //│ deforest > >>> fusing >>>
 //│ deforest > AA⁰(tmp⁵) ->
 //│ deforest > 	match: x⁸
-//│ deforest > 	fields: x⁸.x¹
+//│ deforest > 	fields: (x⁸ as!! AA¹).x¹
 //│ deforest > AA⁰(A⁰) ->
 //│ deforest > 	match: arg$AA$0$²
-//│ deforest > 	fields: arg$AA$0$².x¹
+//│ deforest > 	fields: (arg$AA$0$² as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ = A
 
@@ -170,6 +170,6 @@ c(AA(2), 10)
 //│ deforest > 	match: A⁰
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: x⁹
-//│ deforest > 	fields: x⁹.x¹
+//│ deforest > 	fields: (x⁹ as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ = 12

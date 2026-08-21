@@ -954,13 +954,19 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
           conclude(Select(p, nme)(N)(false).withLocOf(sel))
       case Resolved(sel @ Sel(prefix, nme), sym) =>
         subTerm(prefix): p =>
-          conclude(Select(p, definitionIdent(nme, sym))(S(sym))(false).withLocOf(sel))
+          conclude(
+            Select(castQualifierToOwner(p, S(sym), prefix.toLoc), definitionIdent(nme, sym))(S(sym))(false)
+              .withLocOf(sel),
+          )
       case sel @ SelProj(prefix, _, nme) =>
         subTerm(prefix): p =>
           conclude(Select(p, nme)(N)(false).withLocOf(sel))
       case Resolved(sel @ SelProj(prefix, _, nme), sym) =>
         subTerm(prefix): p =>
-          conclude(Select(p, definitionIdent(nme, sym))(S(sym))(false).withLocOf(sel))
+          conclude(
+            Select(castQualifierToOwner(p, S(sym), prefix.toLoc), definitionIdent(nme, sym))(S(sym))(false)
+              .withLocOf(sel),
+          )
       case _ => subTerm(baseF)(conclude)
     case h @ Handle(lhs, rhs, as, cls, defs, bod) =>
       if !lowerHandlers then
@@ -1004,7 +1010,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
         subTerm(prefix): p =>
           subTerm_nonTail(rhs): r =>
             AssignField(
-              p,
+              castQualifierToOwner(p, resolvedSelectionSymbol, prefix.toLoc),
               nme,
               castTo(r, fieldErasedType(resolvedSelectionSymbol), sel.toLoc),
               k(unit),
@@ -1019,7 +1025,12 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
         softAssert(sym.nonEmpty, s"Missing symbol for synthetic assignment target ${sel.showDbg}")
         subTerm(prefix): p =>
           subTerm_nonTail(rhs): r =>
-            AssignField(p, memberIdent(nme, sel.sym), castTo(r, fieldErasedType(sym), sel.toLoc), k(unit))(sym)
+            AssignField(
+              castQualifierToOwner(p, sym, prefix.toLoc),
+              memberIdent(nme, sel.sym),
+              castTo(r, fieldErasedType(sym), sel.toLoc),
+              k(unit),
+            )(sym)
       case sel @ DynSel(prefix, fld, ai) =>
         subTerm(prefix): p =>
           subTerm_nonTail(fld): f =>
@@ -1029,7 +1040,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
         subTerm(prefix): p =>
           subTerm_nonTail(rhs): r =>
             AssignField(
-              p,
+              castQualifierToOwner(p, resolvedSelectionSymbol, prefix.toLoc),
               memberIdent(proj, sel.sym),
               castTo(r, fieldErasedType(resolvedSelectionSymbol), sel.toLoc),
               k(unit),
@@ -1449,6 +1460,45 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
   private def fieldErasedType(s: Opt[Symbol]): Opt[ErasedType] =
     s.collect { case t: TermSymbol => t.erasedType }.flatten
 
+  /** The erased type of the class or module declaring `disamb`, when narrowing a qualifier to it is meaningful.
+    *
+    * Owners with a primitive representation are excluded: [[`ErasedType.needsCast`]] reports a primitive as
+    * unrelated to everything but itself, so "coercing" a qualifier to one would be an error rather than a
+    * narrowing - and a primitively-represented receiver is not a struct a backend would narrow anyway.
+    */
+  private def qualifierOwnerErasedType(disamb: Opt[DefinitionSymbol[?]]): Opt[ErasedType] =
+    // * A method resolves to its `BlockMemberSymbol`, whose owner lives on the associated `TermSymbol`; `asTrm`
+    // * covers both spellings, the same way `WatBuilder.fieldOwner` does when it re-derives this narrowing.
+    val owner = disamb.flatMap(_.asTrm).flatMap(_.owner)
+    owner match
+      case S(clsOrMod: (ClassSymbol | ModuleOrObjectSymbol)) => clsOrMod.erasedType.filter: et =>
+        et.canonicalize match
+          case _: ErasedType.AnyRef => true
+          case _ => false
+      case _ => N
+
+  /** Narrows the qualifier of a resolved selection to the class or module that declares the selected member.
+    *
+    * The qualifier of a resolved selection is necessarily an instance of the member's owner, but the IR had no rule
+    * recording that, so each backend was left to re-derive the narrowing on its own. `WatBuilder` did exactly that,
+    * inventing a bare `ref.cast` at every field read and every method call - and a cast the backend invents appears
+    * in no IR dump, carries no source location, and cannot be inspected by any later pass. Introducing the coercion
+    * here puts the narrowing back under the IR's ownership. It closes both families at once, because a method call
+    * lowers to `Call(Select(qual, m), args)`: the receiver a call narrows *is* this qualifier.
+    *
+    * Only a decidable narrowing (`S(true)`) is introduced. An unrelated qualifier is left alone rather than reported,
+    * which is deliberately weaker than [[`castTo`]]: selection is resolved without consulting erased types, so an
+    * owner that looks unrelated here is not yet trustworthy enough to call a user error.
+    *
+    * Public only so that `ucs.Normalization` can apply the same rule to the class-parameter bindings it synthesizes,
+    * the way it already reaches [[`castTo`]]; it is not meant for wider use.
+    */
+  def castQualifierToOwner(p: Path, disamb: Opt[DefinitionSymbol[?]], loc: Opt[Loc]): Path =
+    qualifierOwnerErasedType(disamb) match
+      case S(owner) if ErasedType.needsCast(p.erasedValueType_!.canonicalize, owner.canonicalize) === S(true) =>
+        castTo(p, S(owner), loc)
+      case _ => p
+
   /** The declared erased types of a parameter list's fixed parameters (excluding rest params). */
   private def expectedParamTypes(ps: ParamList): Ls[Opt[ErasedType]] =
     ps.params.map(_.sym.erasedType)
@@ -1470,7 +1520,10 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
   
   def setupSelection(prefix: Term, nme: Tree.Ident, disamb: Opt[DefinitionSymbol[?]])(k: Result => Block)(using LoweringCtx): Block =
     subTerm(prefix): p =>
-      k(Select(p, disamb.fold(memberIdent(nme, N))(definitionIdent(nme, _)))(disamb)(
+      k(Select(
+        castQualifierToOwner(p, disamb, prefix.toLoc),
+        disamb.fold(memberIdent(nme, N))(definitionIdent(nme, _)),
+      )(disamb)(
         !disamb.isDefined
         // * ^ We assume that resolved selections are well-behaved (will not yield undefined or debind a method)
         // || disamb.exists(_.defn.exists(_.hasDeclareModifier.isEmpty)) // * This checks `declare` members, which is normally unwanted

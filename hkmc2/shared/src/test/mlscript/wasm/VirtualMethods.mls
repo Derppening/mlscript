@@ -94,14 +94,13 @@ callF(B())
 //│         (ref.i31
 //│           (i32.const 2)))))
 //│   (func $callF (export "callF") (type $callF) (param $a (ref $A)) (result (ref null any))
-//│     (local $receiver (ref null any))
+//│     (local $receiver (ref $A))
 //│     (return
 //│       (block (result (ref null any))
 //│         (local.set $receiver
 //│           (local.get $a))
 //│         (call_ref $virtual2
-//│           (ref.cast (ref $A)
-//│             (local.get $receiver))
+//│           (local.get $receiver)
 //│           (ref.i31
 //│             (i32.const 5))
 //│           (struct.get $A_typeinfo $slot0
@@ -112,7 +111,7 @@ callF(B())
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $tmp (ref null any))
 //│     (local $a (ref $A))
-//│     (local $receiver (ref null any))
+//│     (local $receiver (ref $A))
 //│     (block (result (ref null any))
 //│       (local.set $tmp
 //│         (call $B_ctor))
@@ -124,8 +123,7 @@ callF(B())
 //│           (local.set $receiver
 //│             (local.get $a))
 //│           (call_ref $virtual2
-//│             (ref.cast (ref $A)
-//│               (local.get $receiver))
+//│             (local.get $receiver)
 //│             (ref.i31
 //│               (i32.const 5))
 //│             (struct.get $A_typeinfo $slot0
@@ -244,14 +242,13 @@ callPrim(W())
 //│     (return
 //│       (local.get $m)))
 //│   (func $callPrim (export "callPrim") (type $callPrim) (param $a (ref $V)) (result i32)
-//│     (local $receiver (ref null any))
+//│     (local $receiver (ref $V))
 //│     (return
 //│       (block (result i32)
 //│         (local.set $receiver
 //│           (local.get $a))
 //│         (call_ref $virtual2
-//│           (ref.cast (ref $V)
-//│             (local.get $receiver))
+//│           (local.get $receiver)
 //│           (global.get $n32)
 //│           (struct.get $V_typeinfo $slot0
 //│             (ref.cast (ref $V_typeinfo)
@@ -262,7 +259,7 @@ callPrim(W())
 //│     (local $tmp i32)
 //│     (local $tmp1 (ref null any))
 //│     (local $a (ref $V))
-//│     (local $receiver (ref null any))
+//│     (local $receiver (ref $V))
 //│     (block (result i32)
 //│       (local.set $tmp
 //│         (i32.const 7))
@@ -278,8 +275,7 @@ callPrim(W())
 //│           (local.set $receiver
 //│             (local.get $a))
 //│           (call_ref $virtual2
-//│             (ref.cast (ref $V)
-//│               (local.get $receiver))
+//│             (local.get $receiver)
 //│             (global.get $n32)
 //│             (struct.get $V_typeinfo $slot0
 //│               (ref.cast (ref $V_typeinfo)
@@ -306,10 +302,10 @@ class M2() extends M1() with
   fun f(m: Int32): Int = 0
 M2().f(1)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Int32'
-//│ ║  l.307: 	M2().f(1)
+//│ ║  l.303: 	M2().f(1)
 //│ ╙──       	       ^
 //│ ╔══[COMPILATION ERROR] Overriding method `f` declares result as `(ref null i31)`, but the method it overrides declares `i32`
-//│ ║  l.306: 	  fun f(m: Int32): Int = 0
+//│ ║  l.302: 	  fun f(m: Int32): Int = 0
 //│ ╙──       	  ^^^^^^^^^^^^^^^^^^^^^^^^
 
 
@@ -322,7 +318,7 @@ class N2() extends N1() with
 N2().g(1)
 //│ ═══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Int32'
 //│ ╔══[COMPILATION ERROR] Overriding method `g` declares parameter 1 as `(ref null any)`, but the method it overrides declares `i32`
-//│ ║  l.321: 	  fun g(m): Int32 = 0
+//│ ║  l.317: 	  fun g(m): Int32 = 0
 //│ ╙──       	  ^^^^^^^^^^^^^^^^^^^
 
 

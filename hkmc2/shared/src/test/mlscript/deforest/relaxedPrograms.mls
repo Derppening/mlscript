@@ -17,7 +17,7 @@ store.foo(AA(4))
 //│ deforest > >>> fusing >>>
 //│ deforest > AA⁰(Store⁰.this.n⁰) ->
 //│ deforest > 	match: scrut⁰
-//│ deforest > 	fields: scrut⁰.x⁰
+//│ deforest > 	fields: (scrut⁰ as!! AA¹).x⁰
 //│ deforest > <<< fusing <<<
 //│ = 5
 //│ store = Store(_)
@@ -39,9 +39,9 @@ class Store(n) with
 val store = Store(1)
 store.foo(AA(4))
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(Store¹.this.n¹) ->
+//│ deforest > AA²(Store¹.this.n¹) ->
 //│ deforest > 	match: scrut¹
-//│ deforest > 	fields: scrut¹.x¹
+//│ deforest > 	fields: (scrut¹ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ ═══[INTERNAL ERROR] `this` not in scope: class:Store
 //│ > let AA3, Store3, store1, tmp2, tmp3, $scrut_AA;try { const n$accessorSymbol = globalThis.Symbol("n"); $scrut_AA = function $scrut_AA(AA_x) {   runtime.checkArgs("$scrut_AA", 1, true, arguments.length);   return (fv_x, fv_arg$AA$0$) => {     return AA_x + ‹MISSING_THIS›[n$accessorSymbol]   } }; AA3 = function AA(x) {   return globalThis.Object.freeze(new AA.class(x)); }; globalThis.Object.freeze(class AA2 {   static {     AA3.class = this   }   constructor(x) {     this.x = x;   }   toString() { return runtime.render(this); }   static [definitionMetadata] = ["class", "AA", ["x"]]; }); Store3 = function Store(n) {   return globalThis.Object.freeze(new Store.class(n)); }; globalThis.Object.freeze(class Store2 {   static {     Store3.class = this   }   constructor(n) {     this.#n = n;   }   #n;   get [n$accessorSymbol]() { return this.#n; }   set [n$accessorSymbol](value) { this.#n = value; }   get get$__checkNotMethod() { runtime.deboundMethod("get", "Store"); }    get foo$__checkNotMethod() { runtime.deboundMethod("foo", "Store"); }   get() {     runtime.checkArgs("get", 0, true, arguments.length);     let AA_x;     AA_x = this.#n;     return runtime.checkCall($scrut_AA(AA_x)(undefined, undefined))   }   foo(x) {     runtime.checkArgs("foo", 1, true, arguments.length);     let arg$AA$0$;     if (x instanceof AA3.class) {       arg$AA$0$ = x.x;       return arg$AA$0$ + this.#n     }     throw globalThis.Object.freeze(new globalThis.Error("match error"));   }   toString() { return runtime.render(this); }   static [definitionMetadata] = ["class", "Store", [null]]; }); tmp2 = runtime.checkCall(Store3(1)); store1 = tmp2; tmp3 = runtime.checkCall(AA3(4)); block$res2 = runtime.safeCall(store1.foo(tmp3));; undefined } catch (e) { console.log('\u200B' + e + '\u200B'); }
@@ -63,12 +63,12 @@ fun classMethodSibling() =
     AA(x) then x + store.get()
 classMethodSibling()
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut²
-//│ deforest > 	fields: scrut².x¹
-//│ deforest > AA¹(1) ->
+//│ deforest > 	fields: (scrut² as!! AA³).x¹
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut²
-//│ deforest > 	fields: scrut².x¹
+//│ deforest > 	fields: (scrut² as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ ═══[RUNTIME ERROR] ReferenceError: store1 is not defined
 //│ ═══[RUNTIME ERROR] Expected: '3', got: 'undefined'
@@ -82,9 +82,9 @@ if AA(1) is
   AA(x) then
     x + r!a
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut³
-//│ deforest > 	fields: scrut³.x¹
+//│ deforest > 	fields: (scrut³ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ = 1
 //│ r = {a: 0, value: 1}
@@ -97,9 +97,9 @@ if AA(1) is
     let xs = [0, 1]
     x + xs!1
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁴
-//│ deforest > 	fields: scrut⁴.x¹
+//│ deforest > 	fields: (scrut⁴ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ = 2
 
@@ -114,12 +114,12 @@ fun nestedClass() =
     AA(x) then x
 nestedClass()
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁵
-//│ deforest > 	fields: scrut⁵.x¹
-//│ deforest > AA¹(1) ->
+//│ deforest > 	fields: (scrut⁵ as!! AA³).x¹
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁵
-//│ deforest > 	fields: scrut⁵.x¹
+//│ deforest > 	fields: (scrut⁵ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ = 1
 
@@ -133,9 +133,9 @@ fun loopSibling() =
     if AA(1) is
       AA(x) then print(x)
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁶
-//│ deforest > 	fields: scrut⁶.x¹
+//│ deforest > 	fields: (scrut⁶ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ /!!!\ Uncaught error: scala.NotImplementedError: unsupported `continue` instruction during rewriting (of class String)
 
@@ -153,9 +153,9 @@ class C(n) with
 let c = C(1)
 c.get() + c.get()
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁷
-//│ deforest > 	fields: scrut⁷.x¹
+//│ deforest > 	fields: (scrut⁷ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ = 5
 //│ c = C(_)
@@ -170,12 +170,12 @@ module M with
       AA(a) then a + _private
 M.f()
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁸
-//│ deforest > 	fields: scrut⁸.x¹
-//│ deforest > AA¹(1) ->
+//│ deforest > 	fields: (scrut⁸ as!! AA³).x¹
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁸
-//│ deforest > 	fields: scrut⁸.x¹
+//│ deforest > 	fields: (scrut⁸ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ = 4
 
@@ -192,12 +192,12 @@ module M with
         AA(a) then a + g()
 M.MM.f()
 //│ deforest > >>> fusing >>>
-//│ deforest > AA¹(1) ->
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁹
-//│ deforest > 	fields: scrut⁹.x¹
-//│ deforest > AA¹(1) ->
+//│ deforest > 	fields: (scrut⁹ as!! AA³).x¹
+//│ deforest > AA²(1) ->
 //│ deforest > 	match: scrut⁹
-//│ deforest > 	fields: scrut⁹.x¹
+//│ deforest > 	fields: (scrut⁹ as!! AA³).x¹
 //│ deforest > <<< fusing <<<
 //│ ═══[RUNTIME ERROR] ReferenceError: MM is not defined
 

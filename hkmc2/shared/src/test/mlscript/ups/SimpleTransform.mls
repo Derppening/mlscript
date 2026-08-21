@@ -21,8 +21,8 @@ pattern SumPair = Pair(a, b) => a + b
 //│     set transform = lambda⁰;
 //│     match input
 //│       Pair⁰ =>
-//│         set arg$Pair$0$ = input.first⁰;
-//│         set arg$Pair$1$ = input.second⁰;
+//│         set arg$Pair$0$ = (input as!! Pair⁰).first⁰;
+//│         set arg$Pair$1$ = (input as!! Pair⁰).second⁰;
 //│         set transformResult = transform(arg$Pair$0$, arg$Pair$1$);
 //│         return new runtime⁰.MatchSuccess⁰(transformResult, null)
 //│       else
