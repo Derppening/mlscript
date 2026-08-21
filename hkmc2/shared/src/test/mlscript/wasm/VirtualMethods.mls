@@ -36,9 +36,14 @@ callF(B())
 //│   (type $callF (func (param $a (ref $A)) (result (ref null any))))
 //│   (type $plus_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
 //│   (type $times_impl (func (param $lhs (ref null any)) (param $rhs (ref null any)) (result (ref null any))))
+//│   (type $mlx_str_from_utf16 (func (param $glob_offset (ref null any)) (param $len (ref null any)) (result (ref null any))))
+//│   (type $mlx_exn (func (param $ex (ref null any))))
 //│   (type $entry (func (result (ref null any))))
 //│   (import "system" "plus_impl" (func $plus_impl (type $plus_impl)))
 //│   (import "system" "times_impl" (func $times_impl (type $times_impl)))
+//│   (import "system" "mlx_str_from_utf16" (func $mlx_str_from_utf16 (type $mlx_str_from_utf16)))
+//│   (import "system" "mem" (memory $mem 1))
+//│   (tag $mlx_exn (export "mlx_exn") (type $mlx_exn))
 //│   (global $A_typeinfo (export "A_typeinfo") (ref $A_typeinfo) (struct.new $A_typeinfo
 //│     (i32.const 1)
 //│     (ref.null $TypeInfoBase)
@@ -112,27 +117,86 @@ callF(B())
 //│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $tmp (ref null any))
 //│     (local $a (ref $A))
+//│     (local $matchRes (ref null any))
+//│     (local $currentTypeInfo (ref null any))
+//│     (local $targetTypeInfo (ref null any))
+//│     (local $typeInfoMatch (ref null i31))
 //│     (local $receiver (ref null any))
-//│     (block (result (ref null any))
+//│     (block
 //│       (local.set $tmp
 //│         (call $B_ctor))
-//│       (local.set $a
-//│         (ref.cast (ref $A)
-//│           (local.get $tmp)))
-//│       (return
-//│         (block (result (ref null any))
-//│           (local.set $receiver
-//│             (local.get $a))
-//│           (call_ref $virtual2
-//│             (ref.cast (ref $A)
-//│               (local.get $receiver))
+//│       (block $match
+//│         (local.set $matchRes
+//│           (ref.null any))
+//│         (if
+//│           (ref.test (ref $Object)
+//│             (local.get $tmp))
+//│           (then
+//│             (if
+//│               (block (result i32)
+//│                 (local.set $currentTypeInfo
+//│                   (struct.get $Object $$typeinfo
+//│                     (ref.cast (ref $Object)
+//│                       (local.get $tmp))))
+//│                 (local.set $targetTypeInfo
+//│                   (global.get $A_typeinfo))
+//│                 (local.set $typeInfoMatch
+//│                   (ref.i31
+//│                     (i32.const 0)))
+//│                 (block $typeInfo
+//│                   (loop $typeInfo_cont
+//│                     (if
+//│                       (ref.is_null
+//│                         (local.get $currentTypeInfo))
+//│                       (then
+//│                         (br $typeInfo)))
+//│                     (if
+//│                       (ref.eq
+//│                         (ref.cast (ref null eq)
+//│                           (local.get $currentTypeInfo))
+//│                         (ref.cast (ref null eq)
+//│                           (local.get $targetTypeInfo)))
+//│                       (then
+//│                         (block
+//│                           (local.set $typeInfoMatch
+//│                             (ref.i31
+//│                               (i32.const 1)))
+//│                           (br $typeInfo))))
+//│                     (local.set $currentTypeInfo
+//│                       (struct.get $TypeInfoBase $$parent
+//│                         (ref.cast (ref $TypeInfoBase)
+//│                           (local.get $currentTypeInfo))))
+//│                     (br $typeInfo_cont)))
+//│                 (i31.get_s
+//│                   (ref.cast (ref null i31)
+//│                     (local.get $typeInfoMatch))))
+//│               (then
+//│                 (block $arm
+//│                   (local.set $a
+//│                     (ref.cast (ref $A)
+//│                       (local.get $tmp)))
+//│                   (return
+//│                     (block (result (ref null any))
+//│                       (local.set $receiver
+//│                         (local.get $a))
+//│                       (call_ref $virtual2
+//│                         (ref.cast (ref $A)
+//│                           (local.get $receiver))
+//│                         (ref.i31
+//│                           (i32.const 5))
+//│                         (struct.get $A_typeinfo $slot0
+//│                           (ref.cast (ref $A_typeinfo)
+//│                             (struct.get $Object $$typeinfo
+//│                               (ref.cast (ref $Object)
+//│                                 (local.get $receiver)))))))))))))
+//│         (throw $mlx_exn
+//│           (call $mlx_str_from_utf16
 //│             (ref.i31
-//│               (i32.const 5))
-//│             (struct.get $A_typeinfo $slot0
-//│               (ref.cast (ref $A_typeinfo)
-//│                 (struct.get $Object $$typeinfo
-//│                   (ref.cast (ref $Object)
-//│                     (local.get $receiver))))))))))
+//│               (i32.const 0))
+//│             (ref.i31
+//│               (i32.const 66)))))
+//│       (unreachable)))
+//│   (data $Cannot$_narrow$_a$_ (i32.const 0) "\43\00\61\00\6e\00\6e\00\6f\00\74\00\20\00\6e\00\61\00\72\00\72\00\6f\00\77\00\20\00\61\00\20\00\76\00\61\00\6c\00\75\00\65\00\20\00\74\00\6f\00\20\00\74\00\79\00\70\00\65\00\20\00\27\00\41\00\27\00")
 //│   (elem $A_init declare func $A_init)
 //│   (elem $A_ctor declare func $A_ctor)
 //│   (elem $A_f declare func $A_f)
@@ -172,6 +236,7 @@ callF(C()) + callG(C())
 
 // A virtual slot's Wasm type carries the result type of the method that introduced it, so overrides share it
 :wat
+:noCheckCasts
 val n32: Int32 = wasm.i32.const(7)
 class V() with
   virtual fun f(m: Int32): Int32 = m
@@ -306,10 +371,10 @@ class M2() extends M1() with
   fun f(m: Int32): Int = 0
 M2().f(1)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Int32'
-//│ ║  l.307: 	M2().f(1)
+//│ ║  l.372: 	M2().f(1)
 //│ ╙──       	       ^
 //│ ╔══[COMPILATION ERROR] Overriding method `f` declares result as `(ref null i31)`, but the method it overrides declares `i32`
-//│ ║  l.306: 	  fun f(m: Int32): Int = 0
+//│ ║  l.371: 	  fun f(m: Int32): Int = 0
 //│ ╙──       	  ^^^^^^^^^^^^^^^^^^^^^^^^
 
 
@@ -322,7 +387,7 @@ class N2() extends N1() with
 N2().g(1)
 //│ ═══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Int32'
 //│ ╔══[COMPILATION ERROR] Overriding method `g` declares parameter 1 as `(ref null any)`, but the method it overrides declares `i32`
-//│ ║  l.321: 	  fun g(m): Int32 = 0
+//│ ║  l.386: 	  fun g(m): Int32 = 0
 //│ ╙──       	  ^^^^^^^^^^^^^^^^^^^
 
 

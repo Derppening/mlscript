@@ -210,12 +210,15 @@ wasm.i32.eqz(wasm.i32.const(1))
 
 
 // `2147483647` does not fit in an i31 and is truncated to all 31 bits set, which `get_s` reads as -1 and
-// `get_u` as 2147483647.
+// `get_u` as 2147483647. `:noCheckCasts`: the Int literal narrowing to `Int31` has no expressible Wasm
+// typeinfo test.
+:noCheckCasts
 wasm.i31.get_s(2147483647)
 //│ Wasm result:
 //│ = -1
 
 
+:noCheckCasts
 wasm.i31.get_u(2147483647)
 //│ Wasm result:
 //│ = 2147483647

@@ -79,7 +79,9 @@ val box: ArrBox = new ArrBox(["x"])
 
 
 // The narrowing target must be a reference type: `Int` is not under `Object`, so narrowing to it would be
-// an unrelated-types error rather than a cast.
+// an unrelated-types error rather than a cast. `:noCheckCasts` keeps this the *unchecked* spelling of the
+// contrast with the `val n2` block below (checked casts are the default).
+:noCheckCasts
 class Boxed(v: Int)
 fun mkObj(): Object = new Boxed(1)
 val o: Object = mkObj()
@@ -162,7 +164,7 @@ fun main =
   made.y
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define mk⁰ as fun mk¹(a: ?): ? {
-//│   return new Bar⁰((a as!! Str⁰))
+//│   return new Bar⁰((a as! Str⁰))
 //│ };
 //│ define main⁴ as fun main⁵(): ? { let made: ?; set made = mk¹(1); return made.y﹖ };
 //│ end
@@ -181,7 +183,7 @@ fun add2(x: Int, y: Int): Int = x + y
 //│ define add1⁰ as fun add1¹(x: Int⁰, y: Int⁰): ? {
 //│   return +⁰(x, y)
 //│ };
-//│ define add2⁰ as fun add2¹(x: Int⁰, y: Int⁰): Int⁰ { return (+⁰(x, y) as!! Int⁰) };
+//│ define add2⁰ as fun add2¹(x: Int⁰, y: Int⁰): Int⁰ { return (+⁰(x, y) as! Int⁰) };
 //│ end
 
 
@@ -202,7 +204,7 @@ class Ref(mut val v: Int) with
 //│     define v¹ as val v²: Int⁰ = v;
 //│     end
 //│   }
-//│   method put⁰ = fun put¹(x: ?): ? { set Ref².this.v² = (x as!! Int⁰); return runtime⁰.Unit⁰ }
+//│   method put⁰ = fun put¹(x: ?): ? { set Ref².this.v² = (x as! Int⁰); return runtime⁰.Unit⁰ }
 //│ };
 //│ end
 
@@ -219,7 +221,7 @@ class Calc() with
 //│ define Calc⁰ as class Calc² {
 //│   constructor Calc¹
 //│   method twice⁰ = fun twice¹(x: Int⁰): Int⁰ {
-//│     return (+⁰(x, x) as!! Int⁰)
+//│     return (+⁰(x, x) as! Int⁰)
 //│   }
 //│   method whatever⁰ = fun whatever¹(a: ?): ? { return a }
 //│ };
@@ -288,7 +290,7 @@ resetCounter(41)
 //│ define reset as fun reset⁰(resetCounter$cap: ?): ? {
 //│   let tmp: ?;
 //│   set tmp = +⁰(resetCounter$cap.x$0⁰, 1);
-//│   set resetCounter$cap.x$0⁰ = (tmp as!! Int⁰);
+//│   set resetCounter$cap.x$0⁰ = (tmp as! Int⁰);
 //│   return runtime⁰.Unit⁰
 //│ };
 //│ define Capture$resetCounter as class Capture$resetCounter¹ {
@@ -317,10 +319,10 @@ fun f(x: Int32, o: Object) =
   useObj(x)
   useInt32(o)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Object'
-//│ ║  l.317: 	  useObj(x)
+//│ ║  l.319: 	  useObj(x)
 //│ ╙──       	         ^
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Object' at an unrelated type 'Int32'
-//│ ║  l.318: 	  useInt32(o)
+//│ ║  l.320: 	  useInt32(o)
 //│ ╙──       	           ^
 //│ ═══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
@@ -339,7 +341,7 @@ fun f(x: Int32, o: Object) =
 fun id(x: Anything) = ()
 fun f(x: Int32) = id(x)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
-//│ ║  l.340: 	fun f(x: Int32) = id(x)
+//│ ║  l.342: 	fun f(x: Int32) = id(x)
 //│ ╙──       	                     ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define id⁰ as fun id¹(x: Unknown): ? {
@@ -368,7 +370,7 @@ module Encl with
   class Shape
   fun bad(x: Shape) = useShape(x)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Encl.Shape' at an unrelated type 'Shape'
-//│ ║  l.369: 	  fun bad(x: Shape) = useShape(x)
+//│ ║  l.371: 	  fun bad(x: Shape) = useShape(x)
 //│ ╙──       	                               ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define useShape⁰ as fun useShape¹(x: Shape⁰): ? {
@@ -395,10 +397,10 @@ fun f(o: Object, i: Int) =
   useObj(i)
   useInt(o)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Object'
-//│ ║  l.395: 	  useObj(i)
+//│ ║  l.397: 	  useObj(i)
 //│ ╙──       	         ^
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Object' at an unrelated type 'Int'
-//│ ║  l.396: 	  useInt(o)
+//│ ║  l.398: 	  useInt(o)
 //│ ╙──       	         ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define useObj² as fun useObj³(o: Object⁰): ? {
@@ -422,7 +424,7 @@ fun g(i: Int, i31: Int31) =
 //│ };
 //│ define g⁰ as fun g¹(i: Int⁰, i31: Int31⁰): ? {
 //│   do useInt¹(i31);
-//│   return useInt31¹((i as!! Int31⁰))
+//│   return useInt31¹((i as! Int31⁰))
 //│ };
 //│ end
 
@@ -528,7 +530,7 @@ fun unionIntoSubtype(x: A | B) = takesSubtype(x)
 //│   return takesUnion¹(b)
 //│ };
 //│ define unionIntoSubtype⁰ as fun unionIntoSubtype¹(x: Base⁰): ? {
-//│   return takesSubtype¹((x as!! A¹))
+//│   return takesSubtype¹((x as! A¹))
 //│ };
 //│ end
 
@@ -557,7 +559,7 @@ fun mixedThree(x: Int32 | Str | Bool) = 0
 :ge
 fun intoMixed(n: Int32) = mixed(n)
 //│ ╔══[COMPILATION ERROR] Types 'Int32' and 'Str' have no common representation
-//│ ║  l.558: 	fun intoMixed(n: Int32) = mixed(n)
+//│ ║  l.560: 	fun intoMixed(n: Int32) = mixed(n)
 //│ ╙──       	                                ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define intoMixed⁰ as fun intoMixed¹(n: Int32): ? { return mixed¹(n) }; end
@@ -587,12 +589,12 @@ fun sccF(): Int = sccG()
 fun sccG(): Num = sccF() + 1
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define sccF⁰ as fun sccF¹(): Int⁰ {
-//│   return (sccG⁰() as!! Int⁰)
+//│   return (sccG⁰() as! Int⁰)
 //│ };
 //│ define sccG¹ as fun sccG⁰(): Num⁰ {
 //│   let tmp: Int⁰;
 //│   set tmp = sccF¹();
-//│   return (+⁰(tmp, 1) as!! Num⁰)
+//│   return (+⁰(tmp, 1) as! Num⁰)
 //│ };
 //│ end
 //│ ——————————————| Optimized IR |——————————————————————————————————————————————————————————————————————
@@ -606,15 +608,26 @@ fun sccG(): Num = sccF() + 1
 //│           set id = 1;
 //│           continue loopLabel
 //│         1 =>
-//│           let tmp: Int⁰;
+//│           let tmp: Int⁰, castScrut: ?;
 //│           set tmp = sccF¹();
-//│           set inlinedVal = (+⁰(tmp, 1) as!! Num⁰);
-//│           break inlinedLbl
+//│           set castScrut = +⁰(tmp, 1);
+//│           match castScrut
+//│             Num⁰ =>
+//│               set inlinedVal = (castScrut as!! Num⁰);
+//│               break inlinedLbl
+//│             else
+//│               throw new globalThis⁰.Error﹖("Cannot narrow a value to type 'Num'")
+//│           end
 //│         else
 //│           unreachable /* dispatch tag is always a merged member id */
 //│       end
 //│     unreachable /* Rest of abortive labelled block */
-//│   return (inlinedVal as!! Int⁰)
+//│   match inlinedVal
+//│     Int⁰ =>
+//│       return (inlinedVal as!! Int⁰)
+//│     else
+//│       throw new globalThis⁰.Error﹖("Cannot narrow a value to type 'Int'")
+//│   end
 //│ };
 //│ define sccG¹ as fun sccG⁰(): Num⁰ {
 //│   let id: Int⁰, inlinedVal: Num⁰;
@@ -626,10 +639,16 @@ fun sccG(): Num = sccF() + 1
 //│           set id = 1;
 //│           continue loopLabel
 //│         1 =>
-//│           let tmp: Int⁰;
+//│           let tmp: Int⁰, castScrut: ?;
 //│           set tmp = sccF¹();
-//│           set inlinedVal = (+⁰(tmp, 1) as!! Num⁰);
-//│           break inlinedLbl
+//│           set castScrut = +⁰(tmp, 1);
+//│           match castScrut
+//│             Num⁰ =>
+//│               set inlinedVal = (castScrut as!! Num⁰);
+//│               break inlinedLbl
+//│             else
+//│               throw new globalThis⁰.Error﹖("Cannot narrow a value to type 'Num'")
+//│           end
 //│         else
 //│           unreachable /* dispatch tag is always a merged member id */
 //│       end
@@ -648,7 +667,7 @@ annotHelper(100000)
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ @tailrec
 //│ define annotLoop⁰ as fun annotLoop¹(n: Int⁰): Unit⁰ {
-//│   return (annotHelper⁰(n) as!! Unit⁰)
+//│   return (annotHelper⁰(n) as! Unit⁰)
 //│ };
 //│ define annotHelper¹ as fun annotHelper⁰(n: ?): ? {
 //│   let scrut: ?, tmp: ?;
@@ -658,7 +677,7 @@ annotHelper(100000)
 //│       return runtime⁰.Unit⁰
 //│     else
 //│       set tmp = -⁰(n, 1);
-//│       return annotLoop¹((tmp as!! Int⁰))
+//│       return annotLoop¹((tmp as! Int⁰))
 //│   end
 //│ };
 //│ return annotHelper⁰(100000)
@@ -680,7 +699,7 @@ sccHelper(100000)
 //│ define sccLoop⁰ as fun sccLoop¹(n: Int⁰): Int⁰ {
 //│   let r: ?;
 //│   set r = sccHelper⁰(n);
-//│   return (r as!! Int⁰)
+//│   return (r as! Int⁰)
 //│ };
 //│ define sccHelper¹ as fun sccHelper⁰(n: Int⁰): Num⁰ {
 //│   let scrut: ?, tmp: ?;
@@ -690,7 +709,7 @@ sccHelper(100000)
 //│       return 0
 //│     else
 //│       set tmp = -⁰(n, 1);
-//│       return sccLoop¹((tmp as!! Int⁰))
+//│       return sccLoop¹((tmp as! Int⁰))
 //│   end
 //│ };
 //│ return sccHelper⁰(100000)
@@ -710,9 +729,14 @@ sccHelper(100000)
 //│             return 0
 //│           else
 //│             set tmp = -⁰(param0, 1);
-//│             set param0 = (tmp as!! Int⁰);
-//│             set id = 0;
-//│             continue loopLabel
+//│             match tmp
+//│               Int⁰ =>
+//│                 set param0 = (tmp as!! Int⁰);
+//│                 set id = 0;
+//│                 continue loopLabel
+//│               else
+//│                 throw new globalThis⁰.Error﹖("Cannot narrow a value to type 'Int'")
+//│             end
 //│         end
 //│       else
 //│         unreachable /* dispatch tag is always a merged member id */
@@ -721,7 +745,14 @@ sccHelper(100000)
 //│ };
 //│ @tailrec
 //│ define sccLoop⁰ as fun sccLoop¹(n: Int⁰): Int⁰ {
-//│   return (sccLoop_sccHelper⁰(0, n) as!! Int⁰)
+//│   let castScrut: Num⁰;
+//│   set castScrut = sccLoop_sccHelper⁰(0, n);
+//│   match castScrut
+//│     Int⁰ =>
+//│       return (castScrut as!! Int⁰)
+//│     else
+//│       throw new globalThis⁰.Error﹖("Cannot narrow a value to type 'Int'")
+//│   end
 //│ };
 //│ define sccHelper¹ as fun sccHelper⁰(n: Int⁰): Num⁰ {
 //│   return sccLoop_sccHelper⁰(1, n)
@@ -746,7 +777,7 @@ useFn(curried(1))
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let tmp: Function⁰;
 //│ define curried⁰ as fun curried¹(a: Int⁰)(b: Int⁰): Int⁰ {
-//│   return (+⁰(a, b) as!! Int⁰)
+//│   return (+⁰(a, b) as! Int⁰)
 //│ };
 //│ define useFn⁰ as fun useFn¹(g: Function⁰): ? {
 //│   return g(1)
@@ -773,11 +804,11 @@ val over: Int = thunk(2)
 //│   define lambda as fun lambda⁰(b: Int⁰) {
 //│     return +⁰(b, 1)
 //│   };
-//│   return (lambda⁰ as!! Function⁰)
+//│   return (lambda⁰ as! Function⁰)
 //│ };
 //│ set tmp = thunk¹();
 //│ set tmp1 = tmp(2);
-//│ define over⁰ as val over¹: Int⁰ = (tmp1 as!! Int⁰);
+//│ define over⁰ as val over¹: Int⁰ = (tmp1 as! Int⁰);
 //│ end
 
 
@@ -787,7 +818,7 @@ val over: Int = thunk(2)
 :ge
 val bad: Str = thunk
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Function' at an unrelated type 'Str'
-//│ ║  l.788: 	val bad: Str = thunk
+//│ ║  l.819: 	val bad: Str = thunk
 //│ ╙──       	               ^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let tmp: Function⁰; set tmp = thunk¹(); define bad² as val bad³: Str⁰ = tmp; end
@@ -799,7 +830,7 @@ val bad: Str = thunk
 fun called() = 3
 val notCalled: Str = called
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Function' at an unrelated type 'Str'
-//│ ║  l.800: 	val notCalled: Str = called
+//│ ║  l.831: 	val notCalled: Str = called
 //│ ╙──       	                     ^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define called⁰ as fun called¹(): ? {
@@ -809,11 +840,10 @@ val notCalled: Str = called
 //│ end
 
 
-// Under `:checkCasts` the printer spells a checked cast `as!` and an unchecked one `as!!`. Narrowing the
-// same `o` that the unchecked block near the top of this file narrows makes the contrast direct: the flag is
-// read where the coercion is introduced, so only the mark differs. What the mark expands into is covered by
-// `CheckedCasts.mls`.
-:checkCasts
+// By default the printer spells a checked cast `as!` and an unchecked one `as!!`. Narrowing the
+// same `o` that the `:noCheckCasts` block near the top of this file narrows makes the contrast direct:
+// the flag is read where the coercion is introduced, so only the mark differs. What the mark expands
+// into is covered by `CheckedCasts.mls`.
 val n2: Boxed = o
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define n2⁰ as val n2¹: Boxed⁰ = (o¹ as! Boxed⁰); end
@@ -824,7 +854,7 @@ val n2: Boxed = o
 :ge
 fun badInst() = useInt(new Bar("x"))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Bar' at an unrelated type 'Int'
-//│ ║  l.825: 	fun badInst() = useInt(new Bar("x"))
+//│ ║  l.855: 	fun badInst() = useInt(new Bar("x"))
 //│ ╙──       	                       ^^^^^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badInst⁰ as fun badInst¹(): ? {
@@ -841,7 +871,7 @@ fun test: Function = id
 
 fun test: Function = new Object
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ define test⁴ as fun test⁵(): Function⁰ { return (new globalThis⁰.Object⁰() as!! Function⁰) }; end
+//│ define test⁴ as fun test⁵(): Function⁰ { return (new globalThis⁰.Object⁰() as! Function⁰) }; end
 
 
 // A written arrow type erases to `Function` rather than to nothing: a parameter so annotated is a function
@@ -852,10 +882,10 @@ applyF((x: Int) => x)
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let lambda;
 //│ define applyF⁰ as fun applyF¹(f: Function⁰): Int⁰ {
-//│   return (f(1) as!! Int⁰)
+//│   return (f(1) as! Int⁰)
 //│ };
 //│ define lambda as fun lambda¹(x: Int⁰) { return x };
-//│ return applyF¹((lambda¹ as!! Function⁰))
+//│ return applyF¹((lambda¹ as! Function⁰))
 
 
 // A result annotation that is a written arrow is likewise a function-typed result: `mk` returns a function
@@ -867,7 +897,7 @@ fun mk: Int -> Int = (x: Int) => x
 //│   let lambda;
 //│   @private
 //│   define lambda as fun lambda²(x: Int⁰) { return x };
-//│   return (lambda² as!! Function⁰)
+//│   return (lambda² as! Function⁰)
 //│ };
 //│ end
 
@@ -877,7 +907,7 @@ fun mk: Int -> Int = (x: Int) => x
 :ge
 fun badFn() = applyF(42)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Function'
-//│ ║  l.878: 	fun badFn() = applyF(42)
+//│ ║  l.908: 	fun badFn() = applyF(42)
 //│ ╙──       	                     ^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badFn⁰ as fun badFn¹(): ? { return applyF¹(42) }; end
@@ -890,7 +920,7 @@ val g: Int -> Int = (x: Int) => x
 //│ define lambda as fun lambda³(x: Int⁰) {
 //│   return x
 //│ };
-//│ define g² as val g³: Function⁰ = (lambda³ as!! Function⁰);
+//│ define g² as val g³: Function⁰ = (lambda³ as! Function⁰);
 //│ end
 
 
@@ -905,6 +935,7 @@ val g: Int -> Int = (x: Int) => x
 // point. `fortyTwo` is deliberately unannotated so that the coercion into `asWrapper`'s parameter is a real
 // narrowing, and `Wrapper` is never actually instantiated: only the emitted JS matters here.
 :js
+:noCheckCasts
 class Wrapper with
   val whoami = "wrapper"
 fun fortyTwo = 42
@@ -925,6 +956,7 @@ fun asWrapper(x: Wrapper): Wrapper = x
 
 // A cast literal as a property-access receiver.
 :js
+:noCheckCasts
 :sjs
 asWrapper(fortyTwo).whoami
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
@@ -938,6 +970,7 @@ asWrapper(fortyTwo).whoami
 
 // A cast literal as a tuple-pattern scrutinee, whose test reads `.length` off it.
 :js
+:noCheckCasts
 :sjs
 if asWrapper(fortyTwo) is
   [a, b] then "pair"

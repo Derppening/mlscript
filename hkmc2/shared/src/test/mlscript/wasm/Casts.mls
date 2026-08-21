@@ -26,7 +26,12 @@ useBox(id(new Box(42)))
 //│   (type $Box_ctor (func (param $v (ref null i31)) (result (ref $Box))))
 //│   (type $id (func (param $a (ref null any)) (result (ref null any))))
 //│   (type $useBox (func (param $b (ref $Box)) (result (ref null i31))))
-//│   (type $entry (func (result (ref null i31))))
+//│   (type $mlx_str_from_utf16 (func (param $glob_offset (ref null any)) (param $len (ref null any)) (result (ref null any))))
+//│   (type $mlx_exn (func (param $ex (ref null any))))
+//│   (type $entry (func (result (ref null any))))
+//│   (import "system" "mlx_str_from_utf16" (func $mlx_str_from_utf16 (type $mlx_str_from_utf16)))
+//│   (import "system" "mem" (memory $mem 1))
+//│   (tag $mlx_exn (export "mlx_exn") (type $mlx_exn))
 //│   (global $Box_typeinfo (export "Box_typeinfo") (ref $Box_typeinfo) (struct.new $Box_typeinfo
 //│     (i32.const 1)
 //│     (ref.null $TypeInfoBase)))
@@ -59,10 +64,14 @@ useBox(id(new Box(42)))
 //│       (ref.cast (ref i31)
 //│         (struct.get $Box $v
 //│           (local.get $b)))))
-//│   (func $entry (export "entry") (type $entry) (result (ref null i31))
+//│   (func $entry (export "entry") (type $entry) (result (ref null any))
 //│     (local $tmp (ref $Box))
 //│     (local $tmp1 (ref null any))
-//│     (block (result (ref null i31))
+//│     (local $matchRes (ref null any))
+//│     (local $currentTypeInfo (ref null any))
+//│     (local $targetTypeInfo (ref null any))
+//│     (local $typeInfoMatch (ref null i31))
+//│     (block
 //│       (local.set $tmp
 //│         (call $Box_ctor
 //│           (ref.i31
@@ -70,10 +79,65 @@ useBox(id(new Box(42)))
 //│       (local.set $tmp1
 //│         (call $id
 //│           (local.get $tmp)))
-//│       (return
-//│         (call $useBox
-//│           (ref.cast (ref $Box)
-//│             (local.get $tmp1))))))
+//│       (block $match
+//│         (local.set $matchRes
+//│           (ref.null any))
+//│         (if
+//│           (ref.test (ref $Object)
+//│             (local.get $tmp1))
+//│           (then
+//│             (if
+//│               (block (result i32)
+//│                 (local.set $currentTypeInfo
+//│                   (struct.get $Object $$typeinfo
+//│                     (ref.cast (ref $Object)
+//│                       (local.get $tmp1))))
+//│                 (local.set $targetTypeInfo
+//│                   (global.get $Box_typeinfo))
+//│                 (local.set $typeInfoMatch
+//│                   (ref.i31
+//│                     (i32.const 0)))
+//│                 (block $typeInfo
+//│                   (loop $typeInfo_cont
+//│                     (if
+//│                       (ref.is_null
+//│                         (local.get $currentTypeInfo))
+//│                       (then
+//│                         (br $typeInfo)))
+//│                     (if
+//│                       (ref.eq
+//│                         (ref.cast (ref null eq)
+//│                           (local.get $currentTypeInfo))
+//│                         (ref.cast (ref null eq)
+//│                           (local.get $targetTypeInfo)))
+//│                       (then
+//│                         (block
+//│                           (local.set $typeInfoMatch
+//│                             (ref.i31
+//│                               (i32.const 1)))
+//│                           (br $typeInfo))))
+//│                     (local.set $currentTypeInfo
+//│                       (struct.get $TypeInfoBase $$parent
+//│                         (ref.cast (ref $TypeInfoBase)
+//│                           (local.get $currentTypeInfo))))
+//│                     (br $typeInfo_cont)))
+//│                 (i31.get_s
+//│                   (ref.cast (ref null i31)
+//│                     (local.get $typeInfoMatch))))
+//│               (then
+//│                 (block $arm
+//│                   (return
+//│                     (call $useBox
+//│                       (ref.cast (ref $Box)
+//│                         (local.get $tmp1)))))))))
+//│         (throw $mlx_exn
+//│           (call $mlx_str_from_utf16
+//│             (ref.i31
+//│               (i32.const 0))
+//│             (ref.i31
+//│               (i32.const 70)))))
+//│       (unreachable)))
+//│   (data $Cannot$_narrow$_a$_ (i32.const 0) "\43\00\61\00\6e\00\6e\00\6f\00\74\00\20\00\6e\00\61\00\72\00\72\00\6f\00\77\00\20\00\61\00\20\00\76\00\61\00\6c\00\75\00\65\00\20\00\74\00\6f\00\20\00\74\00\79\00\70\00\65\00\20\00\27\00\42\00\6f\00\78\00\27\00")
 //│   (elem $Box_init declare func $Box_init)
 //│   (elem $Box_ctor declare func $Box_ctor)
 //│   (elem $id declare func $id)
@@ -85,6 +149,7 @@ useBox(id(new Box(42)))
 
 // Similarly, the constructor call is `new Wrap(cast[Box](id(new Box(7))))`.
 :noInline
+:noCheckCasts
 class Wrap(val b: Box)
 fun readV(b: Box) = b.v
 let w = new Wrap(id(new Box(7)))
@@ -140,24 +205,24 @@ fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
 //│ ═══[COMPILATION ERROR] Cannot use a value of type 'Unknown' at an unrelated type 'Int32'
 //│ ═══[COMPILATION ERROR] Types 'Int31' and 'Int32' have no common representation
 //│ ╔══[COMPILATION ERROR] Types 'Int31' and 'Int32' have no common representation
-//│ ║  l.138: 	fun sccF(): Int31 = wasm.ref.i31(sccG())
+//│ ║  l.203: 	fun sccF(): Int31 = wasm.ref.i31(sccG())
 //│ ╙──       	    ^^^^
 //│ ╔══[COMPILATION ERROR] Types 'Int31' and 'Int32' have no common representation
-//│ ║  l.139: 	fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
+//│ ║  l.204: 	fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
 //│ ╙──       	    ^^^^
 //│ ═══[COMPILATION ERROR] Types 'Int31' and 'Int32' have no common representation
 //│ ═══[COMPILATION ERROR] Types 'Int31' and 'Int32' have no common representation
 //│ ╔══[COMPILATION ERROR] Types 'Int31' and 'Int32' have no common representation
-//│ ║  l.138: 	fun sccF(): Int31 = wasm.ref.i31(sccG())
+//│ ║  l.203: 	fun sccF(): Int31 = wasm.ref.i31(sccG())
 //│ ╙──       	    ^^^^
 //│ ╔══[COMPILATION ERROR] Types 'Int31' and 'Int32' have no common representation
-//│ ║  l.139: 	fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
+//│ ║  l.204: 	fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
 //│ ╙──       	    ^^^^
 //│ ╔══[COMPILATION ERROR] Wasm function `sccF` expects result to have type `(ref null i31)`, but got `(ref null any)`
-//│ ║  l.138: 	fun sccF(): Int31 = wasm.ref.i31(sccG())
+//│ ║  l.203: 	fun sccF(): Int31 = wasm.ref.i31(sccG())
 //│ ╙──       	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 //│ ╔══[COMPILATION ERROR] Wasm function `sccG` expects result to have type `i32`, but got `(ref null any)`
-//│ ║  l.139: 	fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
+//│ ║  l.204: 	fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
 //│ ╙──       	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
@@ -172,15 +237,15 @@ fun foo(n: Int31) =
 fun bar(m: Int32) =
   foo(wasm.ref.i31(m))
 //│ ╔══[COMPILATION ERROR] Operand #1 of wasm intrinsic 'ref.i31' must be of type 'Int32'
-//│ ║  l.173: 	  foo(wasm.ref.i31(m))
+//│ ║  l.238: 	  foo(wasm.ref.i31(m))
 //│ ╙──       	                   ^
 //│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `i32` to `(ref null any)` in a different type hierarchy
 
 
 // The class must be defined in this block: one from an earlier block has no `typeinfo` global
-// registered, so no test can be emitted for it. That `:checkCasts` really replaces the bare `ref.cast`
-// with a runtime test is what the pair below observes; here the test only has to pass.
-:checkCasts
+// registered, so no test can be emitted for it. That checked casts (the default) really replace the
+// bare `ref.cast` with a runtime test is what the `:noCheckCasts` blocks below observe; here the
+// test only has to pass.
 class Crate(val v: Int)
 fun useCrate(c: Crate): Int = c.v
 useCrate(id(new Crate(42)))
@@ -190,7 +255,9 @@ useCrate(id(new Crate(42)))
 
 // `NotACrate` has a different field count, so it is a distinct struct and the `ref.cast` traps. The
 // constructor must be properly applied for that to be what fails: an under-applied one throws first, with an
-// opaque `[object Object]` that hides whether the cast was reached at all.
+// opaque `[object Object]` that hides whether the cast was reached at all. `:noCheckCasts` keeps this the
+// bare-`ref.cast` spelling; the checked default would replace it with a `typeinfo` test.
+:noCheckCasts
 :re
 class Crate2(val v: Int)
 class NotACrate(val w: Int, val x: Int)
@@ -201,7 +268,8 @@ useCrate2(id(new NotACrate(1, 2)))
 
 
 // With the same field count the two are structurally identical structs, so `ref.cast` cannot tell them
-// apart and the narrowing silently succeeds.
+// apart and the narrowing silently succeeds (see the checked default in the next block, which can).
+:noCheckCasts
 class Crate2(val v: Int)
 class NotACrate(val w: Int)
 fun useCrate2(c: Crate2): Int = c.v
@@ -210,9 +278,9 @@ useCrate2(id(new NotACrate(1)))
 //│ = 1
 
 
-// The same two classes as the block above, which `ref.cast` could not tell apart. `:checkCasts` tests the
-// `typeinfo` tag instead, which does distinguish them, and names the target type when the test fails.
-:checkCasts
+// The same two classes as the `:noCheckCasts` block above, which `ref.cast` could not tell apart. The
+// checked default tests the `typeinfo` tag instead, which does distinguish them, and names the target
+// type when the test fails.
 :re
 class Crate2(val v: Int)
 class NotACrate(val w: Int)
@@ -223,7 +291,6 @@ useCrate2(id(new NotACrate(1)))
 
 
 // Boxing is an intrinsic and takes no runtime test on the way in: an `Int32` has nothing to test against.
-:checkCasts
 wasm.ref.i31(wasm.i32.const(7))
 //│ Wasm result:
 //│ = 7
@@ -232,16 +299,14 @@ wasm.ref.i31(wasm.i32.const(7))
 // The same value cannot round-trip through an untyped slot: `id` leaves its parameter and result unannotated.
 // Unlike the unannotated-result case in `wasm/Basics.mls`, the value crosses in both directions, so it is
 // rejected going in and coming out. `:noInline` keeps `id` in place; inlining elides the crossing.
-// `:checkCasts` is repeated for the contrast with the block above, and is inert: no cast survives to expand.
 :ge
 :noInline
-:checkCasts
 wasm.ref.i31(id(wasm.i32.const(7)))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
-//│ ║  l.239: 	wasm.ref.i31(id(wasm.i32.const(7)))
+//│ ║  l.304: 	wasm.ref.i31(id(wasm.i32.const(7)))
 //│ ╙──       	                ^^^^^^^^^^^^^^^^^
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Unknown' at an unrelated type 'Int32'
-//│ ║  l.239: 	wasm.ref.i31(id(wasm.i32.const(7)))
+//│ ║  l.304: 	wasm.ref.i31(id(wasm.i32.const(7)))
 //│ ╙──       	             ^^^^^^^^^^^^^^^^^^^^^
 //│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `i32` to `(ref null any)` in a different type hierarchy
 //│ ═══[COMPILATION ERROR] Operand #1 of wasm intrinsic 'ref.i31' must be of type 'Int32'
@@ -262,7 +327,7 @@ unpack(toObj())
 :e
 fun test: Function = id
 //│ ╔══[COMPILATION ERROR] Returning function instances is not supported
-//│ ║  l.263: 	fun test: Function = id
+//│ ║  l.328: 	fun test: Function = id
 //│ ╙──       	                     ^^
 
 :fixme
@@ -289,6 +354,7 @@ fun castToObj(x): Object = x
 //│ Wasm result:
 //│ = {}
 
+:noCheckCasts
 fun test: Function = castToObj(new C)
 //│ Wasm result:
 //│ = {}
@@ -297,6 +363,7 @@ fun castToA[A](x: A): A = x
 //│ Wasm result:
 //│ = {}
 
+:noCheckCasts
 fun test: Function = castToA(123)
 //│ Wasm result:
 //│ = {}
@@ -304,7 +371,7 @@ fun test: Function = castToA(123)
 :e
 castToA(wasm.i32.const(123))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
-//│ ║  l.305: 	castToA(wasm.i32.const(123))
+//│ ║  l.372: 	castToA(wasm.i32.const(123))
 //│ ╙──       	        ^^^^^^^^^^^^^^^^^^^
 //│ Wasm result:
 //│ = 123
