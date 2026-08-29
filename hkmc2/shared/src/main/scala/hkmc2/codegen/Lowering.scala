@@ -1609,6 +1609,16 @@ trait LoweringTraceLog(instrument: Bool)(using TL, Raise, State)
   override def setupFunctionDef(paramLists: List[ParamList], bodyTerm: st, name: Option[Str], returnType: Opt[ErasedType])
       (using LoweringCtx): (List[ParamList], Block) =
     if instrument then
+      // * TODO: Instrumentation collapses the trailing parameter lists into lambdas, so `fun f(a)(b): Int` is
+      // * compiled to take `a` alone and return a function, while its erased type - which `returnType` is
+      // * read off - still promises two parameter lists and an `Int`.
+      // *
+      // * Callers are unaffected, since applying the wrapper is the same as applying a curried definition, so
+      // * this is reported rather than worked around: the fix is for instrumentation to stop reshaping
+      // * definitions, which belongs to this pass rather than to the erased types.
+      softTODO(paramLists.sizeIs <= 1,
+        s"instrumenting '${name.getOrElse("[arrow function]")}' collapses its parameter lists, " +
+        "so its erased type no longer describes what it is compiled to")
       val (ps, bod) = handleMultipleParamLists(paramLists, bodyTerm)
       val instrumentedBody = setupFunctionBody(ps, bod, name, returnType)
       (ps :: Nil, instrumentedBody)
