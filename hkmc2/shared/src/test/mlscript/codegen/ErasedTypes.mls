@@ -596,46 +596,29 @@ fun sccG(): Num = sccF() + 1
 //│ };
 //│ end
 //│ ——————————————| Optimized IR |——————————————————————————————————————————————————————————————————————
+//│ let sccF_sccG;
+//│ @private
+//│ define sccF_sccG as fun sccF_sccG⁰(id: Int⁰): Num⁰ {
+//│   loop loopLabel:
+//│     match id
+//│       0 =>
+//│         set id = 1;
+//│         continue loopLabel
+//│       1 =>
+//│         let tmp: Int⁰;
+//│         set tmp = (sccF_sccG⁰(0) as! Int⁰);
+//│         return (+⁰(tmp, 1) as! Num⁰)
+//│       else
+//│         unreachable /* dispatch tag is always a merged member id */
+//│     end
+//│   unreachable /* Rest of abortive labelled block */
+//│ };
+//│ @inline
 //│ define sccF⁰ as fun sccF¹(): Int⁰ {
-//│   let id: Int⁰, inlinedVal: Num⁰;
-//│   set id = 0;
-//│   block inlinedLbl:
-//│     loop loopLabel:
-//│       match id
-//│         0 =>
-//│           set id = 1;
-//│           continue loopLabel
-//│         1 =>
-//│           let tmp: Int⁰;
-//│           set tmp = sccF¹();
-//│           set inlinedVal = (+⁰(tmp, 1) as! Num⁰);
-//│           break inlinedLbl
-//│         else
-//│           unreachable /* dispatch tag is always a merged member id */
-//│       end
-//│     unreachable /* Rest of abortive labelled block */
-//│   return (inlinedVal as! Int⁰)
+//│   return (sccF_sccG⁰(0) as! Int⁰)
 //│ };
-//│ define sccG¹ as fun sccG⁰(): Num⁰ {
-//│   let id: Int⁰, inlinedVal: Num⁰;
-//│   set id = 1;
-//│   block inlinedLbl:
-//│     loop loopLabel:
-//│       match id
-//│         0 =>
-//│           set id = 1;
-//│           continue loopLabel
-//│         1 =>
-//│           let tmp: Int⁰;
-//│           set tmp = sccF¹();
-//│           set inlinedVal = (+⁰(tmp, 1) as! Num⁰);
-//│           break inlinedLbl
-//│         else
-//│           unreachable /* dispatch tag is always a merged member id */
-//│       end
-//│     unreachable /* Rest of abortive labelled block */
-//│   return inlinedVal
-//│ };
+//│ @inline
+//│ define sccG¹ as fun sccG⁰(): Num⁰ { return sccF_sccG⁰(1) };
 //│ end
 
 
@@ -696,6 +679,7 @@ sccHelper(100000)
 //│ return sccHelper⁰(100000)
 //│ ——————————————| Optimized IR |——————————————————————————————————————————————————————————————————————
 //│ let sccLoop_sccHelper;
+//│ @private
 //│ define sccLoop_sccHelper as fun sccLoop_sccHelper⁰(id: Int⁰, param0: ?): Num⁰ {
 //│   loop loopLabel:
 //│     match id
@@ -719,10 +703,11 @@ sccHelper(100000)
 //│     end
 //│   unreachable /* Rest of abortive labelled block */
 //│ };
-//│ @tailrec
+//│ @inline @tailrec
 //│ define sccLoop⁰ as fun sccLoop¹(n: Int⁰): Int⁰ {
 //│   return (sccLoop_sccHelper⁰(0, n) as! Int⁰)
 //│ };
+//│ @inline
 //│ define sccHelper¹ as fun sccHelper⁰(n: Int⁰): Num⁰ {
 //│   return sccLoop_sccHelper⁰(1, n)
 //│ };
@@ -787,7 +772,7 @@ val over: Int = thunk(2)
 :ge
 val bad: Str = thunk
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Function' at an unrelated type 'Str'
-//│ ║  l.788: 	val bad: Str = thunk
+//│ ║  l.773: 	val bad: Str = thunk
 //│ ╙──       	               ^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let tmp: Function⁰; set tmp = thunk¹(); define bad² as val bad³: Str⁰ = tmp; end
@@ -799,7 +784,7 @@ val bad: Str = thunk
 fun called() = 3
 val notCalled: Str = called
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Function' at an unrelated type 'Str'
-//│ ║  l.800: 	val notCalled: Str = called
+//│ ║  l.785: 	val notCalled: Str = called
 //│ ╙──       	                     ^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define called⁰ as fun called¹(): ? {
@@ -814,7 +799,7 @@ val notCalled: Str = called
 :ge
 fun badInst() = useInt(new Bar("x"))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Bar' at an unrelated type 'Int'
-//│ ║  l.815: 	fun badInst() = useInt(new Bar("x"))
+//│ ║  l.800: 	fun badInst() = useInt(new Bar("x"))
 //│ ╙──       	                       ^^^^^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badInst⁰ as fun badInst¹(): ? {
@@ -863,7 +848,7 @@ fun mk: Int -> Int = (x: Int) => x
 :ge
 fun badFn() = applyF(42)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Function'
-//│ ║  l.864: 	fun badFn() = applyF(42)
+//│ ║  l.849: 	fun badFn() = applyF(42)
 //│ ╙──       	                     ^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badFn⁰ as fun badFn¹(): ? { return applyF¹(42) }; end
@@ -902,7 +887,7 @@ fun useAdd() = useInt(addInts(1, 2))
 :ge
 fun badAdd() = useStr(addInts(1, 2))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Str'
-//│ ║  l.903: 	fun badAdd() = useStr(addInts(1, 2))
+//│ ║  l.888: 	fun badAdd() = useStr(addInts(1, 2))
 //│ ╙──       	                      ^^^^^^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badAdd⁰ as fun badAdd¹(): ? {
@@ -1209,7 +1194,7 @@ fun tagged(x: Int) =
   fun describe() = Tag.label()
   describe()
 //│ ╔══[WARNING] Objects are not yet lifted.
-//│ ║  l.1207: 	  object Tag with
+//│ ║  l.1192: 	  object Tag with
 //│ ╙──        	         ^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let describe;
@@ -1236,7 +1221,7 @@ fun mk() =
     fun get() = Tag.label()
   new Holder
 //│ ╔══[WARNING] Objects are not yet lifted.
-//│ ║  l.1233: 	  object Tag with
+//│ ║  l.1218: 	  object Tag with
 //│ ╙──        	         ^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let Holder;
