@@ -1095,10 +1095,6 @@ sealed abstract class Result extends AutoLocated, HasErasedType:
             // * An over-applied call applies arguments to whatever the function returns, which the function's
             // * signature is oblivious about.
             case _ => N
-        // * A `fun` with no parameter lists is a getter, so it has no `FuncRef` and `Lowering.ref` auto-invokes it
-        // * with one empty argument list - the getter's own type is the result type of the call.
-        // * Any further application is handled as an over-applied call.
-        case other if (ts.k is syntax.Fun) && argss.sizeIs == 1 && argss.head.isEmpty => other
         case _ => N
       case _ => N
     // * A resolved selection has the type of the member it refers to (e.g. `this.field`); an

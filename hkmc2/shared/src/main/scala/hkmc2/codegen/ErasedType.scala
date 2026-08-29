@@ -392,8 +392,9 @@ object ErasedFuncType:
   * `paramLists` mirrors the definition's parameter *lists*, so that curried functions can be represented - functions
   * that are partially applied yields a function type with fewer parameter lists.
   * 
-  * Note that `paramLists` should never be empty: a member declaring no parameter list at all is a getter, and is erased
-  * to its result instead.
+  * Note that `paramLists` should never be empty: a definition declaring no parameter list at all is either compiled
+  * to a getter and erased to its result instead, or given an implicitly-added empty parameter list which the erased
+  * type mirrors.
   */
 sealed abstract class ErasedFuncType extends ErasedType:
   val rsc: Opt[Bool]

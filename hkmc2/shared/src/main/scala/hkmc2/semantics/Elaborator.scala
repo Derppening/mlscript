@@ -2072,11 +2072,19 @@ extends Importer:
                   val paramLists = sigShape match
                     case S((ps, _)) => ps
                     case N => pss.map(_.params.map(_.sym.erasedType))
-                  // * A `fun` with no parameter lists is a getter, which is auto-invoked on every reference or
-                  // * compiled into a getter method when selected, so it never denotes a function value.
-                  // * Its erased type is therefore the type of the getter's result.
-                  if paramLists.isEmpty then retTpe
-                  else S(ErasedType.FuncRef(rsc = S(false), paramLists, retTpe))
+                  // * An erased type must describe what a definition is *compiled to*, and a paramless `fun` is
+                  // * compiled in two different ways:
+                  // *
+                  // * - As a class-like member, it becomes either a getter method or a `globalThis` selection depending
+                  // *   on if it is `declare`d or not - neither denotes a function value, so the erased type is its
+                  // *   result;
+                  // * - At block level, it is lowered to a function with an implicit empty parameter list which every 
+                  // *   reference auto-invokes, so the erased type will carry that parameter list.
+                  val isCompiledAsGetter = owner.isDefined || Annot.declareModifierOf(annotations).isDefined
+                  val physicalParamLists =
+                    if paramLists.isEmpty && !isCompiledAsGetter then Nil :: Nil else paramLists
+                  if physicalParamLists.isEmpty then retTpe
+                  else S(ErasedType.FuncRef(rsc = S(false), physicalParamLists, retTpe))
                 case _: syntax.Val => retTpe
                 case _ => N
               val tsym = TermSymbol(k, owner, id, erasedType = erasedTpe) // TODO?

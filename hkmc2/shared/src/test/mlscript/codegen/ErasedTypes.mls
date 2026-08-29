@@ -794,12 +794,41 @@ val notCalled: Str = called
 //│ end
 
 
+// The two forms nonetheless agree on what they are *compiled to*: a source `fun` with no parameter list is
+// given an implicitly-added empty one at block level, so it is lowered exactly like `called` above and its
+// erased type says so. As a class-like member it instead becomes a getter, which has no parameter list at
+// all - and it is that difference, not the source form, that the erased type has to follow.
+fun localGetter: Int = 1
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define localGetter⁰ as fun localGetter¹(): Int⁰ { return 1 }; end
+
+module M with
+  fun memberGetter: Int = 1
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define M⁰ as class M¹ module M² { method memberGetter⁰ = fun memberGetter¹: Int⁰ { return 1 } }; end
+
+fun useLocal: Int = localGetter
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define useLocal⁰ as fun useLocal¹(): Int⁰ { return localGetter¹() }; end
+
+fun useMember: Int = M.memberGetter
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define useMember⁰ as fun useMember¹(): Int⁰ { return M².memberGetter¹ }; end
+
+// Applying the getter applies its *result*, which its signature says nothing about, so the call is untyped
+// and returning it from `: Int` needs a cast. Were the call read as the getter's own auto-invocation, this
+// would silently take the getter's result type and the cast would be dropped.
+fun callMember: Int = M.memberGetter()
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define callMember⁰ as fun callMember¹(): Int⁰ { return (M².memberGetter¹() as! Int⁰) }; end
+
+
 // An instantiation is typed as its class, so it cannot fill a primitive slot. Were the `Instantiate` type
 // lost, this would silently become an ordinary downcast instead of the error below.
 :ge
 fun badInst() = useInt(new Bar("x"))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Bar' at an unrelated type 'Int'
-//│ ║  l.800: 	fun badInst() = useInt(new Bar("x"))
+//│ ║  l.829: 	fun badInst() = useInt(new Bar("x"))
 //│ ╙──       	                       ^^^^^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badInst⁰ as fun badInst¹(): ? {
@@ -848,7 +877,7 @@ fun mk: Int -> Int = (x: Int) => x
 :ge
 fun badFn() = applyF(42)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Function'
-//│ ║  l.849: 	fun badFn() = applyF(42)
+//│ ║  l.878: 	fun badFn() = applyF(42)
 //│ ╙──       	                     ^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badFn⁰ as fun badFn¹(): ? { return applyF¹(42) }; end
@@ -887,7 +916,7 @@ fun useAdd() = useInt(addInts(1, 2))
 :ge
 fun badAdd() = useStr(addInts(1, 2))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int' at an unrelated type 'Str'
-//│ ║  l.888: 	fun badAdd() = useStr(addInts(1, 2))
+//│ ║  l.917: 	fun badAdd() = useStr(addInts(1, 2))
 //│ ╙──       	                      ^^^^^^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define badAdd⁰ as fun badAdd¹(): ? {
@@ -1194,7 +1223,7 @@ fun tagged(x: Int) =
   fun describe() = Tag.label()
   describe()
 //│ ╔══[WARNING] Objects are not yet lifted.
-//│ ║  l.1192: 	  object Tag with
+//│ ║  l.1221: 	  object Tag with
 //│ ╙──        	         ^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let describe;
@@ -1221,7 +1250,7 @@ fun mk() =
     fun get() = Tag.label()
   new Holder
 //│ ╔══[WARNING] Objects are not yet lifted.
-//│ ║  l.1218: 	  object Tag with
+//│ ║  l.1247: 	  object Tag with
 //│ ╙──        	         ^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let Holder;
