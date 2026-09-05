@@ -2068,7 +2068,7 @@ extends Importer:
                   ErasedType.eraseSign(resultSign)
               val erasedTpe = k match
                 case syntax.Fun =>
-                  // * A `declare`d function's parameter lists is derived from its signature if it doesn't have one.
+                  // * A `declare`d function's parameter lists are derived from its signature when it writes none.
                   val paramLists = sigShape match
                     case S((ps, _)) => ps
                     case N => pss.map(_.params.map(_.sym.erasedType))
@@ -2078,7 +2078,7 @@ extends Importer:
                   // * - As a class-like member, it becomes either a getter method or a `globalThis` selection depending
                   // *   on if it is `declare`d or not - neither denotes a function value, so the erased type is its
                   // *   result;
-                  // * - At block level, it is lowered to a function with an implicit empty parameter list which every 
+                  // * - At block level, it is lowered to a function with an implicit empty parameter list which every
                   // *   reference auto-invokes, so the erased type will carry that parameter list.
                   val isCompiledAsGetter = owner.isDefined || Annot.declareModifierOf(annotations).isDefined
                   val physicalParamLists =

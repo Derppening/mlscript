@@ -1,12 +1,8 @@
-// All comments in this file assume that an intrinsic `cast[T](val)` function exists to perform a
-// downcast to `T` for `val`. MLscript currently does not have a surface-language syntax or
-// function for casting between types.
-
 :global
 :wasm
 
 
-// In this example, the function call is equivalent to `useBox(cast[Box](id(new Box(42))))`.
+// In this example, the function call is equivalent to `useBox((id(new Box(42) as!! Box)))`.
 // The `:wat` output below shows this as a `ref.cast` to `(ref $Box)` applied to the result of `id`,
 // which is what the round-trip through an unannotated `id` makes necessary.
 // Note that `:noInline` is needed here (and below) to prevent `id` from being inlined and the coercion elided.
@@ -83,7 +79,7 @@ useBox(id(new Box(42)))
 //│ = 42
 
 
-// Similarly, the constructor call is `new Wrap(cast[Box](id(new Box(7))))`.
+// Similarly, the constructor call is `new Wrap((id(new Box(7)) as!! Box))`.
 :noInline
 class Wrap(val b: Box)
 fun readV(b: Box) = b.v
@@ -93,7 +89,7 @@ readV(w.Wrap#b)
 //│ = 7
 
 
-// `inc(cast[Int](id(41)))`
+// `inc((id(41) as!! Int))`
 :noInline
 fun inc(n: Int) = n + 1
 inc(id(41))
@@ -101,7 +97,7 @@ inc(id(41))
 //│ = 42
 
 
-// `set x = cast[Int](id(7))`
+// `set x = (id(7) as!! Int)`
 :noInline
 fun setter(x: Int) =
   set x = id(7)
@@ -161,6 +157,8 @@ fun sccG(): Int32 = wasm.i31.get_s(sccF()) + wasm.i32.const(1)
 //│ ╙──       	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
+// `bar` on its own first, so the `:fixme` below is known to be about the mutual recursion rather than about
+// `bar` itself.
 fun bar(m: Int32) =
   wasm.ref.i31(m)
 //│ Wasm result:
@@ -173,7 +171,7 @@ fun bar(m: Int32) =
   foo(wasm.ref.i31(m))
 //│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `i32` to `(ref null any)` in a different type hierarchy
 //│ ╔══[COMPILATION ERROR] Operand #1 of wasm intrinsic 'ref.i31' must be of type 'Int32'
-//│ ║  l.173: 	  foo(wasm.ref.i31(m))
+//│ ║  l.175: 	  foo(wasm.ref.i31(m))
 //│ ╙──       	                   ^
 //│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `i32` to `(ref null any)` in a different type hierarchy
 
@@ -213,10 +211,10 @@ wasm.ref.i31(wasm.i32.const(7))
 :noInline
 wasm.ref.i31(id(wasm.i32.const(7)))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
-//│ ║  l.214: 	wasm.ref.i31(id(wasm.i32.const(7)))
+//│ ║  l.216: 	wasm.ref.i31(id(wasm.i32.const(7)))
 //│ ╙──       	                ^^^^^^^^^^^^^^^^^
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Unknown' at an unrelated type 'Int32'
-//│ ║  l.214: 	wasm.ref.i31(id(wasm.i32.const(7)))
+//│ ║  l.216: 	wasm.ref.i31(id(wasm.i32.const(7)))
 //│ ╙──       	             ^^^^^^^^^^^^^^^^^^^^^
 //│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `i32` to `(ref null any)` in a different type hierarchy
 //│ ═══[COMPILATION ERROR] Operand #1 of wasm intrinsic 'ref.i31' must be of type 'Int32'
@@ -234,10 +232,14 @@ unpack(toObj())
 //│ = 7
 
 
+// Coercions *into* `Function`. Returning a function instance is unsupported outright, and a class instance is
+// unrelated to `Function`. However, routing the same instance through a slot that erases it upcasts it to the
+// top type, after which the narrowing is accepted with no diagnostic at all. The exception is the last block,
+// where `Unknown` cannot be cast to a primitive and is rejected.
 :e
 fun test: Function = id
 //│ ╔══[COMPILATION ERROR] Returning function instances is not supported
-//│ ║  l.238: 	fun test: Function = id
+//│ ║  l.245: 	fun test: Function = id
 //│ ╙──       	                     ^^
 
 :fixme
@@ -279,7 +281,7 @@ fun test: Function = castToA(123)
 :e
 castToA(wasm.i32.const(123))
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
-//│ ║  l.280: 	castToA(wasm.i32.const(123))
+//│ ║  l.287: 	castToA(wasm.i32.const(123))
 //│ ╙──       	        ^^^^^^^^^^^^^^^^^^^
 //│ Wasm result:
 //│ = 123

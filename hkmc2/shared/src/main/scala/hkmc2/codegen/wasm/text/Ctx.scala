@@ -188,7 +188,7 @@ final class SessionExportCtx(
   * @param exportName
   *   Optional export name.
   * @param wrapId
-  *   An pair of optional strings for adding a prefix and suffix to the generated identifier of this function.
+  *   A pair of optional strings for adding a prefix and suffix to the generated identifier of this function.
   */
 class FuncInfo(
     val sym: ExternSymbol,
@@ -236,7 +236,7 @@ end FuncInfo
   * @param sym
   *   The source [[ScopedSymbol]] which this global is generated from.
   * @param wrapId
-  *   An pair of optional strings for adding a prefix and suffix to the generated identifier of this global.
+  *   A pair of optional strings for adding a prefix and suffix to the generated identifier of this global.
   */
 class GlobalInfo(
     val globalType: GlobalType,
@@ -265,12 +265,12 @@ end GlobalInfo
   * @param memType
   *   The type of the memory.
   * @param wrapId
-  *   An pair of optional strings for adding a prefix and suffix to the generated identifier of this memory.
+  *   A pair of optional strings for adding a prefix and suffix to the generated identifier of this memory.
   */
 class MemInfo(val sym: ExternSymbol, val memType: MemType, val wrapId: Opt[Str] -> Opt[Str] = N -> N)(using Ctx, Raise)
     extends ToWat:
 
-  /** Symbolic identifier for the global. */
+  /** Symbolic identifier for the memory. */
   val id: SymIdx = SymIdx(summon[Ctx].memoryScp.allocateOrGetNameWrapped(sym, wrapId))
 
   def toWat: Document = doc"(memory ${id.toWat} ${memType.toWat})"
@@ -283,7 +283,7 @@ end MemInfo
   * @param sym
   *   The source [[ExternSymbol]] which this type is generated from.
   * @param wrapId
-  *   An pair of optional strings for adding a prefix and suffix to the generated identifier of this type.
+  *   A pair of optional strings for adding a prefix and suffix to the generated identifier of this type.
   * @param compType
   *   The composite type this type definition represents.
   * @param objectTag
@@ -338,7 +338,7 @@ enum WasmIntrinsicType:
 /** An argument passed to a Wasm intrinsic function.
   *
   * This class also stores the parameter's kind (i.e. instruction argument vs stack argument), since some wasm
-  * intrinsics (e.g. `i32.const`) only accepts a constant literal as part of the instruction.
+  * intrinsics (e.g. `i32.const`) only accept a constant literal as part of the instruction.
   *
   * @param intrName
   *   The name of the intrinsic this argument was passed to, for diagnostics.
@@ -487,7 +487,7 @@ class FunctionCtx(
   /** The declared Wasm value type of the param/local slot for `sym`.
     *
     * Parameter slot types are resolved eagerly at construction (see [[resolvedParamTypes]]): each comes from the slot's
-    * `paramValTypes` override if present, otherwise from the symbol's erased type via [[paramType]]. Local slots derive
+    * `paramTypes` override if present, otherwise from the symbol's erased type via [[paramType]]. Local slots derive
     * their type from the symbol's erased type via [[localType]].
     */
   def slotType(sym: SlotSymbol)(using Ctx): ValType =
@@ -635,7 +635,7 @@ class Ctx(using Elaborator.Ctx, State) extends ToWat:
 
   import Ctx.prettyString
 
-  /** The [[`Elaborator.Ctx`]] associated with this instance. */
+  /** The [[Elaborator.Ctx]] associated with this instance. */
   def elabCtx: Elaborator.Ctx = summon[Elaborator.Ctx]
 
   /** [[Scope]] for generating WAT identifiers of types. */

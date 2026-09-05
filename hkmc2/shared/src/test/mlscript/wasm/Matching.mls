@@ -283,7 +283,7 @@ isBool(true)
 //│ Wasm result:
 //│ = 1
 
-// ⚠️ The two share one representation — `true` and `1` are both `(ref.i31 1)` — so neither test can exclude
+// ⚠️ The two share one representation - `true` and `1` are both `(ref.i31 1)` - so neither test can exclude
 // the other, and both of these answer 1 where JS answers 0. Telling them apart would need `Bool` to have a
 // representation of its own; testing by value is not an option, as `0` and `1` are perfectly good `Int`s.
 isInt(true)
@@ -295,7 +295,7 @@ isBool(1)
 //│ = 1
 
 // `Object` needs no `typeinfo`: as the root of the reference hierarchy it is decided by representation alone.
-// Both halves of the split count — a class instance is a `$Object` struct, a tuple is a Wasm array.
+// Both halves of the split count - a class instance is a `$Object` struct, a tuple is a Wasm array.
 class Foo(val x)
 fun isObj(v) = if v is Object then 1 else 0
 isObj(Foo(1))

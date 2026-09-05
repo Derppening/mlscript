@@ -32,7 +32,7 @@ private def isBoxedAsI31(sym: Symbol, ctx: Ctx): Bool =
   (sym eq builtins.Int) || (sym eq builtins.Int31) || (sym eq builtins.Bool)
 
 extension (et: ErasedType)
-  /** Returns the corresponding Wasm type for this [[`ErasedType`]]. */
+  /** Returns the corresponding Wasm type for this [[ErasedType]]. */
   private[text] def wasmType(using Ctx, State): Opt[ValType] =
     import Ctx.ctx
     val elabCtx = ctx.elabCtx
@@ -51,7 +51,7 @@ extension (et: ErasedType)
 extension (sym: WasmSlotSymbol)
   /** The Wasm value type a *local* slot for `sym` should be declared with.
     *
-    * Use [[`FunctionCtx.slotType`]] for parameter slots, which handles `anyref` widening due to virtual dispatch
+    * Use [[FunctionCtx.slotType]] for parameter slots, which handles `anyref` widening due to virtual dispatch
     * calling conventions.
     */
   private[text] def localType(using Ctx, State): ValType =
@@ -69,7 +69,7 @@ extension (sym: WasmSlotSymbol)
         s.erasedType.flatMap(_.wasmType).getOrElse(RefType.anyref)
 
 extension (sym: WasmSlotSymbol)
-  /** The Wasm value type a parameter slot for `sym` should be declared with, if typed parameters are enabled. */
+  /** The Wasm value type a parameter slot for `sym` should be declared with. */
   private[text] def paramType(using Ctx, State): ValType =
     sym match
       case s: HasErasedType =>
@@ -944,7 +944,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
   private def predeclareClass(defn: ClsLikeDefn)(using Raise, SessionExportCtx): Unit =
     predeclareClassVirtualTable(defn)
     // Note: `predeclareClassType` must run before `predeclareClassTypeInfoType`, since virtual slots in `typeinfo`
-    // needs to type `this` as the class's own type.
+    // need to type `this` as the class's own type.
     predeclareClassType(defn)
     predeclareClassTypeInfoType(defn)
     predeclareClassInit(defn)
@@ -1503,7 +1503,10 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
     raise(ErrorReport(errMsgs, source = Diagnostic.Source.Compilation, extraInfo = extraInfo))
     unreachable
 
-  /** Returns the local or global index for a given symbol `l`. */
+  /** The local or global index for `l`, or `N` when it is neither.
+    *
+    * An [[InnerSymbol]] is a hard failure: it never denotes a variable slot.
+    */
   def varIndex(l: WasmSlotSymbol, loc: Opt[Loc])(using FunctionCtx, Raise): Opt[LocalIdx | GlobalIdx] = l match
     case ts: InnerSymbol =>
       lastWords(s"InnerSymbol `$ts` (${ts.getClass.getSimpleName}) cannot be resolved as a variable")
@@ -1975,7 +1978,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
       case _ => N
     loop(path, Nil)
 
-  /** Resolves the argument at position `idx` as an [[`IntrinsicArg`]], compiling it as an operand and recovering the
+  /** Resolves the argument at position `idx` as an [[IntrinsicArg]], compiling it as an operand and recovering the
     * integer literal it was written as, if it was written as one.
     *
     * `declared` is the type the prelude declares for the parameter. Conformance is only reported if the body actually
@@ -2649,8 +2652,8 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
               local.get(matchResLocal.get, RefType.anyref),
             )
           else
-            // Every path of the match is a control transfer, so the tail (and any subsequent reads of `$matchRes` is
-            // dead. Emit `unreachable` to type the enclosing block as bottom.
+            // Every path of the match is a control transfer, so the tail (and any subsequent reads of `$matchRes`)
+            // is dead. Emit `unreachable` to type the enclosing block as bottom.
             Vector(matchBlock, unreachable)
         else
           val rstExpr = returningTerm(rst)

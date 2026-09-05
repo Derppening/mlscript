@@ -1466,11 +1466,11 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
         val l = loweringCtx.registerTempSymbol(N, erasedType = r.erasedValueType)
         Assign(l, r, k(l.asSimpleRef))
 
-  /** Wraps the lowered result `r` with a [[`Cast`]] when it must be downcasted to fit the `expected` erased type of the
+  /** Wraps the lowered result `r` with a [[Cast]] when it must be downcasted to fit the `expected` erased type of the
     * slot it flows into.
     *
-    *  - If `expected` is a subtype of `r`'s type, a `r` is wrapped with a downcast.
-    *  - If `expected and `r` are unrelated, a compile-time error is raised and `r` returns uncast.
+    *  - If `expected` is a subtype of `r`'s type, `r` is wrapped with a downcast.
+    *  - If `expected` and `r` are unrelated, a compile-time error is raised and `r` returns uncast.
     *  - Otherwise, `r` is returned unchanged.
     *
     * An absent `expected` is an unannotated slot, which holds the top reference type rather than no type at all.
