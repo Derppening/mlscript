@@ -873,6 +873,9 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
               S(k(Value.Lit(negLit))),
               Unreachable("tail operation in branches"),
             ) else
+              // Well-typed short-circuit expressions have Boolean operands and results.
+              // The JS lowering may propagate a non-Boolean RHS in ill-typed input; such input is rejected
+              // by the type checker, so that runtime behavior does not determine the IR result type.
               val ts = loweringCtx.registerTempSymbol(N, erasedType = S(ErasedType.Bool))
               Match(
                 ar1,

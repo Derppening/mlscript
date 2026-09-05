@@ -1,0 +1,178 @@
+
+:global
+:wasm
+
+
+// A class used only by a runtime cast must remain reachable after lifting.
+// Currently, Local disappears from optimized IR and the backend silently drops the cast,
+// so narrowLocal(42) returns 42 instead of trapping.
+:noInline
+:lift
+:sir
+:soir
+:re
+:breakme // Preserve concrete cast-target dependencies through optimization.
+fun narrowLocal(x): Object =
+  class Local()
+  val y: Local = x
+  y
+narrowLocal(42)
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ let Local;
+//│ define Local as class Local¹ {
+//│   constructor Local⁰
+//│ };
+//│ define narrowLocal⁰ as fun narrowLocal¹(x) {
+//│   let y;
+//│   define y as val y⁰ = (x as! Local¹);
+//│   return y⁰
+//│ };
+//│ return narrowLocal¹(42)
+//│ ——————————————| Optimized IR |——————————————————————————————————————————————————————————————————————
+//│ define narrowLocal⁰ as fun narrowLocal¹(x) {
+//│   let y;
+//│   define y as val y⁰ = (x as! Local¹);
+//│   return y⁰
+//│ };
+//│ return narrowLocal¹(42)
+//│ Wasm result:
+//│ = 42
+
+
+// Entering the broad member of this SCC must still enforce narrow's return contract.
+// The different class layouts ensure that Wasm's structural type identity cannot mask the cast.
+// Currently, TailRecOpt drops the intermediate cast and returns an Other.
+:noInline
+:soir
+:re
+:breakme // Entry-stub casts do not preserve intermediate return coercions.
+class Narrow(val n: Int)
+class Other()
+fun narrow(n: Int): Narrow = broad(n)
+fun broad(n: Int): Object = if n <= 0 then new Other() else narrow(n - 1)
+broad(1)
+//│ ——————————————| Optimized IR |——————————————————————————————————————————————————————————————————————
+//│ let narrow_broad;
+//│ @private
+//│ define narrow_broad as fun narrow_broad⁰(id, param0) {
+//│   loop loopLabel:
+//│     match id
+//│       0 =>
+//│         set id = 1;
+//│         continue loopLabel
+//│       1 =>
+//│         let scrut, tmp;
+//│         set scrut = wasm⁰.le_impl﹖(param0, 0);
+//│         match scrut
+//│           true =>
+//│             return new Other⁰()
+//│           else
+//│             set tmp = wasm⁰.minus_impl﹖(param0, 1);
+//│             set param0 = (tmp as! Int⁰);
+//│             set id = 0;
+//│             continue loopLabel
+//│         end
+//│       else
+//│         unreachable /* dispatch tag is always a merged member id */
+//│     end
+//│   unreachable /* Rest of abortive labelled block */
+//│ };
+//│ @inline
+//│ define narrow⁰ as fun narrow¹(n) {
+//│   return (narrow_broad⁰(0, n) as! Narrow⁰)
+//│ };
+//│ @inline
+//│ define broad⁰ as fun broad¹(n) {
+//│   return narrow_broad⁰(1, n)
+//│ };
+//│ define Narrow¹ as class Narrow⁰ {
+//│   val n⁰;
+//│   constructor Narrow²(n) {
+//│     define n⁰ as val n¹ = n;
+//│     end
+//│   }
+//│ };
+//│ define Other¹ as class Other⁰ { constructor Other² };
+//│ return broad¹(1)
+//│ Wasm result:
+//│ = {}
+
+
+// Control: without tail-recursion optimization, the same call traps as required.
+:noInline
+:noTailRec
+:re
+class NarrowControl(val n: Int)
+class OtherControl()
+fun narrowControl(n: Int): NarrowControl = broadControl(n)
+fun broadControl(n: Int): Object = if n <= 0 then new OtherControl() else narrowControl(n - 1)
+broadControl(1)
+//│ Wasm result:
+//│ ═══[RUNTIME ERROR] RuntimeError: illegal cast
+
+
+// Forward references must resolve consistently in class layouts and constructor signatures.
+// Currently, the predeclared initializer/constructor parameter is anyref, but its later
+// function definition uses (ref $Later), so Binaryen rejects the generated module.
+:noInline
+:fixme // Resolve class identities before freezing layouts and function signatures.
+class Forward(val b: Later) with
+  fun get(): Later = b
+class Later(val n: Int)
+fun readForward(f: Forward): Later = f.get()
+readForward(new Forward(new Later(7)))
+//│ Wasm result:
+//│ ═══[RUNTIME ERROR] [object Object]
+
+
+// An inhabited self-reference exposes the same ordering problem in field storage.
+// Currently, next is stored as anyref and get returns it without restoring the SelfNode type.
+:noInline
+:fixme // Preserve the declared field type across self-referential class layouts and reads.
+class SelfNode() with
+  val next: SelfNode = this
+  fun get(): SelfNode = next
+if new SelfNode().get() is SelfNode then 1 else 0
+//│ ╔══[COMPILATION ERROR] Wasm function `get` expects result to have type `(ref $SelfNode)`, but got `(ref null any)`
+//│ ║  l.134: 	  fun get(): SelfNode = next
+//│ ╙──       	  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+// Typed IR knows the covariant override's return type, while the virtual slot uses Object.
+// The backend must adapt the dispatch result to Child before returning it from readChild.
+:noInline
+:fixme // Restore the selected method's result type after virtual dispatch.
+class Parent() with
+  virtual fun get(): Object = new Parent()
+class Child() extends Parent() with
+  fun get(): Child = new Child()
+fun readChild(c: Child): Child = c.get()
+readChild(new Child())
+//│ ╔══[COMPILATION ERROR] Wasm function `readChild` expects result to have type `(ref $Child)`, but got `(ref null any)`
+//│ ║  l.149: 	fun readChild(c: Child): Child = c.get()
+//│ ╙──       	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+// Control: an Int32 conditional can already be returned directly.
+:noInline
+fun chooseDirect(b: Bool): Int32 = if b then wasm.i32.const(1) else wasm.i32.const(2)
+chooseDirect(true)
+//│ Wasm result:
+//│ = 1
+
+
+// Introducing an explicitly typed local must preserve the same primitive representation.
+// Currently, conditional normalization introduces an untyped temporary, forcing the i32
+// branches through anyref and rejecting the subsequent assignment to Int32.
+:noInline
+:fixme // Carry the primitive result representation through non-tail conditional temporaries.
+fun chooseLocal(b: Bool): Int32 =
+  val x: Int32 = if b then wasm.i32.const(1) else wasm.i32.const(2)
+  x
+chooseLocal(true)
+//│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Unknown' at an unrelated type 'Int32'
+//│ ║  l.170: 	  val x: Int32 = if b then wasm.i32.const(1) else wasm.i32.const(2)
+//│ ╙──       	                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `i32` to `(ref null any)` in a different type hierarchy
+//│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `i32` to `(ref null any)` in a different type hierarchy
+//│ ═══[COMPILATION ERROR] Cannot cast a Wasm value of type `(ref null any)` to `i32` in a different type hierarchy
