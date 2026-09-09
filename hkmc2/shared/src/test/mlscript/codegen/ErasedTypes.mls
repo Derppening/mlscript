@@ -361,11 +361,11 @@ fun f(o: Object, i: Int, x: Int32) =
 :ge
 fun id(x: Anything) = ()
 fun f(x: Int32) = id(x)
-//│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'rsc? Unknown'
+//│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
 //│ ║  l.363: 	fun f(x: Int32) = id(x)
 //│ ╙──       	                     ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ define id⁰ as fun id¹(x: rsc? Unknown): ? {
+//│ define id⁰ as fun id¹(x: Unknown): ? {
 //│   return runtime⁰.Unit⁰
 //│ };
 //│ define f⁴ as fun f⁵(x: Int32): ? { return id¹(x) };
@@ -385,7 +385,7 @@ fun f3(x: Anything): Anything = x
 //│ define f2⁰ as fun f2¹(x: Int⁰): ? {
 //│   return id¹(x)
 //│ };
-//│ define f3⁰ as fun f3¹(x: rsc? Unknown): rsc? Unknown { return x };
+//│ define f3⁰ as fun f3¹(x: Unknown): Unknown { return x };
 //│ end
 
 
@@ -480,7 +480,7 @@ type Union = P | Q
 fun useCyclic(x: Cyclic): Cyclic = x
 fun useUnion(x: Union): Union = x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ define useCyclic⁰ as fun useCyclic¹(x: rsc? Unknown): rsc? Unknown {
+//│ define useCyclic⁰ as fun useCyclic¹(x: Unknown): Unknown {
 //│   return x
 //│ };
 //│ define useUnion⁰ as fun useUnion¹(x: Object⁰): Object⁰ {

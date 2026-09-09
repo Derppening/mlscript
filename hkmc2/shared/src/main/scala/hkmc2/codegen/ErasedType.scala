@@ -257,23 +257,34 @@ object ErasedType:
     * Note that the resulting erased type is **not** canonicalized to avoid using `ctx.builtins` during elaboration
     * of `Prelude`.
     */
-  def eraseSign(sign: Term): Opt[ErasedValueType] = sign match
+  def eraseSign(sign: Term): Opt[ErasedValueType] = eraseSign(sign, rsc = S(false))
+
+  /** Erases `sign` under the resource-ness gathered from the modifiers wrapping it so far.
+    *
+    * `rsc` starts as the unannotated default and is replaced by each `rsc`/`rsc?` annotation peeled off on the
+    * way down, so that the modifier applies to whatever the signature ultimately denotes.
+    */
+  private def eraseSign(sign: Term, rsc: Opt[Bool]): Opt[ErasedValueType] = sign match
+    // * The resource modifiers reach here as annotations.
+    // * Note that this arm has to be part of * the recursion: a union erases its members by recursive call, and each 
+    // * carries its own modifier, so `rsc C | rsc D` would otherwise erase to nothing at all.
+    case Term.Annotated(Annot.Resource(rsc), target) => eraseSign(target, rsc)
     case CompType(lhs, rhs, true) =>
       // * A union is kept as a transient `Union` surface form; `canonicalize` collapses it to the members' LUB.
       for
-        l <- eraseSign(lhs)
-        r <- eraseSign(rhs)
+        l <- eraseSign(lhs, rsc)
+        r <- eraseSign(rhs, rsc)
       yield ErasedType.union(l, r)
     // * An intersection is never decomposed: narrowing to one member would call for a GLB, which this lattice
     // * cannot express.
-    case CompType(_, _, false) => S(ErasedType.Unknown(N))
+    case CompType(_, _, false) => S(ErasedType.Unknown(rsc))
     case UnitVal() => S(ErasedType.Unit)
     // * A written arrow denotes a function value, and every function value is a `Function`.
-    case FunTy(_, _, _) => S(ErasedType.Function(rsc = S(false)))
+    case FunTy(_, _, _) => S(ErasedType.Function(rsc))
     // * Quantification erases away: what a `forall` denotes is what its body denotes.
-    case Forall(_, _, body) => eraseSign(body)
+    case Forall(_, _, body) => eraseSign(body, rsc)
     case _ =>
-      sign.symbol.flatMap(_.asTpe).map(sym => ErasedType.ValueLike(rsc = S(false), sym))
+      sign.symbol.flatMap(_.asTpe).map(sym => ErasedType.ValueLike(rsc, sym))
 
   /** Whether `actual` is a subtype of `expected`, walking the class hierarchy.
     *
@@ -503,18 +514,12 @@ object CanonicalErasedValueType:
 
   /** Creates an instance from an already-resolved symbol. */
   private def resolved(rsc: Opt[Bool], sym: TypeSymbol)(using Ctx, State): CanonicalErasedValueType = sym match
-    // * An unresolvable alias becomes the top type with unknown resource-ness.
-    case _: TypeAliasSymbol => ErasedType.Unknown(N)
+    // * An unresolvable alias becomes the top type, carrying whatever resource-ness was written on it.
+    case _: TypeAliasSymbol => ErasedType.Unknown(rsc)
     case base =>
-      // TODO(Derppening): Pass `rsc` through to both top-type cases instead of forcing `N`, so that `rsc Anything`
-      // * is expressible at all and a join of two resources keeps its `S(true)` - `lub` routes through here, so the
-      // * `lubRsc` it computes is discarded whenever `lubSym` widens to `Anything`. Blocked on `eraseSign` supplying
-      // * `N` for a bare `Anything`: every caller passes `S(false)` today, so passing it through would assert the
-      // * collected layout for the surface top.
-      // *
       // * Note that `base is ctx.builtins.Anything` is only necessary for `InvalMLPrelude.mls` - the `Anything` type
       // * is `declare class`-ed there (since `declare type` is not supported in `invalml`).
-      if base is ctx.builtins.Anything then ErasedType.Unknown(N)
+      if base is ctx.builtins.Anything then ErasedType.Unknown(rsc)
       else PrimitiveType.values.find(_.sym === base) match
         case S(prim) => ErasedType.Primitive(prim)
         case _ => ErasedType.AnyRef(rsc, base)
