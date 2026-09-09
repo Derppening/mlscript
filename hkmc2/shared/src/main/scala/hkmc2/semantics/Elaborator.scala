@@ -2019,6 +2019,12 @@ extends Importer:
                 case _ =>
                   Modulefulness.none
               
+              /** Whether a signature is a possibly-quantified arrow. */
+              def wrapsArrow(sign: Term): Bool = sign match
+                case Term.Forall(_, _, body) => wrapsArrow(body)
+                case Term.FunTy(_, _, _) => true
+                case _ => false
+              
               /** Splits a signature's arrow chain into the parameter lists it describes and the type it returns.
                 * Yields `N` if the signature is not an arrow or if some parameter list's arity cannot be read.
                 */
@@ -2035,6 +2041,9 @@ extends Importer:
                   case single => S(ErasedType.eraseSign(single) :: Nil)
                 sign match
                   case Term.Forall(_, _, body) => splitSignature(body)
+                  // * The split reads only the arrows' shape, and a resource modifier describes the function they
+                  // * denote rather than that shape, so the split sees through it.
+                  case Term.Annotated(Annot.Resource(_), target) => splitSignature(target)
                   case Term.FunTy(lhs, rhs, _) => paramsOf(lhs).map: ps =>
                     splitSignature(rhs) match
                       case S((rest, ret)) => (ps :: rest, ret)
@@ -2061,6 +2070,10 @@ extends Importer:
                   // * parameters (see `sigShape`).
                   def stripSignatureParams(s: Term, n: Int): Term = (s, n) match
                     case (Term.Forall(_, _, body), _) => stripSignatureParams(body, n)
+                    // * Only a modifier on an arrow being stripped goes with it; one on anything else wraps the
+                    // * result, so `fun f: rsc C` keeps it however many parameter lists `f` writes.
+                    case (Term.Annotated(Annot.Resource(_), target), n) if n > 0 && wrapsArrow(target) =>
+                      stripSignatureParams(target, n)
                     case (Term.FunTy(_, rhs, _), n) if n > 0 => stripSignatureParams(rhs, n - 1)
                     case _ => s
                   val resultSign: Term =
