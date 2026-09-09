@@ -28,12 +28,12 @@ fun h(x: C) = x
 // A written arrow is consumed as the definition's parameter list, so what remains is
 // the result type - the modifier describes the function rather than the result, and is
 // stripped along with the arrow. `kControl` is the same shape without one; `kForall`
-// puts a quantifier between the modifier and the arrow.
+// puts a quantifier between the modifier and the arrow, and `kMaybe` uses `rsc?`.
 
 fun k: rsc (C) -> C
 fun k(x) = x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ define k⁰ as fun k¹(x: ?): C² { return (x as! C²) }; end
+//│ define k⁰ as rsc fun k¹(x: ?): C² { return (x as! C²) }; end
 
 fun kControl: (C) -> C
 fun kControl(x) = x
@@ -43,15 +43,20 @@ fun kControl(x) = x
 fun kForall: rsc [A] -> (A) -> A
 fun kForall(x) = x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ define kForall⁰ as fun kForall¹(x: ?): ? { return x }; end
+//│ define kForall⁰ as rsc fun kForall¹(x: ?): ? { return x }; end
+
+fun kMaybe: rsc? (C) -> C
+fun kMaybe(x) = x
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define kMaybe⁰ as rsc? fun kMaybe¹(x: ?): C² { return (x as! C²) }; end
 
 // Referencing each as a value carries the resource-ness its signature declared of the
-// function itself, which the definition does not otherwise render. Narrowing names it.
+// function itself, which its definition renders as a prefix. Narrowing names it too.
 
 :ge
 val kNarrowed: Str = k
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'rsc Function' at an unrelated type 'Str'
-//│ ║  l.52: 	val kNarrowed: Str = k
+//│ ║  l.57: 	val kNarrowed: Str = k
 //│ ╙──      	                     ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define kNarrowed⁰ as val kNarrowed¹: Str⁰ = k¹; end
@@ -59,7 +64,7 @@ val kNarrowed: Str = k
 :ge
 val kControlNarrowed: Str = kControl
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Function' at an unrelated type 'Str'
-//│ ║  l.60: 	val kControlNarrowed: Str = kControl
+//│ ║  l.65: 	val kControlNarrowed: Str = kControl
 //│ ╙──      	                            ^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define kControlNarrowed⁰ as val kControlNarrowed¹: Str⁰ = kControl¹; end
@@ -67,13 +72,22 @@ val kControlNarrowed: Str = kControl
 :ge
 val kForallNarrowed: Str = kForall
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'rsc Function' at an unrelated type 'Str'
-//│ ║  l.68: 	val kForallNarrowed: Str = kForall
+//│ ║  l.73: 	val kForallNarrowed: Str = kForall
 //│ ╙──      	                           ^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define kForallNarrowed⁰ as val kForallNarrowed¹: Str⁰ = kForall¹; end
 
+:ge
+val kMaybeNarrowed: Str = kMaybe
+//│ ╔══[COMPILATION ERROR] Cannot use a value of type 'rsc? Function' at an unrelated type 'Str'
+//│ ║  l.81: 	val kMaybeNarrowed: Str = kMaybe
+//│ ╙──      	                          ^^^^^^
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define kMaybeNarrowed⁰ as val kMaybeNarrowed¹: Str⁰ = kMaybe¹; end
+
 // An arrow the definition does not consume is its result, so a modifier on it describes
-// the function the definition returns rather than the definition itself.
+// the function the definition returns rather than the definition itself. A paramless
+// `fun` consumes none, even though at block level it compiles to a nullary function.
 
 fun resultRsc(x): rsc (C) -> C = x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
@@ -82,10 +96,15 @@ fun resultRsc(x): rsc (C) -> C = x
 :ge
 val resultRscNarrowed: Str = resultRsc
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Function' at an unrelated type 'Str'
-//│ ║  l.83: 	val resultRscNarrowed: Str = resultRsc
+//│ ║  l.97: 	val resultRscNarrowed: Str = resultRsc
 //│ ╙──      	                             ^^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define resultRscNarrowed⁰ as val resultRscNarrowed¹: Str⁰ = resultRsc¹; end
+
+fun paramlessRsc: rsc (C) -> C
+fun paramlessRsc = resultRsc(0)
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define paramlessRsc⁰ as fun paramlessRsc¹(): rsc Function⁰ { return resultRsc¹(0) }; end
 
 
 
@@ -151,7 +170,7 @@ fun p(x: rsc C | D) = x
 :ge
 fun intoAny(x: rsc C) = m(x)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'rsc C' at an unrelated type 'Unknown'
-//│ ║  l.152: 	fun intoAny(x: rsc C) = m(x)
+//│ ║  l.171: 	fun intoAny(x: rsc C) = m(x)
 //│ ╙──       	                          ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define intoAny⁰ as fun intoAny¹(x: rsc C²): ? { return m¹(x) }; end
@@ -212,7 +231,7 @@ fun t(b: Box[rsc C]) = b
 :ge
 fun q(x: C) = useRsc(x)
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'C' at an unrelated type 'rsc C'
-//│ ║  l.213: 	fun q(x: C) = useRsc(x)
+//│ ║  l.232: 	fun q(x: C) = useRsc(x)
 //│ ╙──       	                     ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define q⁰ as fun q¹(x: C²): ? { return useRsc¹(x) }; end
@@ -225,7 +244,7 @@ fun q(x: C) = useRsc(x)
 fun u() = rsc 1
 //│ ╔══[WARNING] This annotation has no effect.
 //│ ╟── This annotation is not supported on integer literal terms.
-//│ ║  l.225: 	fun u() = rsc 1
+//│ ║  l.244: 	fun u() = rsc 1
 //│ ╙──       	              ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define u⁰ as fun u¹(): ? { return 1 }; end
@@ -249,16 +268,16 @@ fun modOf = M
 fun rscModOf: rsc module M
 fun rscModOf = M
 //│ ╔══[COMPILATION ERROR] Illegal type declaration in term position.
-//│ ║  l.249: 	fun rscModOf: rsc module M
+//│ ║  l.268: 	fun rscModOf: rsc module M
 //│ ╙──       	                  ^^^^^^^^
 //│ ╔══[COMPILATION ERROR] Illegal type declaration in term position.
-//│ ║  l.249: 	fun rscModOf: rsc module M
+//│ ║  l.268: 	fun rscModOf: rsc module M
 //│ ╙──       	                  ^^^^^^^^
 //│ ╔══[COMPILATION ERROR] Expected a type, got ‹error›
-//│ ║  l.249: 	fun rscModOf: rsc module M
+//│ ║  l.268: 	fun rscModOf: rsc module M
 //│ ╙──       	                  ^^^^^^^^
 //│ ╔══[COMPILATION ERROR] Expected a type, got ‹error›
-//│ ║  l.249: 	fun rscModOf: rsc module M
+//│ ║  l.268: 	fun rscModOf: rsc module M
 //│ ╙──       	                  ^^^^^^^^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define rscModOf⁰ as fun rscModOf¹(): ? { return M² }; end

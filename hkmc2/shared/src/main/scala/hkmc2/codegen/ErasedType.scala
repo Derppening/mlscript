@@ -223,6 +223,13 @@ object ErasedType:
       case single :: Nil => single
       case ms => Union(ms)
 
+  /** The prefix naming a resource-ness in rendered output.
+    *
+    * A non-resource prints nothing: it is both the common case and the unannotated default, so spelling it
+    * out would put a prefix on almost every type in a dump.
+    */
+  private[codegen] def rscPrefix(rsc: Opt[Bool]): Str = rsc.fold("rsc? ")(if _ then "rsc " else "")
+
   /** The least upper bound of two types' resource-ness.
     *
     * Resource and non-resource values have distinct layouts, so a join of the two is only known to be *some*
@@ -423,13 +430,13 @@ sealed abstract class ErasedType:
       case _: TopLevelSymbol => acc
       case _ => ownerOf(s).fold(s.nme :: acc)(o => qualify(o, s.nme :: acc))
     canonicalize match
-      case ErasedType.Unknown(rsc) => s"${rsc.fold("rsc? ")(if _ then "rsc " else "")}Unknown"
+      case ErasedType.Unknown(rsc) => s"${ErasedType.rscPrefix(rsc)}Unknown"
       case ErasedType.Incompatible(l, r) => s"‹incompatible(${l.describe}, ${r.describe})›"
       case cet => cet.sym match
         case NoSymbol => lastWords(s"no name is defined for '$cet'")
         case tpeSym: TypeSymbol =>
           val name = qualify(tpeSym, Nil).mkString(".")
-          val rscPrefix = cet.rsc.fold("rsc? ")(if _ then "rsc " else "")
+          val rscPrefix = ErasedType.rscPrefix(cet.rsc)
           if tpeSym.asMod.isDefined then s"${rscPrefix}module $name" else s"$rscPrefix$name"
 
 /** Base class indicating that the [[ErasedType]] is a value type. */

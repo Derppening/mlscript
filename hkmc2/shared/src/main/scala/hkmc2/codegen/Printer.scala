@@ -35,17 +35,15 @@ class Printer(using Config, Ctx, Raise, ShowCfg, State, SymbolPrinter):
     if tpeSym.asMod.isDefined then doc"module ${print(tpeSym)}" else print(tpeSym)
 
   def print(cet: CanonicalErasedType)(using Scope): Document = cet match
-    // * Unlike a concrete reference, whose resource-ness defaults to `S(false)` and so goes unprinted, the top
-    // * type's default is `N` - it is the known cases that are worth spelling out here.
-    case ErasedType.Unknown(rsc) => doc"${rsc.fold("rsc? ")(if _ then "rsc " else "")}Unknown"
+    case ErasedType.Unknown(rsc) => doc"${ErasedType.rscPrefix(rsc)}Unknown"
     case ErasedType.Incompatible(lhs, rhs) => doc"‹incompatible(${print(lhs)}, ${print(rhs)})›"
-    case ErasedType.AnyRef(rsc, tpeSym: TypeSymbol) => doc"${rsc.fold("rsc? ")(if _ then "rsc " else "")}${printTpe(tpeSym)}"
+    case ErasedType.AnyRef(rsc, tpeSym: TypeSymbol) => doc"${ErasedType.rscPrefix(rsc)}${printTpe(tpeSym)}"
     case ErasedType.CanonicalFuncRef(rsc, paramLists, ret) =>
       // * Curried functions are rendered as `(A) => (B) => R`, so that an under-applied call reads as the residual
       // * function type it actually has.
       val sig = paramLists.foldRight(ret.fold(doc"?")(print)): (ps, acc) =>
         doc"(${ps.map(_.fold(doc"?")(print)).mkDocument(sep = doc", ")}) => $acc"
-      doc"${rsc.fold("rsc? ")(if _ then "rsc " else "")}$sig"
+      doc"${ErasedType.rscPrefix(rsc)}$sig"
     case ErasedType.Primitive(prim) => doc"${prim.toString}"
 
   def print(et: ErasedType)(using Scope): Document = et match
@@ -56,6 +54,17 @@ class Printer(using Config, Ctx, Raise, ShowCfg, State, SymbolPrinter):
   def erasedTypeAnnot(x: HasErasedType)(using Scope): Document =
     if !summon[ShowCfg].showErasedTypes then doc""
     else doc": ${x.erasedType.fold(doc"?")(print)}"
+
+  /** Renders a function's own resource-ness, as declared by its definition symbol.
+    *
+    * This is the resource-ness of the *function value*, which a signature states by writing the modifier on
+    * the outermost arrow the definition consumes as a parameter list - not that of anything it returns.
+    */
+  def funRscAnnot(dSym: TermSymbol)(using Scope): Document =
+    if !summon[ShowCfg].showErasedTypes then doc""
+    else dSym.erasedType match
+      case S(ft: ErasedFuncType) => doc"${ErasedType.rscPrefix(ft.rsc)}"
+      case _ => doc""
 
   /** Renders a function's return type, as declared by its definition symbol. */
   def returnTypeAnnot(dSym: TermSymbol)(using Scope): Document =
@@ -174,7 +183,7 @@ class Printer(using Config, Ctx, Raise, ShowCfg, State, SymbolPrinter):
         val docParams = printParamLists(paramss)
         val docBody = print(body)
         val docStaged = if fun.isStaged then doc"staged " else doc""
-        doc"${docStaged}fun ${print(dSym)}${docParams}${returnTypeAnnot(dSym)} ${bracedbk(docBody)}"
+        doc"${docStaged}${funRscAnnot(dSym)}fun ${print(dSym)}${docParams}${returnTypeAnnot(dSym)} ${bracedbk(docBody)}"
     case ValDefn(tsym, sym, rhs) =>
       doc"val ${print(tsym)}${erasedTypeAnnot(tsym)} = ${print(rhs)}"
     case cls @ ClsLikeDefn(own, isym, sym, ctorSym, k, paramsOpt, auxParams, parentSym, methods,
