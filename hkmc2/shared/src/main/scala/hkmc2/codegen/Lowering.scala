@@ -774,7 +774,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
     val k: Result => Block =
       if !isUntyped then k0
       else r =>
-        val l = loweringCtx.registerTempSymbol(N, erasedType = S(ErasedType.Unknown))
+        val l = loweringCtx.registerTempSymbol(N, erasedType = S(ErasedType.Unknown(N)))
         // TODO: Does `@untyped` on a primitive make sense? How should be handle it?
         Assign(l, r, k0(l.asSimpleRef))
     
@@ -1479,7 +1479,7 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
     * An absent `expected` is an unannotated slot, which holds the top reference type rather than no type at all.
     */
   def castTo[R <: Result](r: R, expected: Opt[ErasedType], loc: Opt[Loc]): (R | Cast) =
-    r.coerceTo(expected.getOrElse(ErasedType.Unknown), loc)
+    r.coerceTo(expected.getOrElse(ErasedType.Unknown(N)), loc)
 
   /** The declared erased type of the field a selection resolves to, if it is an annotated `TermSymbol`. */
   private def fieldErasedType(s: Opt[Symbol]): Opt[ErasedType] =

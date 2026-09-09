@@ -71,6 +71,8 @@ object ErasedType:
 
   /** A primitive type. */
   case class Primitive(prim: PrimitiveType) extends ErasedValueType, CanonicalErasedType:
+    // * An unboxed primitive is never a resource.
+    override val rsc: Opt[Bool] = S(false)
     override def sym(using Ctx, State): TypeSymbol = prim.sym
 
   /** A union of erased types.
@@ -90,8 +92,10 @@ object ErasedType:
     *
     * Reached by an absent annotation (`erasedType_!` folds `N` here), by an alias the IR cannot resolve, and
     * by the surface top `Anything`, which has no erased counterpart of its own.
+    *
+    * - `rsc` is true if this reference is a resource.
     */
-  case object Unknown extends ErasedValueType, CanonicalErasedType:
+  case class Unknown(rsc: Opt[Bool]) extends ErasedValueType, CanonicalErasedType:
     // * No symbol denotes this type: `Anything` is the surface top, which is a different thing.
     override def sym(using Ctx, State): NoSymbol = NoSymbol
 
@@ -106,6 +110,8 @@ object ErasedType:
     */
   case class Incompatible(lhs: CanonicalErasedValueType, rhs: CanonicalErasedValueType)
       extends ErasedValueType, CanonicalErasedType:
+    // * An incompatibility is an invalid type and has no resource-ness to describe.
+    override val rsc: Opt[Bool] = N
     override def sym(using Ctx, State): NoSymbol = NoSymbol
 
   /** The builtin `Unit` reference type. */
@@ -217,6 +223,14 @@ object ErasedType:
       case single :: Nil => single
       case ms => Union(ms)
 
+  /** The least upper bound of two types' resource-ness.
+    *
+    * Resource and non-resource values have distinct layouts, so a join of the two is only known to be *some*
+    * reference - which the undetermined case the backend resolves with a runtime test.
+    */
+  private[codegen] def lubRsc(lhs: Opt[Bool], rhs: Opt[Bool]): Opt[Bool] =
+    if lhs === rhs then lhs else N
+
   /** The least upper bound of two canonical erased types. */
   def lub(lhs: CanonicalErasedValueType, rhs: CanonicalErasedValueType)(using Ctx, State): CanonicalErasedValueType =
     (lhs, rhs) match
@@ -228,14 +242,15 @@ object ErasedType:
       // * A primitive is a root of its own: it shares no supertype with any distinct type - the `Unknown` type
       // * included.
       case (_: Primitive, _) | (_, _: Primitive) => Incompatible(lhs, rhs)
-      // * The top type absorbs every reference type.
-      case (Unknown, _) | (_, Unknown) => Unknown
+      // * The top type absorbs every reference type, while the resource-ness joins.
+      case (_: Unknown, _) | (_, _: Unknown) => Unknown(lubRsc(lhs.rsc, rhs.rsc))
       // * Two reference types: their nearest common ancestor, at worst `Object`.
       case _ => (lhs.sym, rhs.sym) match
         // * `Unknown` and `Incompatible` are the only symbol-less canonical types, and both are absorbed above.
         case (NoSymbol, _) | (_, NoSymbol) =>
           lastWords(s"no upper bound is defined for '$lhs' and '$rhs'")
-        case (l: TypeSymbol, r: TypeSymbol) => CanonicalErasedValueType(rsc = S(false), lubSym(l, r))
+        case (l: TypeSymbol, r: TypeSymbol) =>
+          CanonicalErasedValueType(lubRsc(lhs.rsc, rhs.rsc), lubSym(l, r))
 
   /** Erases a type-annotated term to an [[ErasedType]].
     *
@@ -251,7 +266,7 @@ object ErasedType:
       yield ErasedType.union(l, r)
     // * An intersection is never decomposed: narrowing to one member would call for a GLB, which this lattice
     // * cannot express.
-    case CompType(_, _, false) => S(ErasedType.Unknown)
+    case CompType(_, _, false) => S(ErasedType.Unknown(N))
     case UnitVal() => S(ErasedType.Unit)
     // * A written arrow denotes a function value, and every function value is a `Function`.
     case FunTy(_, _, _) => S(ErasedType.Function(rsc = S(false)))
@@ -294,6 +309,27 @@ object ErasedType:
     * Returns `S(true)` if a cast is needed, `S(false)` if no cast is needed, or `N` if the two types are unrelated.
     */
   def needsCast(actual: CanonicalErasedType, expected: CanonicalErasedType)(using Ctx, State): Opt[Bool] =
+    // * A value has to fit the slot in both its identity and its resource-ness: a cast is needed when either
+    // * dimension calls for one, and the coercion is impossible when either says it is.
+    (needsRscCast(actual.rsc, expected.rsc), needsClassCast(actual, expected)) match
+      case (N, _) | (_, N) => N
+      case (S(byLayout), S(byClass)) => S(byLayout || byClass)
+
+  /** Whether the layout dimension of a coercion needs a cast.
+    *
+    * A resource and a non-resource are distinct structs sharing no supertype below the top, so neither can be
+    * coerced to the other. Both widen freely into the undetermined layout, and narrowing back out of it is the
+    * runtime ref-count test.
+    */
+  private[codegen] def needsRscCast(actual: Opt[Bool], expected: Opt[Bool]): Opt[Bool] =
+    (actual, expected) match
+      case _ if actual === expected => S(false)
+      case (_, N) => S(false)
+      case (N, _) => S(true)
+      case (S(_), S(_)) => N
+
+  /** Whether the class dimension of a coercion needs a cast, ignoring resource-ness. */
+  private def needsClassCast(actual: CanonicalErasedType, expected: CanonicalErasedType)(using Ctx, State): Opt[Bool] =
     (actual, expected) match
       // * A type with no upper bound has no representation of its own, so nothing can be coerced into or out of
       // * it - not even widened into the top type.
@@ -302,8 +338,8 @@ object ErasedType:
       // * A primitive is compatible only with the same primitive in either direction.
       case (Primitive(_), _) | (_, Primitive(_)) => N
       // * `T -> Unknown` needs no cast; `Unknown -> T` needs a checked downcast.
-      case (_, Unknown) => S(false)
-      case (Unknown, _) => S(true)
+      case (_, _: Unknown) => S(false)
+      case (_: Unknown, _) => S(true)
       case (da, de) => (da.sym, de.sym) match
         // * `Unknown` and `Incompatible` are the only symbol-less canonical types, and both are decided above.
         case (NoSymbol, _) | (_, NoSymbol) =>
@@ -376,13 +412,14 @@ sealed abstract class ErasedType:
       case _: TopLevelSymbol => acc
       case _ => ownerOf(s).fold(s.nme :: acc)(o => qualify(o, s.nme :: acc))
     canonicalize match
-      case ErasedType.Unknown => "Unknown"
+      case ErasedType.Unknown(rsc) => s"${rsc.fold("rsc? ")(if _ then "rsc " else "")}Unknown"
       case ErasedType.Incompatible(l, r) => s"‹incompatible(${l.describe}, ${r.describe})›"
       case cet => cet.sym match
         case NoSymbol => lastWords(s"no name is defined for '$cet'")
         case tpeSym: TypeSymbol =>
           val name = qualify(tpeSym, Nil).mkString(".")
-          if tpeSym.asMod.isDefined then s"module $name" else name
+          val rscPrefix = cet.rsc.fold("rsc? ")(if _ then "rsc " else "")
+          if tpeSym.asMod.isDefined then s"${rscPrefix}module $name" else s"$rscPrefix$name"
 
 /** Base class indicating that the [[ErasedType]] is a value type. */
 sealed abstract class ErasedValueType extends ErasedType:
@@ -414,6 +451,14 @@ sealed abstract class ErasedFuncType extends ErasedType:
 /** An [[ErasedType]] that is resolved into a canonical representation. */
 sealed trait CanonicalErasedType extends ErasedType:
   type Canonical = this.type
+
+  /** Whether this type is a resource, or `N` if that is not known statically.
+    *
+    * Note that `rsc?` (represented by `N`) and non-`rsc` (represented by `S(false)`) represent two different things:
+    * `N` indicates that the resource-ness is not known statically and requires a runtime test, while `S(false)`
+    * indicates that it is not a resource.
+    */
+  val rsc: Opt[Bool]
 
   override protected def computeCanonicalize(using Ctx, State): this.type = this
 
@@ -458,15 +503,18 @@ object CanonicalErasedValueType:
 
   /** Creates an instance from an already-resolved symbol. */
   private def resolved(rsc: Opt[Bool], sym: TypeSymbol)(using Ctx, State): CanonicalErasedValueType = sym match
-    // * An unresolvable alias becomes the top type.
-    case _: TypeAliasSymbol => ErasedType.Unknown
+    // * An unresolvable alias becomes the top type with unknown resource-ness.
+    case _: TypeAliasSymbol => ErasedType.Unknown(N)
     case base =>
-      // * `Unknown` drops `rsc`, which is meaningless on the top type. Every construction site passes
-      // * `rsc = false` today; a future resource-type implementation must revisit this.
+      // TODO(Derppening): Pass `rsc` through to both top-type cases instead of forcing `N`, so that `rsc Anything`
+      // * is expressible at all and a join of two resources keeps its `S(true)` - `lub` routes through here, so the
+      // * `lubRsc` it computes is discarded whenever `lubSym` widens to `Anything`. Blocked on `eraseSign` supplying
+      // * `N` for a bare `Anything`: every caller passes `S(false)` today, so passing it through would assert the
+      // * collected layout for the surface top.
       // *
       // * Note that `base is ctx.builtins.Anything` is only necessary for `InvalMLPrelude.mls` - the `Anything` type
       // * is `declare class`-ed there (since `declare type` is not supported in `invalml`).
-      if base is ctx.builtins.Anything then ErasedType.Unknown
+      if base is ctx.builtins.Anything then ErasedType.Unknown(N)
       else PrimitiveType.values.find(_.sym === base) match
         case S(prim) => ErasedType.Primitive(prim)
         case _ => ErasedType.AnyRef(rsc, base)
@@ -480,14 +528,14 @@ trait HasErasedType:
     *
     * Parameter and return types of [[ErasedFuncType]]s are recursively coerced.
     */
-  lazy val erasedType_! : ErasedType = erasedType.fold(ErasedType.Unknown):
+  lazy val erasedType_! : ErasedType = erasedType.fold(ErasedType.Unknown(N)):
     case f @ ErasedType.FuncRef(rsc, paramLists, ret) => f.copy(
-      paramLists = paramLists.map(_.map(p => S(p.getOrElse(ErasedType.Unknown)))),
-      ret = S(ret.getOrElse(ErasedType.Unknown)),
+      paramLists = paramLists.map(_.map(p => S(p.getOrElse(ErasedType.Unknown(N))))),
+      ret = S(ret.getOrElse(ErasedType.Unknown(N))),
     )
     case f @ ErasedType.CanonicalFuncRef(rsc, paramLists, ret) => f.copy(
-      paramLists = paramLists.map(_.map(p => S(p.getOrElse(ErasedType.Unknown)))),
-      ret = S(ret.getOrElse(ErasedType.Unknown)),
+      paramLists = paramLists.map(_.map(p => S(p.getOrElse(ErasedType.Unknown(N))))),
+      ret = S(ret.getOrElse(ErasedType.Unknown(N))),
     )
     case vt: ErasedValueType => vt
 
@@ -500,7 +548,7 @@ trait HasErasedType:
     case vt: ErasedValueType => vt
 
   /** Similar to `erasedValueType`, but coerces to the top type if the specific erased value type is not known. */
-  lazy val erasedValueType_! : ErasedValueType = erasedValueType.getOrElse(ErasedType.Unknown)
+  lazy val erasedValueType_! : ErasedValueType = erasedValueType.getOrElse(ErasedType.Unknown(N))
 
 /** A [[HasErasedType]] whose erased type can be populated exactly once post-construction. */
 trait HasOnceMutableErasedType extends HasErasedType:

@@ -61,6 +61,7 @@ class FirstClassFunctionTransformer
   
   private def etaExpandPath(p: Path, params: ParamList)(k: Path => Block): Block =
     val clsDef = generateFCFunctionClass(p, params)
+    // TODO(Derppening): Does reifying a resource function always need to produce a resource wrapper?
     val tmp = new TempSymbol(None, erasedType = S(ErasedType.ValueLike(rsc = S(false), clsDef.isym.asClsOrMod.get)))
     val cls = clsDef.sym.asMemberRef(clsDef.isym)
     Scoped(Set(clsDef.sym, tmp), Define(clsDef, Assign(tmp, Instantiate(false, cls, Nil :: Nil)(InstantiateMetadata.empty), k(tmp.asSimpleRef))))

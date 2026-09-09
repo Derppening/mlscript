@@ -35,7 +35,9 @@ class Printer(using Config, Ctx, Raise, ShowCfg, State, SymbolPrinter):
     if tpeSym.asMod.isDefined then doc"module ${print(tpeSym)}" else print(tpeSym)
 
   def print(cet: CanonicalErasedType)(using Scope): Document = cet match
-    case ErasedType.Unknown => doc"Unknown"
+    // * Unlike a concrete reference, whose resource-ness defaults to `S(false)` and so goes unprinted, the top
+    // * type's default is `N` - it is the known cases that are worth spelling out here.
+    case ErasedType.Unknown(rsc) => doc"${rsc.fold("rsc? ")(if _ then "rsc " else "")}Unknown"
     case ErasedType.Incompatible(lhs, rhs) => doc"‹incompatible(${print(lhs)}, ${print(rhs)})›"
     case ErasedType.AnyRef(rsc, tpeSym: TypeSymbol) => doc"${rsc.fold("rsc? ")(if _ then "rsc " else "")}${printTpe(tpeSym)}"
     case ErasedType.CanonicalFuncRef(rsc, paramLists, ret) =>

@@ -337,7 +337,7 @@ fun f(o: Object, i: Int, x: Int32) =
 //│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Object' at an unrelated type 'Int32'
 //│ ║  l.327: 	  useInt32(o)
 //│ ╙──       	           ^
-//│ ═══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
+//│ ═══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'rsc? Unknown'
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define useObj⁰ as fun useObj¹(o: Object⁰): ? {
 //│   return o
@@ -361,11 +361,11 @@ fun f(o: Object, i: Int, x: Int32) =
 :ge
 fun id(x: Anything) = ()
 fun f(x: Int32) = id(x)
-//│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'Unknown'
+//│ ╔══[COMPILATION ERROR] Cannot use a value of type 'Int32' at an unrelated type 'rsc? Unknown'
 //│ ║  l.363: 	fun f(x: Int32) = id(x)
 //│ ╙──       	                     ^
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ define id⁰ as fun id¹(x: Unknown): ? {
+//│ define id⁰ as fun id¹(x: rsc? Unknown): ? {
 //│   return runtime⁰.Unit⁰
 //│ };
 //│ define f⁴ as fun f⁵(x: Int32): ? { return id¹(x) };
@@ -385,7 +385,7 @@ fun f3(x: Anything): Anything = x
 //│ define f2⁰ as fun f2¹(x: Int⁰): ? {
 //│   return id¹(x)
 //│ };
-//│ define f3⁰ as fun f3¹(x: Unknown): Unknown { return x };
+//│ define f3⁰ as fun f3¹(x: rsc? Unknown): rsc? Unknown { return x };
 //│ end
 
 
@@ -480,7 +480,7 @@ type Union = P | Q
 fun useCyclic(x: Cyclic): Cyclic = x
 fun useUnion(x: Union): Union = x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
-//│ define useCyclic⁰ as fun useCyclic¹(x: Unknown): Unknown {
+//│ define useCyclic⁰ as fun useCyclic¹(x: rsc? Unknown): rsc? Unknown {
 //│   return x
 //│ };
 //│ define useUnion⁰ as fun useUnion¹(x: Object⁰): Object⁰ {
@@ -1026,7 +1026,7 @@ fun useGetFn() = useFn(getFn)
 fun viaUntyped(x, y): Str = @untyped addInts(x, y)
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define viaUntyped⁰ as fun viaUntyped¹(x: ?, y: ?): Str⁰ {
-//│   let tmp: Unknown;
+//│   let tmp: rsc? Unknown;
 //│   set tmp = globalThis⁰.addInts⁰(x, y);
 //│   return (tmp as! Str⁰)
 //│ };
@@ -1103,7 +1103,7 @@ fun applyGetFn() = useInt(getFn(1))
 fun refUntyped(x: Int): Str = @untyped x
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define refUntyped⁰ as fun refUntyped¹(x: Int⁰): Str⁰ {
-//│   let tmp: Unknown;
+//│   let tmp: rsc? Unknown;
 //│   set tmp = x;
 //│   return (tmp as! Str⁰)
 //│ };
@@ -1121,7 +1121,7 @@ fun refTyped(x: Int): Str = x
 fun selUntyped(): Int = @untyped Plain.f
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define selUntyped⁰ as fun selUntyped¹(): Int⁰ {
-//│   let tmp: Unknown;
+//│   let tmp: rsc? Unknown;
 //│   set tmp = Plain².f⁶;
 //│   return (tmp as! Int⁰)
 //│ };
@@ -1139,7 +1139,7 @@ fun selTyped(): Int = Plain.f
 fun lamUntyped(): Int = @untyped ((x: Int) => x)
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ define lamUntyped⁰ as fun lamUntyped¹(): Int⁰ {
-//│   let tmp: Unknown, lambda;
+//│   let tmp: rsc? Unknown, lambda;
 //│   @private
 //│   define lambda as fun lambda⁴(x: Int⁰): ? {
 //│     return x
