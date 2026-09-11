@@ -167,8 +167,8 @@ class Rewrite(val deadParamElimSolver: DeadParamElimSolver)(using Raise):
                 S(fr.copy(
                   paramLists = fr.paramLists.zipWithIndex.map: (pl, i) =>
                     val eliminable = deadParamElimSolver.eliminableParamsById(ConcreteId((f, i), instId))
-                    pl.zipWithIndex.collect:
-                      case (t, j) if !eliminable(j) => t))
+                    pl.copy(params = pl.params.zipWithIndex.collect:
+                      case (t, j) if !eliminable(j) => t)))
               case other => other
             f -> (
               new BlockMemberSymbol(name, Nil, true),

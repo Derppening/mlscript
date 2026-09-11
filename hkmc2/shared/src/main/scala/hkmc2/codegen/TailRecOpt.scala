@@ -381,7 +381,7 @@ class TailRecOpt(checkAnnotations: Bool)(using Config, State, TL, Raise, Ctx):
             // * flattened - construct a new `FuncRef` to reflect this.
             funs.head.dSym.erasedType match
               case S(ft: ErasedFuncType) =>
-                S(ErasedType.FuncRef(ft.rsc, paramSyms.map(_.erasedType) :: Nil, ft.ret))
+                S(ErasedType.FuncRef(ErasedParamList(ft.rsc, paramSyms.map(_.erasedType)) :: Nil, ft.ret))
               case other => other
           else
             // * The dispatcher can exit through any member's return, so its result type is the LUB of its members.
@@ -390,8 +390,7 @@ class TailRecOpt(checkAnnotations: Bool)(using Config, State, TL, Raise, Ctx):
               if memberRets.exists(_.isEmpty) then N
               else S(memberRets.flatten.map(_.canonicalize).reduce(ErasedType.lub))
             S(ErasedType.FuncRef(
-              rsc = S(false),
-              paramLists = (S(ErasedType.Int) :: paramSyms.map(_.erasedType)) :: Nil,
+              paramLists = ErasedParamList(S(false), S(ErasedType.Int) :: paramSyms.map(_.erasedType)) :: Nil,
               ret = ret,
             ))
         val res = TermSymbol(syntax.Fun, owner, Tree.Ident(bms.nme), erasedType)

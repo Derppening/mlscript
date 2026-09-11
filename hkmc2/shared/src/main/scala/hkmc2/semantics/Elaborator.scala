@@ -17,7 +17,7 @@ import hkmc2.Message.MessageContext
 
 import Keyword.{`and`, `case`, `do`, `else`, `if`, `is`, `let`, `or`, `set`, `then`, `while`}
 import hkmc2.utils.Scope
-import codegen.{ErasedType, ErasedValueType}
+import codegen.{ErasedParamList, ErasedType, ErasedValueType}
 import SimpleSplit.*
 import ucs.{error, unapply}
 
@@ -2050,19 +2050,23 @@ extends Importer:
                       case N => (ps :: Nil, rhs)
                   case _ => N
               
-              /** The resource-ness a signature states about the definition itself, given how many of its leading
-                * arrows the definition consumes as its own parameter lists.
+              /** Strips the `n` leading arrows a definition consumes as its own parameter lists off its signature,
+                * yielding what remains along with the resource-ness each stripped arrow states (`arrowRsc` being that
+                * of the next one).
                 *
-                * A modifier on the outermost of those arrows describes the function value rather than what it
-                * returns, so `fun f: rsc (A) -> B` declares `f` to be a resource function. One on an arrow the
-                * definition does not consume belongs to the result instead, and `eraseSign` reads it off there.
-                * One on a later consumed arrow is dropped, as a `FuncRef` has a single `rsc` for the whole chain.
+                * A modifier on a stripped arrow describes the function value taking the corresponding parameter list
+                * rather than what it returns, so `fun f: rsc (A) -> B` declares `f` to be a resource function. One on
+                * anything else wraps the result and stays, so `fun f: rsc C` keeps it however many parameter lists
+                * `f` writes, and `eraseSign` reads it off there.
                 */
-              def declaredFunRsc(sign: Term, consumed: Int): Opt[Bool] = sign match
-                case _ if consumed === 0 => S(false)
-                case Term.Forall(_, _, body) => declaredFunRsc(body, consumed)
-                case Term.Annotated(Annot.Resource(rsc), target) if wrapsArrow(target) => rsc
-                case _ => S(false)
+              def stripSignatureParams(sign: Term, n: Int, arrowRsc: Opt[Bool]): (Term, Ls[Opt[Bool]]) = (sign, n) match
+                case (Term.Forall(_, _, body), _) => stripSignatureParams(body, n, arrowRsc)
+                case (Term.Annotated(Annot.Resource(rsc), target), n) if n > 0 && wrapsArrow(target) =>
+                  stripSignatureParams(target, n, rsc)
+                case (Term.FunTy(_, rhs, _), n) if n > 0 =>
+                  val (result, rscs) = stripSignatureParams(rhs, n - 1, S(false))
+                  (result, arrowRsc :: rscs)
+                case _ => (sign, Nil)
               
               // * A signature's arrows are the definition's own parameter lists when a reference to it is not
               // * auto-invoked.
@@ -2080,22 +2084,16 @@ extends Importer:
               // * all of them (see `sigShape`).
               val inheritsSignature = (k is syntax.Fun) && td.annotatedResultType.isEmpty
               val consumedArrows = if inheritsSignature then pss.length else sigShape.fold(0)(_._1.length)
+              // * The resource-ness of the function value taking each consumed parameter list.
+              val consumedArrowRscs = s.toList.flatMap(stripSignatureParams(_, consumedArrows, S(false))._2)
               
               // * A moduleful signature (`fun f: module M`) denotes the module itself.
               val retTpe = mfn.msym match
                 case S(msym) => S(ErasedType.ValueLike(rsc = S(false), msym))
                 case N => s.flatMap: s =>
-                  def stripSignatureParams(s: Term, n: Int): Term = (s, n) match
-                    case (Term.Forall(_, _, body), _) => stripSignatureParams(body, n)
-                    // * Only a modifier on an arrow being stripped goes with it; one on anything else wraps the
-                    // * result, so `fun f: rsc C` keeps it however many parameter lists `f` writes.
-                    case (Term.Annotated(Annot.Resource(_), target), n) if n > 0 && wrapsArrow(target) =>
-                      stripSignatureParams(target, n)
-                    case (Term.FunTy(_, rhs, _), n) if n > 0 => stripSignatureParams(rhs, n - 1)
-                    case _ => s
                   val resultSign: Term =
                     if inheritsSignature
-                    then stripSignatureParams(s, consumedArrows)
+                    then stripSignatureParams(s, consumedArrows, S(false))._1
                     else sigShape.map(_._2).getOrElse(s)
                   ErasedType.eraseSign(resultSign)
               val erasedTpe = k match
@@ -2116,7 +2114,11 @@ extends Importer:
                   val physicalParamLists =
                     if paramLists.isEmpty && !isCompiledAsGetter then Nil :: Nil else paramLists
                   if physicalParamLists.isEmpty then retTpe
-                  else S(ErasedType.FuncRef(s.fold(S(false))(declaredFunRsc(_, consumedArrows)), physicalParamLists, retTpe))
+                  else
+                    // * A list beyond the consumed arrows - including an implicitly-added one - has no modifier to read.
+                    val lists = physicalParamLists.zipWithIndex.map: (ps, i) =>
+                      ErasedParamList(consumedArrowRscs.lift(i).getOrElse(S(false)), ps)
+                    S(ErasedType.FuncRef(lists, retTpe))
                 case _: syntax.Val => retTpe
                 case _ => N
               val tsym = TermSymbol(k, owner, id, erasedType = erasedTpe) // TODO?

@@ -55,19 +55,18 @@ object ErasedType:
     // Ensures `toString` returns a stable string
     override def toString: Str = "ValueLike(?)"
 
-  /** A reference to a function of a possibly-known shape.
-    *
-    * - `rsc` is true if this reference is a resource function.
-    */
-  case class FuncRef(override val rsc: Opt[Bool], override val paramLists: Ls[Ls[Opt[ErasedValueType]]], override val ret: Opt[ErasedValueType]) extends ErasedFuncType:
+  /** A reference to a function of a possibly-known shape. */
+  case class FuncRef(override val paramLists: Ls[ErasedParamList[ErasedValueType]], override val ret: Opt[ErasedValueType]) extends ErasedFuncType:
     ErasedFuncType.assertHasParamLists(paramLists)
+    override val rsc: Opt[Bool] = paramLists.head.rsc
     override type Canonical = CanonicalFuncRef
     override protected def computeCanonicalize(using Ctx, State): CanonicalFuncRef =
-      CanonicalFuncRef(rsc, paramLists.map(_.map(_.map(_.canonicalize))), ret.map(_.canonicalize))
+      CanonicalFuncRef(paramLists.map(_.mapParams(_.map(_.canonicalize))), ret.map(_.canonicalize))
 
   /** An analogue to `FuncRef` for function types with canonicalized parameter and return types. */
-  case class CanonicalFuncRef(override val rsc: Opt[Bool], override val paramLists: Ls[Ls[Opt[CanonicalErasedValueType]]], override val ret: Opt[CanonicalErasedValueType]) extends ErasedFuncType with CanonicalErasedType:
+  case class CanonicalFuncRef(override val paramLists: Ls[ErasedParamList[CanonicalErasedValueType]], override val ret: Opt[CanonicalErasedValueType]) extends ErasedFuncType with CanonicalErasedType:
     ErasedFuncType.assertHasParamLists(paramLists)
+    override val rsc: Opt[Bool] = paramLists.head.rsc
 
   /** A primitive type. */
   case class Primitive(prim: PrimitiveType) extends ErasedValueType, CanonicalErasedType:
@@ -448,13 +447,19 @@ object ErasedFuncType:
     *
     * See the documentation of [[ErasedFuncType]] for the rationale.
     */
-  def assertHasParamLists(paramLists: Ls[Ls[?]]): Unit =
+  def assertHasParamLists(paramLists: Ls[?]): Unit =
     assert(paramLists.nonEmpty, "a function type must describe at least one parameter list")
+
+/** One parameter list of an [[ErasedFuncType]], along with the resource-ness of the function value taking it. */
+case class ErasedParamList[+T <: ErasedValueType](rsc: Opt[Bool], params: Ls[Opt[T]]):
+  def mapParams[U <: ErasedValueType](f: Opt[T] => Opt[U]): ErasedParamList[U] = ErasedParamList(rsc, params.map(f))
 
 /** Base class indicating that the [[ErasedType]] is a function type.
   *
   * `paramLists` mirrors the definition's parameter *lists*, so that curried functions can be represented - functions
-  * that are partially applied yield a function type with fewer parameter lists.
+  * that are partially applied yield a function type with fewer parameter lists. Every list beyond the first is taken
+  * by a closure of its own, so each list carries the resource-ness of the function value taking it; `rsc` is that of
+  * the first, i.e. of the function itself.
   *
   * Note that `paramLists` should never be empty: a definition declaring no parameter list at all is either compiled
   * to a getter and erased to its result instead, or given an implicitly-added empty parameter list which the erased
@@ -462,7 +467,7 @@ object ErasedFuncType:
   */
 sealed abstract class ErasedFuncType extends ErasedType:
   val rsc: Opt[Bool]
-  val paramLists: Ls[Ls[Opt[ErasedValueType]]]
+  val paramLists: Ls[ErasedParamList[ErasedValueType]]
   val ret: Opt[ErasedValueType]
   final override def sym(using Ctx, State): TypeSymbol = ctx.builtins.Function
 
@@ -541,12 +546,12 @@ trait HasErasedType:
     * Parameter and return types of [[ErasedFuncType]]s are recursively coerced.
     */
   lazy val erasedType_! : ErasedType = erasedType.fold(ErasedType.Unknown(N)):
-    case f @ ErasedType.FuncRef(rsc, paramLists, ret) => f.copy(
-      paramLists = paramLists.map(_.map(p => S(p.getOrElse(ErasedType.Unknown(N))))),
+    case f @ ErasedType.FuncRef(paramLists, ret) => f.copy(
+      paramLists = paramLists.map(_.mapParams(p => S(p.getOrElse(ErasedType.Unknown(N))))),
       ret = S(ret.getOrElse(ErasedType.Unknown(N))),
     )
-    case f @ ErasedType.CanonicalFuncRef(rsc, paramLists, ret) => f.copy(
-      paramLists = paramLists.map(_.map(p => S(p.getOrElse(ErasedType.Unknown(N))))),
+    case f @ ErasedType.CanonicalFuncRef(paramLists, ret) => f.copy(
+      paramLists = paramLists.map(_.mapParams(p => S(p.getOrElse(ErasedType.Unknown(N))))),
       ret = S(ret.getOrElse(ErasedType.Unknown(N))),
     )
     case vt: ErasedValueType => vt

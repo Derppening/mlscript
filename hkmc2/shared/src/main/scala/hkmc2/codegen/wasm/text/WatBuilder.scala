@@ -1759,7 +1759,7 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
                     case ft: ErasedFuncType => ft.paramLists
                 case _ => N
               val ps = declaredParams match
-                case S(pl :: Nil) => pl
+                case S(pl :: Nil) => pl.params
                 // * The prelude declares every `wasm.` intrinsic with exactly one parameter list; a curried (or
                 // * parameterless) one has no meaning as an instruction.
                 case S(_) =>

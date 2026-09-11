@@ -38,12 +38,11 @@ class Printer(using Config, Ctx, Raise, ShowCfg, State, SymbolPrinter):
     case ErasedType.Unknown(rsc) => doc"${ErasedType.rscPrefix(rsc)}Unknown"
     case ErasedType.Incompatible(lhs, rhs) => doc"‹incompatible(${print(lhs)}, ${print(rhs)})›"
     case ErasedType.AnyRef(rsc, tpeSym: TypeSymbol) => doc"${ErasedType.rscPrefix(rsc)}${printTpe(tpeSym)}"
-    case ErasedType.CanonicalFuncRef(rsc, paramLists, ret) =>
+    case ErasedType.CanonicalFuncRef(paramLists, ret) =>
       // * Curried functions are rendered as `(A) => (B) => R`, so that an under-applied call reads as the residual
-      // * function type it actually has.
-      val sig = paramLists.foldRight(ret.fold(doc"?")(print)): (ps, acc) =>
-        doc"(${ps.map(_.fold(doc"?")(print)).mkDocument(sep = doc", ")}) => $acc"
-      doc"${ErasedType.rscPrefix(rsc)}$sig"
+      // * function type it actually has. Each list is prefixed with the resource-ness of the function taking it.
+      paramLists.foldRight(ret.fold(doc"?")(print)): (pl, acc) =>
+        doc"${ErasedType.rscPrefix(pl.rsc)}(${pl.params.map(_.fold(doc"?")(print)).mkDocument(sep = doc", ")}) => $acc"
     case ErasedType.Primitive(prim) => doc"${prim.toString}"
 
   def print(et: ErasedType)(using Scope): Document = et match
