@@ -23,9 +23,18 @@ class SymbolRefresherWalker(mapping: MutMap[Symbol, Symbol])(using State) extend
     ns.sourceAliases = s.sourceAliases
     assertUpdate(s, ns)
   
+  // * A member's term symbol, which carries its erased type, is only refreshed at its definition, after the member.
+  private val refreshedMembers = Buffer.empty[BlockMemberSymbol -> BlockMemberSymbol]
+
+  /** Links each refreshed member to the refresh of its term symbol. Call once the walk is complete. */
+  def linkTermSymbols(): Unit =
+    for (s, ns) <- refreshedMembers do
+      ns.tsym = s.tsym.map(t => mapping.getOrElse(t, t).asInstanceOf[TermSymbol])
+
   private def refreshBlockMemberSymbol(s: BlockMemberSymbol) =
     val ns = new BlockMemberSymbol(s.nme, s.trees, s.nameIsMeaningful)
     ns.sourceAliases = s.sourceAliases
+    refreshedMembers += s -> ns
     assertUpdate(s, ns)
 
   private def refreshLabelSymbol(s: LabelSymbol) =
@@ -155,7 +164,9 @@ private class SymbolRefresherInternal(m: MutMap[Symbol, Symbol])(using State) ex
   // We have a pretty weird setup here, where we store a mutable state inside the SymbolRefresher
   // We must initialize the SymbolRefresher by walking before applyBlock
   def apply(b: Block) =
-    SymbolRefresherWalker(m).applyBlock(b)
+    val walker = SymbolRefresherWalker(m)
+    walker.applyBlock(b)
+    walker.linkTermSymbols()
     applyBlock(b)
 
   // Although the types created during walking can always be symbol substituted, the user may pass in extra symbol that map across different types
