@@ -64,24 +64,24 @@ appendThree of
 //│ deforest > >>> fusing >>>
 //│ deforest > Cons⁰(h⁰, tmp⁰) ->
 //│ deforest > 	match: xs⁰
-//│ deforest > 	fields: xs⁰.h¹
-//│ deforest > 	fields: xs⁰.t⁰
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).h¹
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: xs⁰
 //│ deforest > Cons⁰(h², tmp¹) ->
 //│ deforest > 	match: xs⁰
-//│ deforest > 	fields: xs⁰.h¹
-//│ deforest > 	fields: xs⁰.t⁰
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).h¹
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).t⁰
 //│ deforest > Cons⁰(h⁰, tmp⁰) ->
 //│ deforest > 	match: xs⁰
-//│ deforest > 	fields: xs⁰.h¹
-//│ deforest > 	fields: xs⁰.t⁰
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).h¹
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).t⁰
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: xs⁰
 //│ deforest > Cons⁰(h², tmp¹) ->
 //│ deforest > 	match: xs⁰
-//│ deforest > 	fields: xs⁰.h¹
-//│ deforest > 	fields: xs⁰.t⁰
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).h¹
+//│ deforest > 	fields: (xs⁰ as!! Cons¹).t⁰
 //│ deforest > <<< fusing <<<
 //│ = Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Cons(6, Nil))))))
 

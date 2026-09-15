@@ -43,13 +43,13 @@ test(p) + f(p) + test(AA(AA(AA(10)))) + test(B)
 //│ deforest > 	match: x⁰
 //│ deforest > AA⁰(tmp⁰) ->
 //│ deforest > 	match: x⁰
-//│ deforest > 	fields: x⁰.x¹
+//│ deforest > 	fields: (x⁰ as!! AA¹).x¹
 //│ deforest > AA⁰(tmp¹) ->
 //│ deforest > 	match: arg$AA$0$⁰
-//│ deforest > 	fields: arg$AA$0$⁰.x¹
+//│ deforest > 	fields: (arg$AA$0$⁰ as!! AA¹).x¹
 //│ deforest > AA⁰(10) ->
 //│ deforest > 	match: arg$AA$0$¹
-//│ deforest > 	fields: arg$AA$0$¹.x¹
+//│ deforest > 	fields: (arg$AA$0$¹ as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let tmp, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9, tmp10, test_28$test, test_28$x_dflt, test_28$x_rest, test_25$test, test_25$x_AA, test_25$x_rest, test_25$arg$AA$0$_AA, test_25$arg$AA$0$_rest, test_25$arg$AA$0$_AA1, test_25$arg$AA$0$_rest1, AA_x, AA_x1, AA_x2, deforest$lam;
@@ -113,13 +113,13 @@ test(p) + f(p) + test(AA(AA(AA(10)))) + test(B)
 //│   let t, a, arg$AA$0$, arg$AA$0$1, arg$AA$0$2, tmp11, tmp12, tmp13, tmp14;
 //│   match x
 //│     AA¹ =>
-//│       set arg$AA$0$ = x.x¹;
+//│       set arg$AA$0$ = (x as!! AA¹).x¹;
 //│       match arg$AA$0$
 //│         AA¹ =>
-//│           set arg$AA$0$1 = arg$AA$0$.x¹;
+//│           set arg$AA$0$1 = (arg$AA$0$ as!! AA¹).x¹;
 //│           match arg$AA$0$1
 //│             AA¹ =>
-//│               set arg$AA$0$2 = arg$AA$0$1.x¹;
+//│               set arg$AA$0$2 = (arg$AA$0$1 as!! AA¹).x¹;
 //│               set a = arg$AA$0$2;
 //│               set tmp11 = a;
 //│               end
@@ -144,7 +144,7 @@ test(p) + f(p) + test(AA(AA(AA(10)))) + test(B)
 //│   let arg$AA$0$;
 //│   match a
 //│     AA¹ =>
-//│       set arg$AA$0$ = a.x¹;
+//│       set arg$AA$0$ = (a as!! AA¹).x¹;
 //│       match arg$AA$0$
 //│         AA¹ =>
 //│           return 0
@@ -189,10 +189,10 @@ test()
 //│ deforest > >>> fusing >>>
 //│ deforest > Global⁰(1) ->
 //│ deforest > 	match: scrut⁰
-//│ deforest > 	fields: scrut⁰.x²
+//│ deforest > 	fields: (scrut⁰ as!! Global¹).x²
 //│ deforest > Global⁰(1) ->
 //│ deforest > 	match: scrut⁰
-//│ deforest > 	fields: scrut⁰.x²
+//│ deforest > 	fields: (scrut⁰ as!! Global¹).x²
 //│ deforest > <<< fusing <<<
 //│ ╔══[COMPILATION ERROR] No definition found in scope for member 'Local'
 //│ ║  l.187: 	    Global(x) then Local(x + 1)
@@ -240,6 +240,6 @@ Test.Test2.foo(AA(2))
 //│ deforest > >>> fusing >>>
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: a⁰
-//│ deforest > 	fields: a⁰.x¹
+//│ deforest > 	fields: (a⁰ as!! AA¹).x¹
 //│ deforest > <<< fusing <<<
 //│ ═══[RUNTIME ERROR] ReferenceError: Test2 is not defined

@@ -49,7 +49,7 @@ case A(x) then x
 //│   let x, arg$A$0$;
 //│   match caseScrut
 //│     A² =>
-//│       set arg$A$0$ = caseScrut.x¹;
+//│       set arg$A$0$ = (caseScrut as!! A²).x¹;
 //│       set x = arg$A$0$;
 //│       return x
 //│     else

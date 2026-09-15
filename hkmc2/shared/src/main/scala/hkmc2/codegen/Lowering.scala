@@ -1513,10 +1513,20 @@ class Lowering()(using Config, TL, Raise, State, Ctx, SymbolPrinter):
     * owner that looks unrelated here is not yet trustworthy enough to call a user error.
     */
   private def castQualifierToOwner(p: Path, disamb: Opt[DefinitionSymbol[?]], loc: Opt[Loc]): Path =
-    qualifierOwnerErasedType(disamb) match
-      case S(owner) if ErasedType.needsCast(p.erasedValueType_!.canonicalize, owner.canonicalize) === S(true) =>
-        castTo(p, S(owner), loc)
-      case _ => p
+    ownerToNarrowTo(p, disamb).fold(p)(owner => castTo(p, S(owner), loc))
+
+  /** [[`castQualifierToOwner`]] for a qualifier that an enclosing class test has already proved to be an instance of
+    * the owner, so the cast is unchecked (see [[`Result.coerceToProven`]]).
+    *
+    * Public only for the class-parameter bindings `ucs.Normalization` synthesizes inside a `Case.Cls` arm.
+    */
+  def castProvenQualifierToOwner(p: Path, disamb: Opt[DefinitionSymbol[?]], loc: Opt[Loc]): Path =
+    ownerToNarrowTo(p, disamb).fold(p)(p.coerceToProven(_, loc))
+
+  /** The owner of `disamb` that `p` needs narrowing to, if that narrowing is decidable. */
+  private def ownerToNarrowTo(p: Path, disamb: Opt[DefinitionSymbol[?]]): Opt[ErasedType] =
+    qualifierOwnerErasedType(disamb).filter: owner =>
+      ErasedType.needsCast(p.erasedValueType_!.canonicalize, owner.canonicalize) === S(true)
 
   /** The declared erased types of a parameter list's fixed parameters (excluding rest params). */
   private def expectedParamTypes(ps: ParamList): Ls[Opt[ErasedType]] =

@@ -1140,9 +1140,21 @@ sealed abstract class Result extends AutoLocated, HasErasedType:
     *
     * This is the only place where [[Config.checkCasts]] is consulted: it fixes each cast's `check` flag at the
     * point the coercion is introduced, so that the transformers rebuilding casts downstream need not carry a
-    * [[Config]] of their own.
+    * [[Config]] of their own. [[coerceToProven]] is the one exception.
     */
   def coerceTo(expected: ErasedType, loc: Opt[Loc])(using Ctx, State, Raise, Config): this.type | Cast =
+    coerce(expected, loc, config.checkCasts)
+
+  /** [[coerceTo]] for a narrowing that an enclosing type test has already proved, such as a scrutinee inside the
+    * `Case.Cls` arm that tested it.
+    *
+    * The cast is never checked, regardless of [[Config.checkCasts]]: the check would repeat the test, and a checked
+    * cast is impure and opaque to [[Path.throughUncheckedCasts]], so it would block dead-code removal and fusion.
+    */
+  def coerceToProven(expected: ErasedType, loc: Opt[Loc])(using Ctx, State, Raise): this.type | Cast =
+    coerce(expected, loc, check = false)
+
+  private def coerce(expected: ErasedType, loc: Opt[Loc], check: Bool)(using Ctx, State, Raise): this.type | Cast =
     val actual = erasedValueType_!.canonicalize
     val declared = expected.canonicalize
     ErasedType.needsCast(actual, declared) match
@@ -1151,7 +1163,7 @@ sealed abstract class Result extends AutoLocated, HasErasedType:
         val target = expected match
           case ft: ErasedFuncType => ErasedType.Function(ft.rsc)
           case v: ErasedValueType => v
-        Cast(this, target, config.checkCasts)
+        Cast(this, target, check)
       case N =>
         // * An `Incompatible` side is not an unrelated type but an unrepresentable one, so it gets its own message.
         def membersOf(et: CanonicalErasedType): Opt[(CanonicalErasedValueType, CanonicalErasedValueType)] = et match
@@ -1269,8 +1281,8 @@ case class Instantiate(mut: Bool, cls: Path, argss: Ls[Ls[Arg]])(val metadata: I
   * `check` records whether the coercion is meant to be verified at runtime. No pass expands it into a type test
   * yet, so a checked cast currently generates the same code as an unchecked one.
   *
-  * `check` is decided once, at the sole semantic construction site [[Result.coerceTo]], which reads
-  * [[Config.checkCasts]]. Every other site that rebuilds a cast must *copy* the flag rather than re-derive it, so
+  * `check` is decided once, at the semantic construction sites [[Result.coerceTo]], which reads
+  * [[Config.checkCasts]], and [[Result.coerceToProven]], which never checks. Every other site that rebuilds a cast must *copy* the flag rather than re-derive it, so
   * that the configuration does not have to be threaded through the IR transformers.
   *
   * Invariants:

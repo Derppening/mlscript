@@ -24,8 +24,8 @@ pattern Steps = @compile (Step as Steps | _)
 //│       let lhs, rhs, lhs1, rhs1, result2$, result1$, bindings, bindings1, tmp, tmp1, tmp2;
 //│       match input1
 //│         Add⁰ =>
-//│           set lhs = input1.lhs⁰;
-//│           set rhs = input1.rhs⁰;
+//│           set lhs = (input1 as!! Add⁰).lhs⁰;
+//│           set rhs = (input1 as!! Add⁰).rhs⁰;
 //│           set tmp = matcher1$(lhs);
 //│           set lhs1 = { "input": lhs, "result": tmp };
 //│           set tmp1 = matcher2$(rhs);
@@ -33,12 +33,12 @@ pattern Steps = @compile (Step as Steps | _)
 //│           set result1$ = lhs1.result﹖;
 //│           match result1$
 //│             MatchSuccess⁰ =>
-//│               set bindings = result1$.bindings⁰;
+//│               set bindings = (result1$ as!! MatchSuccess⁰).bindings⁰;
 //│               set result2$ = rhs1.result﹖;
 //│               match result2$
 //│                 MatchSuccess⁰ =>
 //│                   let inlinedVal1, a, b, c, tmp3, tmp4, tmp5, tmp6, tmp7;
-//│                   set bindings1 = result2$.bindings⁰;
+//│                   set bindings1 = (result2$ as!! MatchSuccess⁰).bindings⁰;
 //│                   set tmp2 = { ...bindings, ...bindings1 };
 //│                   set a = tmp2.a﹖;
 //│                   set b = tmp2.b﹖;
@@ -66,14 +66,14 @@ pattern Steps = @compile (Step as Steps | _)
 //│       let value, value1, result3$, output3$, fieldBindings, bindings, tmp, tmp1;
 //│       match input1
 //│         Lit¹ =>
-//│           set value = input1.value⁰;
+//│           set value = (input1 as!! Lit¹).value⁰;
 //│           set tmp = matcher3$(value);
 //│           set value1 = { "input": value, "result": tmp };
 //│           set result3$ = value1.result﹖;
 //│           match result3$
 //│             MatchSuccess⁰ =>
-//│               set output3$ = result3$.output⁰;
-//│               set bindings = result3$.bindings⁰;
+//│               set output3$ = (result3$ as!! MatchSuccess⁰).output⁰;
+//│               set bindings = (result3$ as!! MatchSuccess⁰).bindings⁰;
 //│               set fieldBindings = { "a": output3$ };
 //│               set tmp1 = { ...fieldBindings, ...bindings };
 //│               return new runtime⁰.MatchSuccess⁰(input1, tmp1)
@@ -89,14 +89,14 @@ pattern Steps = @compile (Step as Steps | _)
 //│       let value, value1, result4$, output4$, fieldBindings, bindings, tmp, tmp1;
 //│       match input1
 //│         Lit¹ =>
-//│           set value = input1.value⁰;
+//│           set value = (input1 as!! Lit¹).value⁰;
 //│           set tmp = matcher4$(value);
 //│           set value1 = { "input": value, "result": tmp };
 //│           set result4$ = value1.result﹖;
 //│           match result4$
 //│             MatchSuccess⁰ =>
-//│               set output4$ = result4$.output⁰;
-//│               set bindings = result4$.bindings⁰;
+//│               set output4$ = (result4$ as!! MatchSuccess⁰).output⁰;
+//│               set bindings = (result4$ as!! MatchSuccess⁰).bindings⁰;
 //│               set fieldBindings = { "b": output4$ };
 //│               set tmp1 = { ...fieldBindings, ...bindings };
 //│               return new runtime⁰.MatchSuccess⁰(input1, tmp1)
@@ -142,14 +142,14 @@ pattern Steps = @compile (Step as Steps | _)
 //│           set redexResult = matcher0$(focus);
 //│           match redexResult
 //│             MatchSuccess⁰ =>
-//│               set contractum = redexResult.output⁰;
+//│               set contractum = (redexResult as!! MatchSuccess⁰).output⁰;
 //│               set focus = contractum;
 //│               continue lbl
 //│             else
 //│               match focus
 //│                 Add⁰ =>
-//│                   set scrut0 = focus.lhs⁰;
-//│                   set scrut1 = focus.rhs⁰;
+//│                   set scrut0 = (focus as!! Add⁰).lhs⁰;
+//│                   set scrut1 = (focus as!! Add⁰).rhs⁰;
 //│                   set tmp = { "tag": 0, "c0": scrut0, "c1": scrut1, "i0": false, "i1": false, "n": focus, "h": 0, "t": stack };
 //│                   set stack = tmp;
 //│                   set focus = scrut0;
@@ -186,7 +186,7 @@ pattern Steps = @compile (Step as Steps | _)
 //│                   set redexResult2 = matcher0$(tmp1);
 //│                   match redexResult2
 //│                     MatchSuccess⁰ =>
-//│                       set contractum2 = redexResult2.output⁰;
+//│                       set contractum2 = (redexResult2 as!! MatchSuccess⁰).output⁰;
 //│                       set stack = frameTail;
 //│                       set focus = contractum2;
 //│                       set mode = 0;
@@ -223,7 +223,7 @@ pattern Steps = @compile (Step as Steps | _)
 //│                   set redexResult1 = matcher0$(tmp3);
 //│                   match redexResult1
 //│                     MatchSuccess⁰ =>
-//│                       set contractum1 = redexResult1.output⁰;
+//│                       set contractum1 = (redexResult1 as!! MatchSuccess⁰).output⁰;
 //│                       set stack = frameTail;
 //│                       set focus = contractum1;
 //│                       set mode = 0;
@@ -250,7 +250,7 @@ pattern Steps = @compile (Step as Steps | _)
 //│     set inlinedVal = new runtime⁰.MatchSuccess⁰(finalResult, null);
 //│     match inlinedVal
 //│       MatchSuccess⁰ =>
-//│         set output = inlinedVal.output⁰;
+//│         set output = (inlinedVal as!! MatchSuccess⁰).output⁰;
 //│         return new runtime⁰.MatchSuccess⁰(output, null)
 //│       else
 //│         return new runtime⁰.MatchFailure⁰(null)
@@ -261,13 +261,13 @@ pattern Steps = @compile (Step as Steps | _)
 //│     set unapplyResult1 = Step⁰.unapplyStringPrefix﹖(input);
 //│     match unapplyResult1
 //│       MatchSuccess⁰ =>
-//│         set outputPair = unapplyResult1.output⁰;
+//│         set outputPair = (unapplyResult1 as!! MatchSuccess⁰).output⁰;
 //│         set output = runtime⁰.Tuple⁰.get⁰(outputPair, 0);
 //│         set remaining = runtime⁰.Tuple⁰.get⁰(outputPair, 1);
 //│         set unapplyResult = Steps¹.unapply﹖(output);
 //│         match unapplyResult
 //│           MatchSuccess⁰ =>
-//│             set output1 = unapplyResult.output⁰;
+//│             set output1 = (unapplyResult as!! MatchSuccess⁰).output⁰;
 //│             set tmp = [output1, remaining];
 //│             return new runtime⁰.MatchSuccess⁰(tmp, null)
 //│           else

@@ -174,8 +174,8 @@ fstConfig(Pair(1, 2))
 //│ deforest > >>> fusing >>>
 //│ deforest > Pair⁰(1, 2) ->
 //│ deforest > 	match: p⁰
-//│ deforest > 	fields: p⁰.a⁰
-//│ deforest > 	fields: p⁰.b⁰
+//│ deforest > 	fields: (p⁰ as!! Pair¹).a⁰
+//│ deforest > 	fields: (p⁰ as!! Pair¹).b⁰
 //│ deforest > <<< fusing <<<
 //│ = 1
 

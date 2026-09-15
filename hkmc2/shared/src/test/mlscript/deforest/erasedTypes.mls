@@ -48,7 +48,7 @@ fun selected(n: Int, k: Str) =
 //│ deforest > >>> fusing >>>
 //│ deforest > Box¹(n⁰) ->
 //│ deforest > 	match: b²
-//│ deforest > 	fields: b².v¹
+//│ deforest > 	fields: (b² as!! Box²).v¹
 //│ deforest > <<< fusing <<<
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let selected_4$b_Box, selected_4$b_rest;
@@ -82,7 +82,7 @@ fun withRest(n: Int, k: Str) =
 //│ deforest > >>> fusing >>>
 //│ deforest > Box¹(n¹) ->
 //│ deforest > 	match: b³
-//│ deforest > 	fields: b³.v¹
+//│ deforest > 	fields: (b³ as!! Box²).v¹
 //│ deforest > <<< fusing <<<
 //│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
 //│ let withRest_4$b_Box, withRest_4$b_rest;
