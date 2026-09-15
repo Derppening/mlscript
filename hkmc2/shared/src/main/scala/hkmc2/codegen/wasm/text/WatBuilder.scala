@@ -1355,6 +1355,16 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
   private def mkTempLocal(base: Str, erasedType: Opt[ErasedValueType])(using FunctionCtx, Raise): LocalIdx =
     funcCtx.addLocal(TempSymbol(N, erasedType, base))
 
+  /** Allocates a Wasm local to spill `r` into, carrying `r`'s erased type, and yields it with its slot type.
+    *
+    * A spill local created with no erased type reads back as `anyref`, which discards whatever type the IR had
+    * established for the value and forces a `ref.cast` at each use of the local. Those casts are invisible to the
+    * IR, so the type belongs on the local instead.
+    */
+  private def mkSpillLocal(base: Str, r: codegen.Result)(using FunctionCtx, Raise): (LocalIdx, ValType) =
+    val sym = TempSymbol(N, r.erasedValueType, base)
+    (funcCtx.addLocal(sym), funcCtx.slotType(sym))
+
   /** Binds constructor self (`thisSym`) to the Wasm local name `this` in the current function context.
     */
   private def bindCtorThis(thisSym: InnerSymbol)(using FunctionCtx, Raise): LocalIdx =
@@ -1652,9 +1662,9 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
           s"Virtual call arity mismatch for $methodSym: ${args.size} args vs ${paramTypes.size} declared params",
         )
         val ownerTypeInfoIdx = typeInfoTypeIdxs(ownerCls)
-        val receiverTmp = mkTempLocal("receiver", erasedType = N)
+        val (receiverTmp, receiverType) = mkSpillLocal("receiver", qual)
         val receiverExpr = local.set(receiverTmp, result(qual))
-        val receiverRef = local.get(receiverTmp, RefType.anyref)
+        val receiverRef = local.get(receiverTmp, receiverType)
         val ownerTypeInfoRef = ref.cast(
           readObjectTypeInfo(receiverRef),
           RefType(ownerTypeInfoIdx, nullable = false),
@@ -2521,6 +2531,8 @@ class WatBuilder(private val ctx: Ctx)(using TraceLogger, State) extends CodeBui
           else N
         val scrutLocalResult = scrut match
           case _: (Value.RefLike | Value.Lit) => N
+          // * Not `mkSpillLocal`: a match scrutinee's erased type is `Unknown` in practice, so typing the spill
+          // * measurably changes nothing here, and the arms narrow it themselves through their `Case` tests.
           case _ => S(mkTempLocal("scrut", erasedType = N))
 
         val scrutInitExpr = scrutLocalResult.map: scrutLocal =>
