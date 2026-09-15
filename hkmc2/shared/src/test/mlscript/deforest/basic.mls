@@ -289,10 +289,6 @@ fun f(x) = if x is
   A(a) then x.A#x + a
 f(A(1))
 //│ deforest > >>> fusing >>>
-//│ deforest > A⁰(1) ->
-//│ deforest > 	match: x⁹
-//│ deforest > 	fields: x⁹.x⁸
-//│ deforest > 	fields: x⁹.x⁸
 //│ deforest > <<< fusing <<<
 //│ = 2
 
@@ -303,11 +299,11 @@ fun f(x) = if x is
 f(A(2)) + f(A(3))
 //│ deforest > >>> fusing >>>
 //│ deforest > A⁰(3) ->
-//│ deforest > 	match: x¹⁰
-//│ deforest > 	fields: x¹⁰.x⁸
+//│ deforest > 	match: x⁹
+//│ deforest > 	fields: x⁹.x⁸
 //│ deforest > A⁰(2) ->
-//│ deforest > 	match: x¹⁰
-//│ deforest > 	fields: x¹⁰.x⁸
+//│ deforest > 	match: x⁹
+//│ deforest > 	fields: x⁹.x⁸
 //│ deforest > <<< fusing <<<
 //│ = 4
 
@@ -319,18 +315,18 @@ if localFuse(3) is
   B(a) then a
 localFuse(4)
 //│ deforest > >>> fusing >>>
-//│ deforest > A⁰(x¹¹) ->
+//│ deforest > A⁰(x¹⁰) ->
 //│ deforest > 	match: scrut¹
 //│ deforest > 	fields: scrut¹.x⁸
-//│ deforest > A⁰(x¹¹) ->
+//│ deforest > A⁰(x¹⁰) ->
 //│ deforest > 	match: scrut¹
 //│ deforest > 	fields: scrut¹.x⁸
-//│ deforest > A⁰(x¹¹) ->
+//│ deforest > A⁰(x¹⁰) ->
 //│ deforest > 	match: scrut¹
 //│ deforest > 	fields: scrut¹.x⁸
 //│ deforest > B⁰(y⁰) ->
 //│ deforest > 	match: scrut²
-//│ deforest > 	fields: scrut².x¹²
+//│ deforest > 	fields: scrut².x¹¹
 //│ deforest > <<< fusing <<<
 //│ = B(4)
 
@@ -380,9 +376,6 @@ dtor(A(B(0)))
 //│ deforest > 	match: y¹
 //│ deforest > B⁰(4) ->
 //│ deforest > 	match: y¹
-//│ deforest > A⁰(tmp²) ->
-//│ deforest > 	match: x¹³
-//│ deforest > 	fields: x¹³.x⁸
 //│ deforest > <<< fusing <<<
 //│ = B(0)
 

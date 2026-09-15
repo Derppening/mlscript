@@ -1360,3 +1360,42 @@ fun capturingLoop(n: Int, acc: Str) =
 //│   unreachable /* Rest of abortive labelled block */
 //│ };
 //│ end
+
+
+// A selection narrows its qualifier to the class declaring the member, so that the coercion lives in the IR
+// instead of being re-derived by each backend. `a` is an untyped local, so the narrowing is not a no-op.
+:sir
+class Box(val v) with
+  fun get() = v
+let a = Box(1)
+a.Box#v
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define Box³ as class Box⁵ {
+//│   val v³: ?;
+//│   constructor Box⁴(v: ?) {
+//│     define v³ as val v⁴: ? = v;
+//│     end
+//│   }
+//│   method get⁵ = fun get⁶(): ? { return Box⁵.this.v⁴ }
+//│ };
+//│ set a² = Box⁴(1);
+//│ return (a² as! Box⁵).v⁴
+
+
+// The same rule reaches the qualifier of a field assignment.
+:sir
+class Cell(val v)
+let c = new mut Cell(1)
+set c.Cell#v = 2
+c.Cell#v
+//│ ———————————————| Lowered IR |———————————————————————————————————————————————————————————————————————
+//│ define Cell³ as class Cell⁵ {
+//│   val v⁵: ?;
+//│   constructor Cell⁴(v: ?) {
+//│     define v⁵ as val v⁶: ? = v;
+//│     end
+//│   }
+//│ };
+//│ set c⁰ = new mut Cell⁵(1);
+//│ set (c⁰ as! Cell⁵).v⁶ = 2;
+//│ return (c⁰ as! Cell⁵).v⁶

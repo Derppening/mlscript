@@ -222,9 +222,6 @@ fun c(x, y) = if x is
 let y = A in
   c(AA(2), y)
 //│ deforest > >>> fusing >>>
-//│ deforest > AA⁰(2) ->
-//│ deforest > 	match: x¹¹
-//│ deforest > 	fields: x¹¹.x¹
 //│ deforest > A⁰ ->
 //│ deforest > 	match: y¹
 //│ deforest > <<< fusing <<<
@@ -241,10 +238,6 @@ fun c2(y) = if y is A then 3
 let y = A in
   c(AA(2), y) + c2(y)
 //│ deforest > >>> fusing >>>
-//│ deforest > AA⁰(2) ->
-//│ deforest > 	match: x¹²
-//│ deforest > 	fields: x¹².x¹
-//│ deforest > 	fields: x¹².x¹
 //│ deforest > <<< fusing <<<
 //│ = 9
 
@@ -262,8 +255,8 @@ let p = AA(AA(AA("10")))
 test(p) + f(p) + test(AA(A))
 //│ deforest > >>> fusing >>>
 //│ deforest > AA⁰(A⁰) ->
-//│ deforest > 	match: x¹³
-//│ deforest > 	fields: x¹³.x¹
+//│ deforest > 	match: x¹¹
+//│ deforest > 	fields: x¹¹.x¹
 //│ deforest > A⁰ ->
 //│ deforest > 	match: arg$AA$0$³
 //│ deforest > <<< fusing <<<
@@ -287,25 +280,16 @@ fun f(x, y) =
 let aa = AA(3)
 f(aa, 3) + f(aa, 4)
 //│ deforest > >>> fusing >>>
-//│ deforest > BB⁰(tmp⁸) ->
-//│ deforest > 	match: tmp⁹
-//│ deforest > 	fields: tmp⁹.x²
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: scrut⁰
 //│ deforest > 	fields: scrut⁰.x¹
 //│ deforest > AA⁰(3) ->
 //│ deforest > 	match: scrut¹
-//│ deforest > BB⁰(tmp⁸) ->
-//│ deforest > 	match: tmp⁹
-//│ deforest > 	fields: tmp⁹.x²
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: scrut⁰
 //│ deforest > 	fields: scrut⁰.x¹
 //│ deforest > AA⁰(3) ->
 //│ deforest > 	match: scrut¹
-//│ deforest > BB⁰(tmp⁸) ->
-//│ deforest > 	match: tmp⁹
-//│ deforest > 	fields: tmp⁹.x²
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: scrut⁰
 //│ deforest > 	fields: scrut⁰.x¹
@@ -405,8 +389,8 @@ test(AA(1), AA(2), BB(3), 4) + test(AA(1), AA(2), BB(3), 4)
 //│ deforest > 	match: y²
 //│ deforest > 	fields: y².x¹
 //│ deforest > AA⁰(1) ->
-//│ deforest > 	match: x¹⁴
-//│ deforest > 	fields: x¹⁴.x¹
+//│ deforest > 	match: x¹²
+//│ deforest > 	fields: x¹².x¹
 //│ deforest > BB⁰(3) ->
 //│ deforest > 	match: z¹
 //│ deforest > 	fields: z¹.x²
@@ -414,8 +398,8 @@ test(AA(1), AA(2), BB(3), 4) + test(AA(1), AA(2), BB(3), 4)
 //│ deforest > 	match: y²
 //│ deforest > 	fields: y².x¹
 //│ deforest > AA⁰(1) ->
-//│ deforest > 	match: x¹⁴
-//│ deforest > 	fields: x¹⁴.x¹
+//│ deforest > 	match: x¹²
+//│ deforest > 	fields: x¹².x¹
 //│ deforest > <<< fusing <<<
 //│ = 18
 
@@ -440,8 +424,8 @@ test(AA(1), AA(2), BB(3), 4) + test(AA(1), BB(2), BB(3), 4)
 //│ deforest > 	match: y³
 //│ deforest > 	fields: y³.x²
 //│ deforest > AA⁰(1) ->
-//│ deforest > 	match: x¹⁵
-//│ deforest > 	fields: x¹⁵.x¹
+//│ deforest > 	match: x¹³
+//│ deforest > 	fields: x¹³.x¹
 //│ deforest > BB⁰(3) ->
 //│ deforest > 	match: z²
 //│ deforest > 	fields: z².x²
@@ -449,8 +433,8 @@ test(AA(1), AA(2), BB(3), 4) + test(AA(1), BB(2), BB(3), 4)
 //│ deforest > 	match: y³
 //│ deforest > 	fields: y³.x¹
 //│ deforest > AA⁰(1) ->
-//│ deforest > 	match: x¹⁵
-//│ deforest > 	fields: x¹⁵.x¹
+//│ deforest > 	match: x¹³
+//│ deforest > 	fields: x¹³.x¹
 //│ deforest > <<< fusing <<<
 //│ = 10
 
@@ -466,17 +450,17 @@ fun c(x) = if x is AA then 0
 fun p(x) = AA(x)
 test(p(BB(3))) + test(p(CC(3))) + c(p(A))
 //│ deforest > >>> fusing >>>
-//│ deforest > AA⁰(x¹⁶) ->
-//│ deforest > 	match: x¹⁷
-//│ deforest > AA⁰(x¹⁶) ->
-//│ deforest > 	match: x¹⁸
-//│ deforest > 	fields: x¹⁸.x¹
+//│ deforest > AA⁰(x¹⁴) ->
+//│ deforest > 	match: x¹⁵
+//│ deforest > AA⁰(x¹⁴) ->
+//│ deforest > 	match: x¹⁶
+//│ deforest > 	fields: x¹⁶.x¹
 //│ deforest > CC⁰(3) ->
 //│ deforest > 	match: arg$AA$0$⁴
-//│ deforest > 	fields: arg$AA$0$⁴.x¹⁹
-//│ deforest > AA⁰(x¹⁶) ->
-//│ deforest > 	match: x¹⁸
-//│ deforest > 	fields: x¹⁸.x¹
+//│ deforest > 	fields: arg$AA$0$⁴.x¹⁷
+//│ deforest > AA⁰(x¹⁴) ->
+//│ deforest > 	match: x¹⁶
+//│ deforest > 	fields: x¹⁶.x¹
 //│ deforest > BB⁰(3) ->
 //│ deforest > 	match: arg$AA$0$⁴
 //│ deforest > 	fields: arg$AA$0$⁴.x²
@@ -501,43 +485,25 @@ fun f(x, y, z, k) =
         AA then m + k
 f(AA(3), 3, true, 10) + f(AA(5), 4, false, 20)
 //│ deforest > >>> fusing >>>
-//│ deforest > BB⁰(tmp¹⁰) ->
-//│ deforest > 	match: tmp¹¹
-//│ deforest > 	fields: tmp¹¹.x²
-//│ deforest > BB⁰(tmp¹²) ->
-//│ deforest > 	match: tmp¹¹
-//│ deforest > 	fields: tmp¹¹.x²
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: scrut³
 //│ deforest > 	fields: scrut³.x¹
 //│ deforest > AA⁰(3) ->
 //│ deforest > 	match: scrut⁴
-//│ deforest > BB⁰(tmp¹⁰) ->
-//│ deforest > 	match: tmp¹¹
-//│ deforest > 	fields: tmp¹¹.x²
-//│ deforest > BB⁰(tmp¹²) ->
-//│ deforest > 	match: tmp¹¹
-//│ deforest > 	fields: tmp¹¹.x²
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: scrut³
 //│ deforest > 	fields: scrut³.x¹
 //│ deforest > AA⁰(3) ->
 //│ deforest > 	match: scrut⁴
 //│ deforest > AA⁰(5) ->
-//│ deforest > 	match: x²⁰
-//│ deforest > BB⁰(tmp¹⁰) ->
-//│ deforest > 	match: tmp¹¹
-//│ deforest > 	fields: tmp¹¹.x²
-//│ deforest > BB⁰(tmp¹²) ->
-//│ deforest > 	match: tmp¹¹
-//│ deforest > 	fields: tmp¹¹.x²
+//│ deforest > 	match: x¹⁸
 //│ deforest > AA⁰(2) ->
 //│ deforest > 	match: scrut³
 //│ deforest > 	fields: scrut³.x¹
 //│ deforest > AA⁰(3) ->
 //│ deforest > 	match: scrut⁴
 //│ deforest > AA⁰(3) ->
-//│ deforest > 	match: x²⁰
+//│ deforest > 	match: x¹⁸
 //│ deforest > <<< fusing <<<
 //│ = 41
 
@@ -601,11 +567,11 @@ sum(prodDouble(4))
 //│ deforest > >>> fusing >>>
 //│ deforest > Nil⁰ ->
 //│ deforest > 	match: ls⁰
-//│ deforest > Cons⁰(n⁰, tmp¹³) ->
+//│ deforest > Cons⁰(n⁰, tmp⁸) ->
 //│ deforest > 	match: ls⁰
 //│ deforest > 	fields: ls⁰.h⁰
 //│ deforest > 	fields: ls⁰.t⁰
-//│ deforest > Cons⁰(n⁰, tmp¹⁴) ->
+//│ deforest > Cons⁰(n⁰, tmp⁹) ->
 //│ deforest > 	match: ls⁰
 //│ deforest > 	fields: ls⁰.h⁰
 //│ deforest > 	fields: ls⁰.t⁰
