@@ -2393,17 +2393,25 @@ extends Importer:
           raise(ErrorReport(msg"Multiple declarations of symbol '$name'" -> N ::
             decls.map(msg"declared here" -> _.toLoc)))
         (sym.trmSigTree, sym.trmImplTree) match
-        case (S(sig), S(impl)) if sym.trmSigFollowsImpl => raise:
-          ErrorReport:
-            msg"The signature of '$name' must be written before its definition" -> sig.toLoc
-            :: msg"defined here" -> impl.toLoc
-            :: Nil
-        case (S(sig), S(impl)) if impl.annotatedResultType.isDefined => raise:
-          ErrorReport:
-            msg"The definition of '$name' cannot annotate its result type, as it has a separate signature"
-              -> impl.annotatedResultType.flatMap(_.toLoc)
-            :: msg"signature here" -> sig.toLoc
-            :: Nil
+        case (S(sig), S(impl)) =>
+          if sym.trmSigFollowsImpl then raise:
+            ErrorReport:
+              msg"The signature of '$name' must be written before its definition" -> sig.toLoc
+              :: msg"defined here" -> impl.toLoc
+              :: Nil
+          else
+            if impl.annotatedResultType.isDefined then raise:
+              ErrorReport:
+                msg"The definition of '$name' cannot annotate its result type, as it has a separate signature"
+                  -> impl.annotatedResultType.flatMap(_.toLoc)
+                :: msg"signature here" -> sig.toLoc
+                :: Nil
+            if sig.k isnt impl.k then raise:
+              ErrorReport:
+                msg"The signature and the definition of '$name' must be of the same kind" -> N
+                :: msg"${sig.k.desc.capitalize} signature here" -> sig.toLoc
+                :: msg"${impl.k.desc.capitalize} definition here" -> impl.toLoc
+                :: Nil
         case _ => ()
     
     /** Whether `td` is a split signature that its member's definition elaborates (see the `TermDef` case of `go`),
@@ -2696,6 +2704,31 @@ extends Importer:
                   case Annot.ImplementationOnly(_)
                     | Annot.Modifier(Keyword.`declare` | Keyword.`private` | Keyword.`public`) => false
                   case a => !annotations.contains(a)
+            // * Type parameters written only on the split signature are the definition's. Written on both sides, they
+            // * must be the same. Written only on the definition, they would be out of scope in the signature.
+            // * After a mismatch, the signature is ignored: its type parameter names would not resolve.
+            val (typeParamTree, sigTypeParamsAgree) = (td.typeParams, externalSig) match
+              case (own, N) => (own, true)
+              case (N, S((sig, _, _))) => (sig.typeParams, true)
+              case (S(own), S((sig, sigLoc, _))) =>
+                val agree = sig.typeParams match
+                  case N =>
+                    raise:
+                      ErrorReport:
+                        msg"The type parameters of '${id.name}' must be written on its signature" -> own.toLoc
+                        :: msg"signature here" -> sigLoc
+                        :: Nil
+                    false
+                  case S(sigTps) =>
+                    val same = sameTypeParamNames(own, sigTps)
+                    if !same then raise:
+                      ErrorReport:
+                        msg"The signature and the definition of '${id.name}' must have the same type parameters" -> N
+                        :: msg"signature's type parameters" -> sigTps.toLoc
+                        :: msg"definition's type parameters" -> own.toLoc
+                        :: Nil
+                    same
+                (S(own), agree)
             val owner =
               // * Instance declarations are not meant to be exported as externally-available members,
               // * even when declared within some class or module.
@@ -2731,7 +2764,7 @@ extends Importer:
               
               log(dbg"Processing term definition $nme")
               // * Add type parameters to context
-              val (tps, newCtx1) = td.typeParams match
+              val (tps, newCtx1) = typeParamTree match
                 case S(t) =>
                   val (tps, ctx) = typeParams(t)
                   (S(tps), ctx)
@@ -2748,7 +2781,9 @@ extends Importer:
               // * definition's value parameters: `fun f: C -> C` with `fun f(C) = …` refers to the type `C`.
               val (st, sigCtx) = td.annotatedResultType match
                 case S(st) => (S(st), newCtx)
-                case N => (externalSig.flatMap((sig, _, _) => sig.annotatedResultType), newCtx1)
+                case N =>
+                  val sig = if sigTypeParamsAgree then externalSig else N
+                  (sig.flatMap((sig, _, _) => sig.annotatedResultType), newCtx1)
               val s = st.map:
                 // unwrap possible module modifier
                 // e.g, `fun f: module M`
@@ -3664,6 +3699,14 @@ extends Importer:
         raise(ErrorReport(msg"Unrecognized pattern (${t.describe})." -> t.toLoc :: Nil))
         Pattern.Wildcard()
     go(t)
+  
+  /** Whether two type parameter lists, as `typeParams` accepts them, name the same parameters in the same order.
+    * Shapes that `typeParams` rejects compare equal, as `typeParams` reports them. */
+  def sameTypeParamNames(t1: Tree, t2: Tree): Bool = (t1, t2) match
+    case (TyTup(ps1), TyTup(ps2)) => ps1.corresponds(ps2):
+      case (id1: Ident, id2: Ident) => id1.name === id2.name
+      case _ => true
+    case _ => true
   
   def typeParams(t: Tree): Ctxl[(Ls[Param], Ctx)] = t match
     case TyTup(ps) =>
